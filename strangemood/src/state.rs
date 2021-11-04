@@ -12,16 +12,31 @@ use solana_program::{
 pub struct Charter {
     // The amount of voting tokens to give to a user per 1.0 wrapped SOL contributed
     // via community account contributions.
-    expansion_rate: f64,
+    //
+    // Note that Borsh doesn't support floats, and so we carry over the pattern
+    // used in the token program of having an "amount" and a "decimals".
+    // So an "amount" of 100 and a "decimals" of 3 would be 0.1
+    expansion_rate_amount: u64,
+    expansion_rate_decimals: u32,
 
     // The % of each purchase that goes to the community account.
-    contribution_rate: f64,
+    contribution_rate_amount: u64,
+    contribution_rate_decimals: u32,
+}
+
+impl Charter {
+    pub fn expansion_rate(&self) -> f64 {
+        self.expansion_rate_amount as f64 / i32::pow(10, self.expansion_rate_decimals) as f64
+    }
+    pub fn contribution_rate(&self) -> f64 {
+        self.contribution_rate_amount as f64 / i64::pow(10, self.contribution_rate_decimals) as f64
+    }
 }
 
 impl Sealed for Charter {}
 
 impl Pack for Charter {
-    const LEN: usize = 169; // See "test_get_packed_len()" for explanation
+    const LEN: usize = 32; // See "test_get_packed_len()" for explanation
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let data = self.try_to_vec().unwrap();
@@ -89,7 +104,7 @@ impl IsInitialized for Listing {
 }
 
 impl Pack for Listing {
-    const LEN: usize = 169; // See "test_get_packed_len()" for explanation
+    const LEN: usize = 137; // See "test_get_packed_len()" for explanation
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let data = self.try_to_vec().unwrap();
@@ -109,6 +124,19 @@ impl Pack for Listing {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn test_rate_calcs() {
+        let charter = Charter {
+            expansion_rate_amount: 1000,
+            expansion_rate_decimals: 5,
+            contribution_rate_amount: 2000,
+            contribution_rate_decimals: 0,
+        };
+
+        assert_eq!(charter.expansion_rate(), 0.01000);
+        assert_eq!(charter.contribution_rate(), 2000.0);
+    }
 
     #[test]
     fn test_get_packed_len() {
