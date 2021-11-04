@@ -72,7 +72,8 @@ impl Processor {
         if purchase_token.amount != listing.price.amount {
             return Err(StrangemoodError::InvalidPurchaseAmount.into());
         }
-        if purchase_token.mint != listing.price.mint_pubkey {
+        // The native mint pubkey
+        if purchase_token.mint != Pubkey::new(b"So11111111111111111111111111111111111111112") {
             return Err(StrangemoodError::InvalidPurchaseToken.into());
         }
 
@@ -195,6 +196,8 @@ impl Processor {
             1,
         )?;
 
+        // TODO: mint tokens
+
         Ok(())
     }
 
@@ -219,25 +222,21 @@ impl Processor {
             return Err(ProgramError::IncorrectProgramId);
         }
 
-        // 2. [] - The mint of the token you'd like to be paid in
-        let price_mint_account = next_account_info(account_info_iter)?;
-        if *price_mint_account.owner != spl_token::id() {
-            msg!("Account #2 is not owned by the token program");
-            return Err(ProgramError::IncorrectProgramId);
-        }
-
-        // TODO: check that this is USDC or SOL, or an accepted currency?
-
-        // 3. [] - The place to deposit the token into
+        // 2. [] - The place to deposit the token into
         let deposit_token_account = next_account_info(account_info_iter)?;
         if *deposit_token_account.owner != spl_token::id() {
-            msg!("Account #3 is not owned by the token program");
+            msg!("Account #2 is not owned by the token program");
             // The token account that's receiving the token needs to be owned
             // by the SPL token program
             return Err(ProgramError::IncorrectProgramId);
         }
+        let deposit_token =
+            spl_token::state::Account::unpack(*deposit_token_account.data.borrow())?;
+        if deposit_token.mint != Pubkey::new(b"So11111111111111111111111111111111111111112") {
+            return Err(StrangemoodError::TokenMintNotSupported.into());
+        }
 
-        // 4. [writable] The listing account
+        // 3. [writable] The listing account
         let listing_account = next_account_info(account_info_iter)?;
         if !listing_account.is_writable {
             return Err(StrangemoodError::NotWritableAccount.into());
@@ -247,24 +246,24 @@ impl Processor {
             return Err(ProgramError::AccountAlreadyInitialized);
         }
 
-        // 5. [] the voting token account to deposit voting tokens into
+        // 4. [] the voting token account to deposit voting tokens into
         let community_token_account = next_account_info(account_info_iter)?;
         let community_token =
             spl_token::state::Account::unpack(*community_token_account.data.borrow())?;
         if *community_token_account.owner != spl_token::id() {
-            msg!("Account #5 is not owned by the token program");
+            msg!("Account #4 is not owned by the token program");
             // The token account that's receiving the token needs to be owned
             // by the SPL token program
             return Err(ProgramError::IncorrectProgramId);
         }
 
-        // 6. [] The realm account
+        // 5. [] The realm account
         let realm_account = next_account_info(account_info_iter)?;
         spl_governance::state::realm::assert_is_valid_realm(program_id, realm_account)?;
         let realm = spl_governance::state::realm::get_realm_data(program_id, realm_account)?;
         realm.assert_is_valid_governing_token_mint(&community_token.mint)?;
 
-        // 7. [] The account governance account of the charter
+        // 6. [] The account governance account of the charter
         let charter_governance_account = next_account_info(account_info_iter)?;
         let charter_governance = spl_governance::state::governance::get_governance_data(
             program_id,
@@ -274,7 +273,7 @@ impl Processor {
             return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
         }
 
-        // 8. [] The charter account itself
+        // 7. [] The charter account itself
         let charter_account = next_account_info(account_info_iter)?;
         let gov_address = spl_governance::state::governance::get_account_governance_address(
             program_id,
@@ -288,21 +287,18 @@ impl Processor {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
 
-        // 9. [] The rent sysvar
+        // 8. [] The rent sysvar
         let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
         if !rent.is_exempt(listing_account.lamports(), listing_account.data_len()) {
             return Err(StrangemoodError::NotRentExempt.into());
         }
 
-        // 10. [] The token program
+        // 9. [] The token program
         let token_program_account = next_account_info(account_info_iter)?;
 
         // Initialize the listing
         listing.is_initialized = true;
-        listing.price = Price {
-            amount: amount,
-            mint_pubkey: *price_mint_account.key,
-        };
+        listing.price = Price { amount: amount };
         listing.seller = Seller {
             seller_pubkey: *initializer_account.key,
             deposit_token_account_pubkey: *deposit_token_account.key,

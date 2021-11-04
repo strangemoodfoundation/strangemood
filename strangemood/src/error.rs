@@ -46,7 +46,7 @@ pub enum StrangemoodError {
     ContractRequiredAsSigner,
 
     /// Someone has tried to purchase a listing with the
-    /// the wrong type of token
+    /// the wrong type of token, should be SOL
     #[error("Invalid Purchase Token")]
     InvalidPurchaseToken,
 

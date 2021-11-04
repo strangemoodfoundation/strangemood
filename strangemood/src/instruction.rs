@@ -13,17 +13,15 @@ pub enum StrangemoodInstruction {
     ///
     /// 0. `[signer]` The account of the person initializing the listing
     /// 1. `[]` The mint account of the app token
-    /// 2. `[]` The mint account of the token you'd like to be paid in
-    ///         (Restricted to SOL and USDC currently to prevent an arbitrary token exploit)
-    /// 3. `[]` The initializer's token account to deposit into.
-    /// 4. `[writable]` The listing account that will store the price and the token
-    /// 5. `[]` The voting token account where the lister will receive
-    ///         community tokens at
-    /// 6. `[]` The realm account
-    /// 7. `[]` The account governance of the charter
-    /// 8. `[]` The account of the charter itself
-    /// 9. `[]` The rent sysvar
-    /// 10. `[]` The token program
+    /// 2. `[]` The initializer's token account to deposit into. (must be SOL)
+    /// 3. `[writable]` The listing account that will store the price and the token
+    /// 4. `[]` The voting token account where the lister will receive
+    ///        community tokens at
+    /// 5. `[]` The realm account
+    /// 6. `[]` The account governance of the charter
+    /// 7. `[]` The account of the charter itself
+    /// 8. `[]` The rent sysvar
+    /// 9. `[]` The token program
     InitListing { amount: u64 },
 
     /// Purchase from a listing

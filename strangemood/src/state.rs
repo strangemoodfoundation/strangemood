@@ -9,23 +9,42 @@ use solana_program::{
 /// The rules of the governance; controlled by a governance account
 /// There should only be one charter per realm.
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
-pub struct Charter {}
+pub struct Charter {
+    // The amount of voting tokens to give to a user per 1.0 wrapped SOL contributed
+    // via community account contributions.
+    expansion_rate: f64,
 
-/// "$60 USDC" or "0.25 SOL"
+    // The % of each purchase that goes to the community account.
+    contribution_rate: f64,
+}
+
+impl Sealed for Charter {}
+
+impl Pack for Charter {
+    const LEN: usize = 169; // See "test_get_packed_len()" for explanation
+
+    fn pack_into_slice(&self, dst: &mut [u8]) {
+        let data = self.try_to_vec().unwrap();
+        dst[..data.len()].copy_from_slice(&data);
+    }
+
+    fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
+        let mut mut_src: &[u8] = src;
+        Self::deserialize(&mut mut_src).map_err(|err| {
+            msg!("Error: failed to deserialize Charter account: {}", err);
+            ProgramError::InvalidAccountData
+        })
+    }
+}
+
+/// "0.25 SOL"
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
 pub struct Price {
-    /// The amount of the token the lister wants.
+    /// The amount of SOL the lister wants.
     ///
     /// Note: remember the decimal place is defined
-    /// in the mint account. So $1 USDC
-    /// is actually "1000000" because
-    /// USDC has 6 decimal places.  
+    /// in the mint account.
     pub amount: u64,
-
-    /// The pubkey of the mint associated with
-    /// the token the lister wants to be paid in.
-    /// Example: "SOL" or "USDC"
-    pub mint_pubkey: Pubkey,
 }
 
 /// The user that's putting up the listing
@@ -99,6 +118,13 @@ mod tests {
             Listing::get_packed_len(),
             solana_program::borsh::get_packed_len::<Listing>(),
         );
+
+        // If this fails, you need to update Charter::LEN to whatever
+        // the borsh schema get_packed_len function says it should be
+        assert_eq!(
+            Charter::get_packed_len(),
+            solana_program::borsh::get_packed_len::<Charter>(),
+        );
     }
 
     #[test]
@@ -107,10 +133,7 @@ mod tests {
         let listing = Listing {
             is_initialized: true,
 
-            price: Price {
-                amount: 10,
-                mint_pubkey: Pubkey::new_unique(),
-            },
+            price: Price { amount: 10 },
             seller: Seller {
                 seller_pubkey: Pubkey::new_unique(),
                 deposit_token_account_pubkey: Pubkey::new_unique(),
