@@ -17,19 +17,33 @@ pub struct Charter {
     // used in the token program of having an "amount" and a "decimals".
     // So an "amount" of 100 and a "decimals" of 3 would be 0.1
     expansion_rate_amount: u64,
-    expansion_rate_decimals: u32,
+    expansion_rate_decimals: u8,
 
     // The % of each purchase that goes to the community account.
     contribution_rate_amount: u64,
-    contribution_rate_decimals: u32,
+    contribution_rate_decimals: u8,
+
+    // The community account of the realm that contributions go to
+    pub realm_sol_token_account_pubkey: Pubkey,
+}
+
+pub(crate) fn amount_as_float(amount: u64, decimals: u8) -> f64 {
+    amount as f64 / i32::pow(10, decimals.into()) as f64
+}
+
+pub(crate) fn float_as_amount(float: f64, decimals: u8) -> u64 {
+    (float as f64 * i32::pow(10, decimals.into()) as f64).floor() as u64
 }
 
 impl Charter {
     pub fn expansion_rate(&self) -> f64 {
-        self.expansion_rate_amount as f64 / i32::pow(10, self.expansion_rate_decimals) as f64
+        amount_as_float(self.expansion_rate_amount, self.expansion_rate_decimals)
     }
     pub fn contribution_rate(&self) -> f64 {
-        self.contribution_rate_amount as f64 / i64::pow(10, self.contribution_rate_decimals) as f64
+        amount_as_float(
+            self.contribution_rate_amount,
+            self.contribution_rate_decimals,
+        )
     }
 }
 
@@ -68,8 +82,11 @@ pub struct Seller {
     /// The seller's system account
     pub seller_pubkey: Pubkey,
 
-    /// The token account to deposit funds into
-    pub deposit_token_account_pubkey: Pubkey,
+    /// The token account to deposit sol into
+    pub sol_token_account_pubkey: Pubkey,
+
+    /// The token account to deposit community votes into
+    pub community_token_account_pubkey: Pubkey,
 }
 
 /// The thing the user is buying
@@ -132,10 +149,12 @@ mod tests {
             expansion_rate_decimals: 5,
             contribution_rate_amount: 2000,
             contribution_rate_decimals: 0,
+            realm_sol_token_account_pubkey: Pubkey::new_unique(),
         };
 
         assert_eq!(charter.expansion_rate(), 0.01000);
         assert_eq!(charter.contribution_rate(), 2000.0);
+        assert_eq!(float_as_amount(0.01, 2), 100);
     }
 
     #[test]
@@ -164,7 +183,8 @@ mod tests {
             price: Price { amount: 10 },
             seller: Seller {
                 seller_pubkey: Pubkey::new_unique(),
-                deposit_token_account_pubkey: Pubkey::new_unique(),
+                sol_token_account_pubkey: Pubkey::new_unique(),
+                community_token_account_pubkey: Pubkey::new_unique(),
             },
             product: Product {
                 mint_pubkey: Pubkey::new_unique(),

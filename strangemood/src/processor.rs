@@ -15,7 +15,7 @@ use spl_token::{error::TokenError, state::Multisig};
 use crate::{
     error::StrangemoodError,
     instruction::StrangemoodInstruction,
-    state::{Listing, Price, Product, Seller},
+    state::{amount_as_float, float_as_amount, Charter, Listing, Price, Product, Seller},
     StrangemoodPDA,
 };
 
@@ -160,6 +160,7 @@ impl Processor {
         if *charter_governance_account.key != gov_address {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
+        let charter = Charter::unpack_unchecked(&charter_account.try_borrow_data()?)?;
 
         // Ensure that the listing is referring to this charter governance
         if listing.charter_governance_pubkey != *charter_account.key {
@@ -175,28 +176,52 @@ impl Processor {
         // 9. [] The token program
         let token_program_account = next_account_info(account_info_iter)?;
 
+        let deposit_rate = 1.0 - charter.contribution_rate();
+        let deposit_amount = deposit_rate * listing.price.amount as f64;
+        let contribution_amount = listing.price.amount as f64 - deposit_amount;
+
         // Transfer payment funds from the user to the developer
-        let signers = signers.iter().map(|pk| pk).collect::<Vec<_>>();
         spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
-            &listing.seller.deposit_token_account_pubkey,
+            &listing.seller.sol_token_account_pubkey,
             initializer_account.key,
-            &signers,
-            listing.price.amount,
+            &[],
+            deposit_amount.floor() as u64,
+        )?;
+
+        // Transfer contribution amount to the realm's sol account
+        spl_token::instruction::transfer(
+            token_program_account.key,
+            purchase_token_account.key,
+            &charter.realm_sol_token_account_pubkey,
+            initializer_account.key,
+            &[],
+            contribution_amount.floor() as u64,
+        )?;
+
+        // Provide voting tokens to the lister
+        let votes = float_as_amount(contribution_amount, spl_token::native_mint::DECIMALS) as f64
+            * charter.expansion_rate();
+        spl_token::instruction::mint_to(
+            token_program_account.key,
+            &realm.community_mint,
+            &listing.seller.community_token_account_pubkey,
+            program_id,
+            &[],
+            votes.floor() as u64,
         )?;
 
         // Mint an app token that proves the user bought the app
+        let signers = signers.iter().map(|pk| pk).collect::<Vec<_>>();
         spl_token::instruction::mint_to(
             token_program_account.owner,
             &listing.product.mint_pubkey,
             app_token_account.key,
             &app_mint_pda,
-            &[],
+            &signers,
             1,
         )?;
-
-        // TODO: mint tokens
 
         Ok(())
     }
@@ -301,7 +326,8 @@ impl Processor {
         listing.price = Price { amount: amount };
         listing.seller = Seller {
             seller_pubkey: *initializer_account.key,
-            deposit_token_account_pubkey: *deposit_token_account.key,
+            sol_token_account_pubkey: *deposit_token_account.key,
+            community_token_account_pubkey: *community_token_account.key,
         };
         listing.product = Product {
             mint_pubkey: *app_mint_account.key,
