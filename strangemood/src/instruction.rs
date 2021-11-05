@@ -11,7 +11,7 @@ pub enum StrangemoodInstruction {
     ///
     /// Accounts expected:
     ///
-    /// 0. `[signer]` The account of the person initializing the listing
+    /// 0. `[signer]` The account that initializes the listing
     /// 1. `[]` The mint account of the app token
     /// 2. `[]` The initializer's token account to deposit into. (must be SOL)
     /// 3. `[writable]` The listing account that will store the price and the token
@@ -23,6 +23,43 @@ pub enum StrangemoodInstruction {
     /// 8. `[]` The rent sysvar
     /// 9. `[]` The token program
     InitListing { amount: u64 },
+
+    /// Changes the current price of a listing
+    ///
+    /// Accounts expected:
+    ///
+    /// 0. `[signer]` The account of that initialized the listing
+    /// 1. `[writable]` The current listing account
+    SetListingPrice { amount: u64 },
+
+    /// TODO: Changes the authority/owner of a Listing
+    ///
+    /// Accounts expected:
+    ///
+    /// 0. `[signer]` The account of that initialized the listing
+    /// 1. `[writable]` The current listing account
+    /// 2. `[]` The new authority of the account
+    SetListingAuthority {},
+
+    /// TODO: Changes where the funds go to.
+    ///
+    /// Accounts expected:
+    ///
+    /// 0. `[signer]` The account of that initialized the listing
+    /// 1. `[writable]` The current listing account
+    /// 2. `[]` The new SOL deposit account
+    /// 3. `[]` The new Community deposit account
+    SetListingDeposit {},
+
+    /// TODO: Changes if the listing is currently buyable.
+    ///
+    /// Accounts expected:
+    ///
+    /// 0. `[signer]` The account of that initialized the listing
+    /// 1. `[writable]` The current listing account
+    /// 2. `[]` The new SOL deposit account
+    /// 3. `[]` The new Community deposit account
+    SetListingAvailability { available: bool },
 
     /// Purchase from a listing
     ///
@@ -39,7 +76,7 @@ pub enum StrangemoodInstruction {
     /// 7. `[]` The account of the charter itself
     /// 8. `[]` The rent sysvar
     /// 9. `[]` The token program
-    Purchase {},
+    PurchaseListing {},
 }
 
 impl StrangemoodInstruction {
@@ -51,7 +88,15 @@ impl StrangemoodInstruction {
             0 => Self::InitListing {
                 amount: Self::unpack_amount(rest)?,
             },
-            1 => Self::Purchase {},
+            1 => Self::PurchaseListing {},
+            2 => Self::SetListingAuthority {},
+            3 => Self::SetListingPrice {
+                amount: Self::unpack_amount(rest)?,
+            },
+            4 => Self::SetListingDeposit {},
+            5 => Self::SetListingAvailability {
+                available: Self::unpack_bool(rest)?,
+            },
             _ => return Err(InvalidInstruction.into()),
         })
     }
@@ -65,6 +110,19 @@ impl StrangemoodInstruction {
         Ok(amount)
     }
 
+    fn unpack_bool(input: &[u8]) -> Result<bool, ProgramError> {
+        if input.len() != 1 {
+            return Err(InvalidInstruction.into());
+        }
+        if input[0] == 0 {
+            Ok(false)
+        } else if input[0] == 1 {
+            Ok(true)
+        } else {
+            Err(InvalidInstruction.into())
+        }
+    }
+
     pub fn pack(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(size_of::<Self>());
 
@@ -76,8 +134,16 @@ impl StrangemoodInstruction {
                 buf.push(0);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            &StrangemoodInstruction::Purchase {} => {
-                buf.push(1);
+            &StrangemoodInstruction::PurchaseListing {} => buf.push(1),
+            StrangemoodInstruction::SetListingAuthority {} => buf.push(2),
+            StrangemoodInstruction::SetListingPrice { amount } => {
+                buf.push(3);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            StrangemoodInstruction::SetListingDeposit {} => buf.push(4),
+            StrangemoodInstruction::SetListingAvailability { available } => {
+                buf.push(5);
+                buf.push(if *available { 1 } else { 0 });
             }
         }
         buf
@@ -91,7 +157,7 @@ mod test {
 
     #[test]
     fn test_instruction_packing() {
-        // Tag 0 -> InitEscrow
+        // Tag 0 -> InitListing
         let amount: u64 = 10;
         let check = StrangemoodInstruction::InitListing { amount };
         let packed = check.pack();
@@ -100,5 +166,62 @@ mod test {
         input.extend_from_slice(&amount.to_le_bytes());
         let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
         assert_eq!(packed, unpacked.pack());
+
+        // Tag 1 -> PurchaseListing
+        let check = StrangemoodInstruction::PurchaseListing {};
+        let packed = check.pack();
+        let mut input: Vec<u8> = Vec::with_capacity(size_of::<StrangemoodInstruction>());
+        input.push(1);
+        let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
+        assert_eq!(packed, unpacked.pack());
+
+        // Tag 2 -> SetListingAuthority
+        let check = StrangemoodInstruction::SetListingAuthority {};
+        let packed = check.pack();
+        let mut input: Vec<u8> = Vec::with_capacity(size_of::<StrangemoodInstruction>());
+        input.push(2);
+        let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
+        assert_eq!(packed, unpacked.pack());
+
+        // Tag 3 -> SetListingPrice
+        let amount: u64 = 20;
+        let check = StrangemoodInstruction::SetListingPrice { amount };
+        let packed = check.pack();
+        let mut input: Vec<u8> = Vec::with_capacity(size_of::<StrangemoodInstruction>());
+        input.push(3);
+        input.extend_from_slice(&amount.to_le_bytes());
+        let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
+        assert_eq!(packed, unpacked.pack());
+
+        // Tag 4 -> SetListingDeposit
+        let check = StrangemoodInstruction::SetListingDeposit {};
+        let packed = check.pack();
+        let mut input: Vec<u8> = Vec::with_capacity(size_of::<StrangemoodInstruction>());
+        input.push(4);
+        let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
+        assert_eq!(packed, unpacked.pack());
+
+        // Tag 5 -> SetListingAvailability
+        let check = StrangemoodInstruction::SetListingAvailability { available: true };
+        let packed = check.pack();
+        let mut input: Vec<u8> = Vec::with_capacity(size_of::<StrangemoodInstruction>());
+        input.push(5);
+        input.push(1);
+        let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
+        assert_eq!(packed, unpacked.pack());
+    }
+
+    #[test]
+    fn test_unpack_bool() {
+        assert_eq!(
+            StrangemoodInstruction::unpack_bool(&[0, 1]),
+            Err(InvalidInstruction.into())
+        );
+        assert_eq!(
+            StrangemoodInstruction::unpack_bool(&[2]),
+            Err(InvalidInstruction.into())
+        );
+        assert_eq!(StrangemoodInstruction::unpack_bool(&[0]), Ok(false));
+        assert_eq!(StrangemoodInstruction::unpack_bool(&[1]), Ok(true));
     }
 }

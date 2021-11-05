@@ -45,6 +45,10 @@ pub enum StrangemoodError {
     #[error("Contract Required as Signer")]
     ContractRequiredAsSigner,
 
+    /// You tried to write to the listing, but you're not the authority
+    #[error("Unauthorized Listing Authority")]
+    UnauthorizedListingAuthority,
+
     /// Someone has tried to purchase a listing with the
     /// the wrong type of token, should be SOL
     #[error("Invalid Purchase Token")]
@@ -101,6 +105,7 @@ impl PrintProgramError for StrangemoodError {
             StrangemoodError::MultisigRequired => todo!(),
             StrangemoodError::ContractRequiredAsSigner => todo!(),
             StrangemoodError::UnauthorizedCharter => todo!(),
+            StrangemoodError::UnauthorizedListingAuthority => todo!(),
         }
     }
 }

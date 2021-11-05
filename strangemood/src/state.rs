@@ -79,21 +79,21 @@ pub struct Price {
 /// The user that's putting up the listing
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
 pub struct Seller {
-    /// The seller's system account
-    pub seller_pubkey: Pubkey,
+    /// The seller's system account, effectively the authority.
+    pub authority: Pubkey,
 
     /// The token account to deposit sol into
-    pub sol_token_account_pubkey: Pubkey,
+    pub sol_token_account: Pubkey,
 
     /// The token account to deposit community votes into
-    pub community_token_account_pubkey: Pubkey,
+    pub community_token_account: Pubkey,
 }
 
 /// The thing the user is buying
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
 pub struct Product {
     /// The token of the mint that they're buying
-    pub mint_pubkey: Pubkey,
+    pub mint: Pubkey,
 }
 
 /// The user-space `data` field of
@@ -104,8 +104,11 @@ pub struct Listing {
     /// Contracts should not trust listings that aren't initialized
     pub is_initialized: bool,
 
+    // If "false", this listing cannot be bought.
+    pub is_available: bool,
+
     // This binds this listing to a governance, bound by a charter.
-    pub charter_governance_pubkey: Pubkey,
+    pub charter_governance: Pubkey,
 
     pub seller: Seller,
     pub price: Price,
@@ -182,14 +185,15 @@ mod tests {
 
             price: Price { amount: 10 },
             seller: Seller {
-                seller_pubkey: Pubkey::new_unique(),
-                sol_token_account_pubkey: Pubkey::new_unique(),
-                community_token_account_pubkey: Pubkey::new_unique(),
+                authority: Pubkey::new_unique(),
+                sol_token_account: Pubkey::new_unique(),
+                community_token_account: Pubkey::new_unique(),
             },
             product: Product {
-                mint_pubkey: Pubkey::new_unique(),
+                mint: Pubkey::new_unique(),
             },
-            charter_governance_pubkey: Pubkey::new_unique(),
+            charter_governance: Pubkey::new_unique(),
+            is_available: true,
         };
 
         Listing::pack(listing, dst).unwrap();

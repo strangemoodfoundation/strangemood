@@ -15,7 +15,7 @@ use spl_token::{error::TokenError, state::Multisig};
 use crate::{
     error::StrangemoodError,
     instruction::StrangemoodInstruction,
-    state::{amount_as_float, float_as_amount, Charter, Listing, Price, Product, Seller},
+    state::{float_as_amount, Charter, Listing, Price, Product, Seller},
     StrangemoodPDA,
 };
 
@@ -32,10 +32,151 @@ impl Processor {
             StrangemoodInstruction::InitListing { amount } => {
                 Processor::process_init_listing(accounts, amount, program_id)
             }
-            StrangemoodInstruction::Purchase {} => {
+            StrangemoodInstruction::PurchaseListing {} => {
                 Processor::process_purchase(accounts, program_id)
             }
+            StrangemoodInstruction::SetListingPrice { amount } => {
+                Processor::process_set_listing_price(accounts, amount, program_id)
+            }
+            StrangemoodInstruction::SetListingAuthority {} => {
+                Processor::process_set_listing_authority(accounts, program_id)
+            }
+            StrangemoodInstruction::SetListingDeposit {} => {
+                Processor::process_set_listing_deposit(accounts, program_id)
+            }
+            StrangemoodInstruction::SetListingAvailability { available } => {
+                Processor::process_set_listing_availability(accounts, available, program_id)
+            }
         }
+    }
+
+    fn process_set_listing_price(
+        accounts: &[AccountInfo],
+        amount: u64,
+        program_id: &Pubkey,
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        // 0. [signer]
+        let initializer_account = next_account_info(account_info_iter)?;
+        if !initializer_account.is_signer {
+            msg!("Account #0 is missing required signature");
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // 1. [writable] The current listing account
+        let listing_account = next_account_info(account_info_iter)?;
+        if listing_account.owner != program_id {
+            msg!("Account #1 is not owned by the program id");
+            return Err(ProgramError::IllegalOwner);
+        }
+        let mut listing = Listing::unpack(&listing_account.try_borrow_data()?)?;
+        if listing.seller.authority != *initializer_account.key {
+            return Err(StrangemoodError::UnauthorizedListingAuthority.into());
+        }
+
+        listing.price.amount = amount;
+        Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
+
+        Ok(())
+    }
+
+    fn process_set_listing_authority(
+        accounts: &[AccountInfo],
+        program_id: &Pubkey,
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        // 0. [signer]
+        let initializer_account = next_account_info(account_info_iter)?;
+        if !initializer_account.is_signer {
+            msg!("Account #0 is missing required signature");
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // 1. [writable] The current listing account
+        let listing_account = next_account_info(account_info_iter)?;
+        if listing_account.owner != program_id {
+            msg!("Account #1 is not owned by the program id");
+            return Err(ProgramError::IllegalOwner);
+        }
+        let mut listing = Listing::unpack(&listing_account.try_borrow_data()?)?;
+        if listing.seller.authority != *initializer_account.key {
+            return Err(StrangemoodError::UnauthorizedListingAuthority.into());
+        }
+
+        // 2. [] The new authority of the account
+        let new_listing_authority = next_account_info(account_info_iter)?;
+        listing.seller.authority = *new_listing_authority.key;
+        Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
+
+        Ok(())
+    }
+
+    fn process_set_listing_deposit(accounts: &[AccountInfo], program_id: &Pubkey) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        // 0. [signer]
+        let initializer_account = next_account_info(account_info_iter)?;
+        if !initializer_account.is_signer {
+            msg!("Account #0 is missing required signature");
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // 1. [writable] The current listing account
+        let listing_account = next_account_info(account_info_iter)?;
+        if listing_account.owner != program_id {
+            msg!("Account #1 is not owned by the program id");
+            return Err(ProgramError::IllegalOwner);
+        }
+        let mut listing = Listing::unpack(&listing_account.try_borrow_data()?)?;
+        if listing.seller.authority != *initializer_account.key {
+            return Err(StrangemoodError::UnauthorizedListingAuthority.into());
+        }
+
+        // 2. [] The new SOL deposit account
+        let new_sol_deposit_account = next_account_info(account_info_iter)?;
+
+        // 3. [] The new community deposit account
+        let new_community_deposit_account = next_account_info(account_info_iter)?;
+
+        listing.seller.sol_token_account = *new_sol_deposit_account.key;
+        listing.seller.community_token_account = *new_community_deposit_account.key;
+
+        Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
+
+        Ok(())
+    }
+
+    fn process_set_listing_availability(
+        accounts: &[AccountInfo],
+        is_available: bool,
+        program_id: &Pubkey,
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        // 0. [signer]
+        let initializer_account = next_account_info(account_info_iter)?;
+        if !initializer_account.is_signer {
+            msg!("Account #0 is missing required signature");
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // 1. [writable] The current listing account
+        let listing_account = next_account_info(account_info_iter)?;
+        if listing_account.owner != program_id {
+            msg!("Account #1 is not owned by the program id");
+            return Err(ProgramError::IllegalOwner);
+        }
+        let mut listing = Listing::unpack(&listing_account.try_borrow_data()?)?;
+        if listing.seller.authority != *initializer_account.key {
+            return Err(StrangemoodError::UnauthorizedListingAuthority.into());
+        }
+
+        listing.is_available = is_available;
+        Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
+
+        Ok(())
     }
 
     fn process_purchase(accounts: &[AccountInfo], program_id: &Pubkey) -> ProgramResult {
@@ -86,7 +227,7 @@ impl Processor {
             return Err(ProgramError::IncorrectProgramId);
         }
         let app_token = spl_token::state::Account::unpack(*app_token_account.data.borrow())?;
-        if app_token.mint != listing.product.mint_pubkey {
+        if app_token.mint != listing.product.mint {
             // Someone tried to purchase something with the wrong type of token account
             return Err(ProgramError::InvalidAccountData);
         }
@@ -119,7 +260,7 @@ impl Processor {
         }
 
         let (app_mint_pda, _bump_seed) =
-            StrangemoodPDA::mint_authority(&program_id.clone(), &listing.product.mint_pubkey);
+            StrangemoodPDA::mint_authority(&program_id.clone(), &listing.product.mint);
 
         // The user and the contract needs to sign in order to transfer this token
         //
@@ -163,7 +304,7 @@ impl Processor {
         let charter = Charter::unpack_unchecked(&charter_account.try_borrow_data()?)?;
 
         // Ensure that the listing is referring to this charter governance
-        if listing.charter_governance_pubkey != *charter_account.key {
+        if listing.charter_governance != *charter_account.key {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
 
@@ -184,7 +325,7 @@ impl Processor {
         spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
-            &listing.seller.sol_token_account_pubkey,
+            &listing.seller.sol_token_account,
             initializer_account.key,
             &[],
             deposit_amount.floor() as u64,
@@ -206,7 +347,7 @@ impl Processor {
         spl_token::instruction::mint_to(
             token_program_account.key,
             &realm.community_mint,
-            &listing.seller.community_token_account_pubkey,
+            &listing.seller.community_token_account,
             program_id,
             &[],
             votes.floor() as u64,
@@ -216,7 +357,7 @@ impl Processor {
         let signers = signers.iter().map(|pk| pk).collect::<Vec<_>>();
         spl_token::instruction::mint_to(
             token_program_account.owner,
-            &listing.product.mint_pubkey,
+            &listing.product.mint,
             app_token_account.key,
             &app_mint_pda,
             &signers,
@@ -325,14 +466,14 @@ impl Processor {
         listing.is_initialized = true;
         listing.price = Price { amount: amount };
         listing.seller = Seller {
-            seller_pubkey: *initializer_account.key,
-            sol_token_account_pubkey: *deposit_token_account.key,
-            community_token_account_pubkey: *community_token_account.key,
+            authority: *initializer_account.key,
+            sol_token_account: *deposit_token_account.key,
+            community_token_account: *community_token_account.key,
         };
         listing.product = Product {
-            mint_pubkey: *app_mint_account.key,
+            mint: *app_mint_account.key,
         };
-        listing.charter_governance_pubkey = *charter_governance_account.key;
+        listing.charter_governance = *charter_governance_account.key;
         Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
 
         // Make the program the authority over the app mint.
