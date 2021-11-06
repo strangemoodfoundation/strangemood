@@ -136,6 +136,12 @@ impl Processor {
 
         // 2. [] The new SOL deposit account
         let new_sol_deposit_account = next_account_info(account_info_iter)?;
+        let deposit_token =
+            spl_token::state::Account::unpack(*new_sol_deposit_account.data.borrow())?;
+        if deposit_token.mint != spl_token::native_mint::id() {
+            msg!("Account #3 is not wrapped SOL");
+            return Err(StrangemoodError::TokenMintNotSupported.into());
+        }
 
         // 3. [] The new community deposit account
         let new_community_deposit_account = next_account_info(account_info_iter)?;
@@ -214,7 +220,7 @@ impl Processor {
             return Err(StrangemoodError::InvalidPurchaseAmount.into());
         }
         // The native mint pubkey
-        if purchase_token.mint != Pubkey::new(b"So11111111111111111111111111111111111111112") {
+        if purchase_token.mint != spl_token::native_mint::id() {
             return Err(StrangemoodError::InvalidPurchaseToken.into());
         }
 
@@ -229,7 +235,7 @@ impl Processor {
         let app_token = spl_token::state::Account::unpack(*app_token_account.data.borrow())?;
         if app_token.mint != listing.product.mint {
             // Someone tried to purchase something with the wrong type of token account
-            return Err(ProgramError::InvalidAccountData);
+            return Err(spl_token::error::TokenError::InvalidMint.into());
         }
 
         // 4. [] The multi-sig owner of the app token account
@@ -381,35 +387,35 @@ impl Processor {
             return Err(ProgramError::MissingRequiredSignature);
         }
 
-        // 1. [] - The mint of the app token
+        // 1. [writable] The listing account
+        let listing_account = next_account_info(account_info_iter)?;
+        let mut listing = Listing::unpack_unchecked(&listing_account.try_borrow_data()?)?;
+        if listing.is_initialized() {
+            msg!("Account #1 is already initialized");
+            return Err(ProgramError::AccountAlreadyInitialized);
+        }
+
+        // 2. [] - The mint of the app token
         let app_mint_account = next_account_info(account_info_iter)?;
         if *app_mint_account.owner != spl_token::id() {
-            msg!("Account #1 is not owned by the token program");
+            msg!("Account #2 is not owned by the token program");
             return Err(ProgramError::IncorrectProgramId);
         }
 
-        // 2. [] - The place to deposit the token into
+        // 3. [] - The place to deposit SOL into
         let deposit_token_account = next_account_info(account_info_iter)?;
         if *deposit_token_account.owner != spl_token::id() {
-            msg!("Account #2 is not owned by the token program");
+            msg!("Account #3 is not owned by the token program");
             // The token account that's receiving the token needs to be owned
             // by the SPL token program
             return Err(ProgramError::IncorrectProgramId);
         }
+
         let deposit_token =
             spl_token::state::Account::unpack(*deposit_token_account.data.borrow())?;
-        if deposit_token.mint != Pubkey::new(b"So11111111111111111111111111111111111111112") {
+        if deposit_token.mint != spl_token::native_mint::id() {
+            msg!("Account #3 is not wrapped SOL");
             return Err(StrangemoodError::TokenMintNotSupported.into());
-        }
-
-        // 3. [writable] The listing account
-        let listing_account = next_account_info(account_info_iter)?;
-        if !listing_account.is_writable {
-            return Err(StrangemoodError::NotWritableAccount.into());
-        }
-        let mut listing = Listing::unpack_unchecked(&listing_account.try_borrow_data()?)?;
-        if listing.is_initialized() {
-            return Err(ProgramError::AccountAlreadyInitialized);
         }
 
         // 4. [] the voting token account to deposit voting tokens into
@@ -436,6 +442,7 @@ impl Processor {
             charter_governance_account,
         )?;
         if charter_governance.realm != *realm_account.key {
+            msg!("Account #6 has an invalid realm for governance");
             return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
         }
 
@@ -447,15 +454,18 @@ impl Processor {
             charter_account.key,
         );
         if *charter_governance_account.key != gov_address {
+            msg!("Account #7 is not an authorized charter");
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
         if *charter_account.owner != *program_id {
-            return Err(StrangemoodError::UnauthorizedCharter.into());
+            msg!("Account #7 is not not owned by the program");
+            return Err(ProgramError::IllegalOwner);
         }
 
         // 8. [] The rent sysvar
         let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
         if !rent.is_exempt(listing_account.lamports(), listing_account.data_len()) {
+            msg!("The listing is not rent exempt");
             return Err(StrangemoodError::NotRentExempt.into());
         }
 
@@ -509,39 +519,186 @@ impl Processor {
 #[cfg(test)]
 mod tests {
 
+    use solana_program::program_option::COption;
     use solana_sdk::account::{create_account_for_test, create_is_signer_account_infos};
 
     use super::*;
 
+    fn set_listing(listing: &mut solana_sdk::account::Account, data: &Listing) {
+        let mut listing_data = vec![0; Listing::get_packed_len()];
+        let mut listing_account = Listing::unpack_unchecked(&listing_data).unwrap();
+        listing_account.is_available = data.is_initialized;
+        listing_account.is_initialized = data.is_initialized;
+        listing_account.price = Price {
+            amount: data.price.amount,
+        };
+        listing_account.seller = Seller {
+            authority: data.seller.authority,
+            sol_token_account: data.seller.sol_token_account,
+            community_token_account: data.seller.community_token_account,
+        };
+        listing_account.product = Product {
+            mint: data.product.mint,
+        };
+        listing_account.charter_governance = data.charter_governance;
+        Listing::pack(listing_account, &mut listing_data).unwrap();
+        listing.data = listing_data;
+    }
+
+    fn set_token_account(
+        account: &mut solana_sdk::account::Account,
+        new_account: &spl_token::state::Account,
+    ) {
+        let mut data = vec![0; spl_token::state::Account::get_packed_len()];
+        let mut token_account = spl_token::state::Account::unpack_unchecked(&data).unwrap();
+
+        token_account.mint = new_account.mint;
+        token_account.owner = new_account.owner;
+        token_account.state = new_account.state;
+        token_account.is_native = new_account.is_native;
+        token_account.delegate = new_account.delegate;
+        token_account.delegated_amount = new_account.delegated_amount;
+        token_account.amount = new_account.amount;
+        token_account.close_authority = new_account.close_authority;
+
+        spl_token::state::Account::pack(token_account, &mut data).unwrap();
+        account.data = data;
+    }
+
     #[test]
-    fn test_init_listing_fails_if_not_signer() {
+    fn test_deposit_accounts_must_use_native_mint() {
+        let program_id = Pubkey::new_unique();
+        let mut signer = create_account_for_test(&Rent::default());
+        let mut listing = create_account_for_test(&Rent::default());
+        let mut app_mint = create_account_for_test(&Rent::default());
+        app_mint.owner = spl_token::id();
+        let mut sol_deposit = create_account_for_test(&Rent::default());
+        sol_deposit.owner = spl_token::id();
+        let mut votes_deposit = create_account_for_test(&Rent::default());
+        votes_deposit.owner = spl_token::id();
+        let mut realm = create_account_for_test(&Rent::default());
+        let mut charter_gov = create_account_for_test(&Rent::default());
+        let mut rent = create_account_for_test(&Rent::default());
+        let mut token_program = create_account_for_test(&Rent::default());
+
+        // Setup Listing
+        set_listing(
+            &mut listing,
+            &Listing {
+                is_initialized: false,
+                is_available: true,
+                charter_governance: Pubkey::new_unique(),
+                seller: Seller {
+                    authority: Pubkey::new_unique(),
+                    sol_token_account: Pubkey::new_unique(),
+                    community_token_account: Pubkey::new_unique(),
+                },
+                price: Price { amount: 10 },
+                product: Product {
+                    mint: Pubkey::new_unique(),
+                },
+            },
+        );
+
+        // Init sol deposit account
+        let not_the_native_mint = Pubkey::new_unique();
+        set_token_account(
+            &mut sol_deposit,
+            &spl_token::state::Account {
+                mint: not_the_native_mint,
+                owner: Pubkey::new_unique(),
+                amount: 10,
+                delegate: COption::None,
+                state: spl_token::state::AccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 0,
+                close_authority: COption::None,
+            },
+        );
+
+        // Run Init Listing
+        let mut accts = [
+            (&Pubkey::new_unique(), true, &mut signer),
+            (&Pubkey::new_unique(), false, &mut listing),
+            (&Pubkey::new_unique(), false, &mut app_mint),
+            (&Pubkey::new_unique(), false, &mut sol_deposit),
+            (&Pubkey::new_unique(), false, &mut votes_deposit),
+            (&Pubkey::new_unique(), false, &mut realm),
+            (&Pubkey::new_unique(), false, &mut charter_gov),
+            (&Pubkey::new_unique(), false, &mut rent),
+            (&Pubkey::new_unique(), false, &mut token_program),
+        ];
+        let mut accounts = create_is_signer_account_infos(&mut accts);
+        accounts[1].is_writable = true; // Make listing writable
+        let result = Processor::process_init_listing(&accounts, 10, &program_id);
+        assert_eq!(Err(StrangemoodError::TokenMintNotSupported.into()), result);
+
+        // Run Set Listing Deposit Accounts
+        let auth = Pubkey::new_unique();
+        set_listing(
+            &mut listing,
+            &Listing {
+                is_initialized: true,
+                is_available: true,
+                charter_governance: Pubkey::new_unique(),
+                seller: Seller {
+                    authority: auth,
+                    sol_token_account: Pubkey::new_unique(),
+                    community_token_account: Pubkey::new_unique(),
+                },
+                price: Price { amount: 10 },
+                product: Product {
+                    mint: Pubkey::new_unique(),
+                },
+            },
+        );
+        listing.owner = program_id;
+        let mut accts = [
+            (&auth, true, &mut signer),
+            (&Pubkey::new_unique(), false, &mut listing),
+            (&Pubkey::new_unique(), false, &mut sol_deposit),
+            (&Pubkey::new_unique(), false, &mut votes_deposit),
+        ];
+        let mut accounts = create_is_signer_account_infos(&mut accts);
+        accounts[1].is_writable = true; // Make listing writable
+        let result = Processor::process_set_listing_deposit(&accounts, &program_id);
+        assert_eq!(Err(StrangemoodError::TokenMintNotSupported.into()), result);
+    }
+
+    #[test]
+    fn test_instructions_require_signers() {
         let mut acct = create_account_for_test(&Rent::default());
         let mut accts = [(&Pubkey::new_unique(), false, &mut acct)];
-
         let accounts = create_is_signer_account_infos(&mut accts);
+
         let result = Processor::process_init_listing(&accounts, 10, &Pubkey::new_unique());
+        assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
+
+        let result = Processor::process_set_listing_price(&accounts, 10, &Pubkey::new_unique());
+        assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
+
+        let result = Processor::process_purchase(&accounts, &Pubkey::new_unique());
+        assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
+
+        let result = Processor::process_set_listing_authority(&accounts, &Pubkey::new_unique());
+        assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
+
+        let result =
+            Processor::process_set_listing_availability(&accounts, true, &Pubkey::new_unique());
+        assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
+
+        let result = Processor::process_set_listing_deposit(&accounts, &Pubkey::new_unique());
         assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
     }
 
     #[test]
     fn test_init_listing_cannot_be_reinitalized() {
         let mut signer = create_account_for_test(&Rent::default());
-        let mut app_mint = create_account_for_test(&Rent::default());
-        app_mint.owner = spl_token::id();
-        let mut purchase_mint = create_account_for_test(&Rent::default());
-        purchase_mint.owner = spl_token::id();
-        let mut deposit_account = create_account_for_test(&Rent::default());
-        deposit_account.owner = spl_token::id();
-        let mut deposit_account = create_account_for_test(&Rent::default());
-        deposit_account.owner = spl_token::id();
-        let mut deposit_account = create_account_for_test(&Rent::default());
-        deposit_account.owner = spl_token::id();
+        let mut listing = create_account_for_test(&Rent::default());
 
         let mut accts = [
             (&Pubkey::new_unique(), true, &mut signer), // 0. [signer]
-            (&Pubkey::new_unique(), false, &mut app_mint), // 1. App Mint
-            (&Pubkey::new_unique(), false, &mut purchase_mint), // 2. Purchase Mint
-            (&Pubkey::new_unique(), false, &mut deposit_account), // 3. Deposit account
+            (&Pubkey::new_unique(), false, &mut listing), // 1. [writable] listing
         ];
         let accounts = create_is_signer_account_infos(&mut accts);
         let result = Processor::process_init_listing(&accounts, 10, &Pubkey::new_unique());

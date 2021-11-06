@@ -50,7 +50,7 @@ impl Charter {
 impl Sealed for Charter {}
 
 impl Pack for Charter {
-    const LEN: usize = 32; // See "test_get_packed_len()" for explanation
+    const LEN: usize = 50; // See "test_get_packed_len()" for explanation
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let data = self.try_to_vec().unwrap();
@@ -124,7 +124,7 @@ impl IsInitialized for Listing {
 }
 
 impl Pack for Listing {
-    const LEN: usize = 137; // See "test_get_packed_len()" for explanation
+    const LEN: usize = 170; // See "test_get_packed_len()" for explanation
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let data = self.try_to_vec().unwrap();
@@ -157,7 +157,8 @@ mod tests {
 
         assert_eq!(charter.expansion_rate(), 0.01000);
         assert_eq!(charter.contribution_rate(), 2000.0);
-        assert_eq!(float_as_amount(0.01, 2), 100);
+        assert_eq!(float_as_amount(0.01, 2), 1);
+        assert_eq!(float_as_amount(amount_as_float(200, 2), 2), 200);
     }
 
     #[test]

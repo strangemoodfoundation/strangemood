@@ -63,7 +63,7 @@ pub enum StrangemoodError {
     #[error("Deposit Token Account not owned by signer")]
     DepositAccountNotOwnedBySigner,
 
-    /// Tokens must be one of the supported tokens.
+    /// Tokens must be wrapped SOL.
     ///
     /// If the contract allowed any token, then someone
     /// could drain funds from the DAO by uploading large
