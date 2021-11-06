@@ -696,58 +696,30 @@ mod tests {
         let mut signer = create_account_for_test(&Rent::default());
         let mut listing = create_account_for_test(&Rent::default());
 
+        set_listing(
+            &mut listing,
+            &Listing {
+                is_initialized: true, // this is what we're testing
+                is_available: true,
+                charter_governance: Pubkey::new_unique(),
+                seller: Seller {
+                    authority: Pubkey::new_unique(),
+                    sol_token_account: Pubkey::new_unique(),
+                    community_token_account: Pubkey::new_unique(),
+                },
+                price: Price { amount: 10 },
+                product: Product {
+                    mint: Pubkey::new_unique(),
+                },
+            },
+        );
         let mut accts = [
             (&Pubkey::new_unique(), true, &mut signer), // 0. [signer]
             (&Pubkey::new_unique(), false, &mut listing), // 1. [writable] listing
         ];
         let accounts = create_is_signer_account_infos(&mut accts);
         let result = Processor::process_init_listing(&accounts, 10, &Pubkey::new_unique());
-        assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
-    }
-
-    #[test]
-    fn test_init_listing_fails_if_accounts_not_owned_by_token_program() {
-        // 1. App Mint must be owned by token program
-        let mut signer = create_account_for_test(&Rent::default());
-        let mut app_mint = create_account_for_test(&Rent::default());
-        let mut accts = [
-            (&Pubkey::new_unique(), true, &mut signer), // 0. [signer]
-            (&Pubkey::new_unique(), false, &mut app_mint), // 1. App Mint
-        ];
-        let accounts = create_is_signer_account_infos(&mut accts);
-        let result = Processor::process_init_listing(&accounts, 10, &Pubkey::new_unique());
-        assert_eq!(Err(ProgramError::IncorrectProgramId), result);
-
-        // 2. Price mint must be owned by token program
-        let mut signer = create_account_for_test(&Rent::default());
-        let mut app_mint = create_account_for_test(&Rent::default());
-        app_mint.owner = spl_token::id();
-        let mut purchase_mint = create_account_for_test(&Rent::default());
-        let mut accts = [
-            (&Pubkey::new_unique(), true, &mut signer), // 0. [signer]
-            (&Pubkey::new_unique(), false, &mut app_mint), // 1. App Mint
-            (&Pubkey::new_unique(), false, &mut purchase_mint), // 2. Purchase Mint
-        ];
-        let accounts = create_is_signer_account_infos(&mut accts);
-        let result = Processor::process_init_listing(&accounts, 10, &Pubkey::new_unique());
-        assert_eq!(Err(ProgramError::IncorrectProgramId), result);
-
-        // 3. Deposit Token Account must be owned by token program
-        let mut signer = create_account_for_test(&Rent::default());
-        let mut app_mint = create_account_for_test(&Rent::default());
-        app_mint.owner = spl_token::id();
-        let mut purchase_mint = create_account_for_test(&Rent::default());
-        purchase_mint.owner = spl_token::id();
-        let mut deposit_account = create_account_for_test(&Rent::default());
-        let mut accts = [
-            (&Pubkey::new_unique(), true, &mut signer), // 0. [signer]
-            (&Pubkey::new_unique(), false, &mut app_mint), // 1. App Mint
-            (&Pubkey::new_unique(), false, &mut purchase_mint), // 2. Purchase Mint
-            (&Pubkey::new_unique(), false, &mut deposit_account), // 3. Deposit account
-        ];
-        let accounts = create_is_signer_account_infos(&mut accts);
-        let result = Processor::process_init_listing(&accounts, 10, &Pubkey::new_unique());
-        assert_eq!(Err(ProgramError::IncorrectProgramId), result);
+        assert_eq!(Err(ProgramError::AccountAlreadyInitialized), result);
     }
 
     #[test]
