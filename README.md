@@ -2,7 +2,7 @@
 <h1 align="center">☼ Strangemood ☼</h1>
 </p>
 
-Strangemood is a decentralized marketplace for video games that's controlled by it's sellers. It's like Steam.
+Strangemood is a decentralized marketplace for video games that's controlled by its sellers. It's like Steam.
 
 Unlike Steam, Strangemood is a _protocol_, like email or RSS, not a product. Anyone can build their own marketplace on top of Strangemood, just like anyone can make a podcasting app or an email client.
 
