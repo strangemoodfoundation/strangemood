@@ -32,7 +32,7 @@ pub enum StrangemoodInstruction {
     /// 1. `[writable]` The current listing account
     SetListingPrice { amount: u64 },
 
-    /// TODO: Changes the authority/owner of a Listing
+    /// Changes the authority/owner of a Listing
     ///
     /// Accounts expected:
     ///
@@ -41,7 +41,7 @@ pub enum StrangemoodInstruction {
     /// 2. `[]` The new authority of the account
     SetListingAuthority {},
 
-    /// TODO: Changes where the funds go to.
+    /// Changes where the funds go to.
     ///
     /// Accounts expected:
     ///
@@ -51,7 +51,7 @@ pub enum StrangemoodInstruction {
     /// 3. `[]` The new Community deposit account
     SetListingDeposit {},
 
-    /// TODO: Changes if the listing is currently buyable.
+    /// Changes if the listing is currently buyable.
     ///
     /// Accounts expected:
     ///
