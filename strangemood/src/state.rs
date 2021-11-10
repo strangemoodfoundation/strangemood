@@ -32,7 +32,7 @@ pub(crate) fn amount_as_float(amount: u64, decimals: u8) -> f64 {
 }
 
 pub(crate) fn float_as_amount(float: f64, decimals: u8) -> u64 {
-    (float as f64 * i32::pow(10, decimals.into()) as f64).floor() as u64
+    (float as f64 * i32::pow(10, decimals.into()) as f64) as u64
 }
 
 impl Charter {

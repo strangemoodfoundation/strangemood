@@ -1,7 +1,5 @@
-import { sum } from '../src';
+import { main } from '../src';
 
-describe('blah', () => {
-  it('works', () => {
-    expect(sum(1, 1)).toEqual(2);
-  });
+test('hi', async () => {
+  return main().catch(console.error);
 });

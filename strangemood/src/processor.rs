@@ -334,7 +334,7 @@ impl Processor {
             &listing.seller.sol_token_account,
             initializer_account.key,
             &[],
-            deposit_amount.floor() as u64,
+            deposit_amount as u64,
         )?;
 
         // Transfer contribution amount to the realm's sol account
@@ -344,7 +344,7 @@ impl Processor {
             &charter.realm_sol_token_account_pubkey,
             initializer_account.key,
             &[],
-            contribution_amount.floor() as u64,
+            contribution_amount as u64,
         )?;
 
         // Provide voting tokens to the lister
@@ -356,7 +356,7 @@ impl Processor {
             &listing.seller.community_token_account,
             program_id,
             &[],
-            votes.floor() as u64,
+            votes as u64,
         )?;
 
         // Mint an app token that proves the user bought the app

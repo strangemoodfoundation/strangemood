@@ -57,8 +57,6 @@ pub enum StrangemoodInstruction {
     ///
     /// 0. `[signer]` The account of that initialized the listing
     /// 1. `[writable]` The current listing account
-    /// 2. `[]` The new SOL deposit account
-    /// 3. `[]` The new Community deposit account
     SetListingAvailability { available: bool },
 
     /// Purchase from a listing
