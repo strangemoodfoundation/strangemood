@@ -16,12 +16,12 @@ pub struct Charter {
     // Note that Borsh doesn't support floats, and so we carry over the pattern
     // used in the token program of having an "amount" and a "decimals".
     // So an "amount" of 100 and a "decimals" of 3 would be 0.1
-    expansion_rate_amount: u64,
-    expansion_rate_decimals: u8,
+    pub expansion_rate_amount: u64,
+    pub expansion_rate_decimals: u8,
 
     // The % of each purchase that goes to the community account.
-    contribution_rate_amount: u64,
-    contribution_rate_decimals: u8,
+    pub contribution_rate_amount: u64,
+    pub contribution_rate_decimals: u8,
 
     // The community account of the realm that contributions go to
     pub realm_sol_token_account_pubkey: Pubkey,

@@ -72,8 +72,7 @@ pub enum StrangemoodInstruction {
     /// 5. `[]` The realm account
     /// 6. `[]` The account governance of the charter
     /// 7. `[]` The account of the charter itself
-    /// 8. `[]` The rent sysvar
-    /// 9. `[]` The token program
+    /// 8. `[]` The token program
     PurchaseListing {},
 }
 

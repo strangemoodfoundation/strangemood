@@ -1,49 +1,58 @@
 import * as solana from '@solana/web3.js';
 import { struct, u32, ns64 } from '@solana/buffer-layout';
+import { asSigner, initListing } from './instructions';
+
+// async function createAccount(
+//   conn: solana.Connection,
+//   keys: {
+//     payer: solana.PublicKey;
+//   }
+// ) {
+//   let nonceAccount = solana.Keypair.generate();
+//   let minimumAmountForNonceAccount = await conn.getMinimumBalanceForRentExemption(
+//     solana.NONCE_ACCOUNT_LENGTH
+//   );
+//   let createNonceAccountTransaction = new solana.Transaction().add(
+//     solana.SystemProgram.createNonceAccount({
+//       fromPubkey: payer.publicKey,
+//       noncePubkey: nonceAccount.publicKey,
+//       authorizedPubkey: payer.publicKey,
+//       lamports: minimumAmountForNonceAccount,
+//     })
+//   );
+// }
 
 export const main = async () => {
-  let keypair = solana.Keypair.generate();
+  let signer = solana.Keypair.generate();
   let payer = solana.Keypair.generate();
-
   let connection = new solana.Connection('http://127.0.0.1:8899');
 
+  // Get some SOL to pay for the transactions
   let airdropSignature = await connection.requestAirdrop(
     payer.publicKey,
     solana.LAMPORTS_PER_SOL
   );
-
   await connection.confirmTransaction(airdropSignature);
 
-  let allocateTransaction = new solana.Transaction({
+  // Create a listing
+  let createListingTx = new solana.Transaction({
     feePayer: payer.publicKey,
   });
-  let keys = [{ pubkey: keypair.publicKey, isSigner: true, isWritable: true }];
-  let params = { space: 100 };
 
-  let allocateStruct = {
-    index: 8,
-    layout: struct([u32('instruction'), ns64('space')]),
-  };
-
-  let data = Buffer.alloc(allocateStruct.layout.span);
-  let layoutFields = Object.assign(
-    { instruction: allocateStruct.index },
-    params
-  );
-  allocateStruct.layout.encode(layoutFields, data);
-
-  allocateTransaction.add(
-    new solana.TransactionInstruction({
-      keys,
-      programId: solana.SystemProgram.programId,
-      data,
-    })
-  );
-
-  await solana.sendAndConfirmTransaction(connection, allocateTransaction, [
-    payer,
-    keypair,
-  ]);
+  // createListingTx.add(
+  //   initListing(
+  //     STRANGEMOOD_PROGRAM_ID,
+  //     {
+  //       signer: asSigner(signer),
+  //       listing:
+  //     },
+  //     { amount: 1 }
+  //   )
+  // );
+  // await solana.sendAndConfirmTransaction(connection, allocateTransaction, [
+  //   payer,
+  //   keypair,
+  // ]);
 
   console.log('confirmed!');
 };

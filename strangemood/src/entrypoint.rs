@@ -12,3 +12,5 @@ fn process_instruction(
 ) -> ProgramResult {
     Processor::process(program_id, accounts, instruction_data)
 }
+
+solana_program::declare_id!("i2wXatLLgvNiVkDP9VrNm7mQ3vYs43MZP8D3ooY9Rgw");

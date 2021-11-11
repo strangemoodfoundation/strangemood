@@ -314,13 +314,7 @@ impl Processor {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
 
-        // 8. [] The rent sysvar
-        let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
-        if !rent.is_exempt(listing_account.lamports(), listing_account.data_len()) {
-            return Err(StrangemoodError::NotRentExempt.into());
-        }
-
-        // 9. [] The token program
+        // 8. [] The token program
         let token_program_account = next_account_info(account_info_iter)?;
 
         let deposit_rate = 1.0 - charter.contribution_rate();
