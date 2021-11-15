@@ -8,6 +8,8 @@ use solana_program::{
 
 /// The rules of the governance; controlled by a governance account
 /// There should only be one charter per realm.
+///
+/// Note: keep in mind these fields are in-order!
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
 pub struct Charter {
     // The amount of voting tokens to give to a user per 1.0 wrapped SOL contributed

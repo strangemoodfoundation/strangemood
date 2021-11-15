@@ -1,8 +1,9 @@
 import * as solana from '@solana/web3.js';
-import { struct, u32, ns64 } from '@solana/buffer-layout';
+import { struct, u32, ns64, seq } from '@solana/buffer-layout';
 import { AccountMeta as SolanaAccountMeta } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { STRANGEMOOD_PROGRAM_ID } from './constants';
+import { CharterLayout, ListingLayout } from './state';
 
 const INDEXES = {
   INIT_LISTING: 0,
@@ -239,6 +240,45 @@ export function purchaseListing(
   });
 }
 
-// export function createCharterAccount() {
-//   solana.SystemProgram.createAccount({});
-// }
+export type CreateCharterAccountParams = {
+  lamportsForRent: number;
+  payerPubkey: solana.PublicKey;
+  newAccountPubkey: solana.PublicKey;
+  owner: solana.PublicKey;
+};
+
+export function createEmptyCharterAccount(params: CreateCharterAccountParams) {
+  return solana.SystemProgram.createAccount({
+    fromPubkey: params.payerPubkey,
+    newAccountPubkey: params.newAccountPubkey,
+    lamports: params.lamportsForRent,
+    space: CharterLayout.span,
+
+    // TODO: this probably should be the gov program, but technically there's no check,
+    // since anyone could create their own governance program.
+    programId: params.owner,
+  });
+}
+
+export function setCharterAccount(params: CreateCharterAccountParams) {
+  let fields = Object.assign({ instruction: INDEXES.SET_LISTING_DEPOSIT });
+  let layout = struct([u32('instruction'), ns64('amount')]);
+  let data = Buffer.alloc(layout.span);
+  layout.encode(fields, data);
+}
+
+export type CreateListingAccount = {
+  lamportsForRent: number;
+  payerPubkey: solana.PublicKey;
+  newAccountPubkey: solana.PublicKey;
+};
+
+export function createListingAccount(params: CreateListingAccount) {
+  return solana.SystemProgram.createAccount({
+    fromPubkey: params.payerPubkey,
+    newAccountPubkey: params.newAccountPubkey,
+    lamports: params.lamportsForRent,
+    space: ListingLayout.span,
+    programId: STRANGEMOOD_PROGRAM_ID,
+  });
+}

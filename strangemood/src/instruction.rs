@@ -1,8 +1,10 @@
 use solana_program::program_error::ProgramError;
+use solana_program::pubkey::Pubkey;
 use std::convert::TryInto;
 use std::mem::size_of;
 
 use crate::error::StrangemoodError::InvalidInstruction;
+use crate::state::Charter;
 
 // inside instruction.rs
 pub enum StrangemoodInstruction {
@@ -74,6 +76,12 @@ pub enum StrangemoodInstruction {
     /// 7. `[]` The account of the charter itself
     /// 8. `[]` The token program
     PurchaseListing {},
+
+    /// Setup a charter account. This is more of a convenience instruction,
+    ///
+    /// Accounts expected:
+    /// 0. `[writable]` The current charter account
+    SetCharter { data: Charter },
 }
 
 impl StrangemoodInstruction {
@@ -94,8 +102,40 @@ impl StrangemoodInstruction {
             5 => Self::SetListingAvailability {
                 available: Self::unpack_bool(rest)?,
             },
+            6 => {
+                let (ex_rate_amount_bs, rest) = rest.split_at(8);
+                let expansion_rate_amount = Self::unpack_amount(ex_rate_amount_bs)?;
+                let (ex_rate_decimal_bs, rest) = rest.split_at(1);
+                let expansion_rate_decimals = Self::unpack_decimal(ex_rate_decimal_bs)?;
+                let (co_rate_amount_bs, rest) = rest.split_at(8);
+                let contribution_rate_amount = Self::unpack_amount(co_rate_amount_bs)?;
+                let (co_rate_decimal_bs, rest) = rest.split_at(1);
+                let contribution_rate_decimals = Self::unpack_decimal(co_rate_decimal_bs)?;
+                let (sol_pubkey_bs, _) = rest.split_at(32);
+                let realm_sol_token_account_pubkey = Self::unpack_pubkey(sol_pubkey_bs)?;
+
+                Self::SetCharter {
+                    data: Charter {
+                        expansion_rate_amount,
+                        expansion_rate_decimals,
+                        contribution_rate_amount,
+                        contribution_rate_decimals,
+                        realm_sol_token_account_pubkey,
+                    },
+                }
+            }
             _ => return Err(InvalidInstruction.into()),
         })
+    }
+
+    fn unpack_pubkey(input: &[u8]) -> Result<Pubkey, ProgramError> {
+        if input.len() >= 32 {
+            let (key, _) = input.split_at(32);
+            let pk = Pubkey::new(key);
+            Ok(pk)
+        } else {
+            Err(InvalidInstruction.into())
+        }
     }
 
     fn unpack_amount(input: &[u8]) -> Result<u64, ProgramError> {
@@ -105,6 +145,15 @@ impl StrangemoodInstruction {
             .map(u64::from_le_bytes)
             .ok_or(InvalidInstruction)?;
         Ok(amount)
+    }
+
+    fn unpack_decimal(input: &[u8]) -> Result<u8, ProgramError> {
+        let decimal = input
+            .get(..1)
+            .and_then(|slice| slice.try_into().ok())
+            .map(u8::from_le_bytes)
+            .ok_or(InvalidInstruction)?;
+        Ok(decimal)
     }
 
     fn unpack_bool(input: &[u8]) -> Result<bool, ProgramError> {
@@ -141,6 +190,14 @@ impl StrangemoodInstruction {
             StrangemoodInstruction::SetListingAvailability { available } => {
                 buf.push(5);
                 buf.push(if *available { 1 } else { 0 });
+            }
+            StrangemoodInstruction::SetCharter { data } => {
+                buf.push(6);
+                buf.extend_from_slice(&data.expansion_rate_amount.to_le_bytes());
+                buf.push(data.expansion_rate_decimals);
+                buf.extend_from_slice(&data.contribution_rate_amount.to_le_bytes());
+                buf.push(data.contribution_rate_decimals);
+                buf.extend_from_slice(&data.realm_sol_token_account_pubkey.to_bytes());
             }
         }
         buf
@@ -204,6 +261,30 @@ mod test {
         let mut input: Vec<u8> = Vec::with_capacity(size_of::<StrangemoodInstruction>());
         input.push(5);
         input.push(1);
+        let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
+        assert_eq!(packed, unpacked.pack());
+
+        // Tag 6 -> SetCharter
+        let pubkey = Pubkey::new_unique();
+        let check = StrangemoodInstruction::SetCharter {
+            data: Charter {
+                expansion_rate_amount: 10000,
+                expansion_rate_decimals: 2,
+                contribution_rate_amount: 100,
+                contribution_rate_decimals: 5,
+                realm_sol_token_account_pubkey: pubkey,
+            },
+        };
+        let packed = check.pack();
+        let mut input: Vec<u8> = Vec::with_capacity(size_of::<StrangemoodInstruction>());
+        input.push(6);
+        let exp_amount: u64 = 10000;
+        input.extend_from_slice(&exp_amount.to_le_bytes());
+        input.push(2);
+        let cont_amount: u64 = 100;
+        input.extend_from_slice(&cont_amount.to_le_bytes());
+        input.push(5);
+        input.extend_from_slice(&pubkey.to_bytes());
         let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
         assert_eq!(packed, unpacked.pack());
     }

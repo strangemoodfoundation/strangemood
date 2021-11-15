@@ -33,7 +33,7 @@ impl Processor {
                 Processor::process_init_listing(accounts, amount, program_id)
             }
             StrangemoodInstruction::PurchaseListing {} => {
-                Processor::process_purchase(accounts, program_id)
+                Processor::process_purchase_listing(accounts, program_id)
             }
             StrangemoodInstruction::SetListingPrice { amount } => {
                 Processor::process_set_listing_price(accounts, amount, program_id)
@@ -46,6 +46,9 @@ impl Processor {
             }
             StrangemoodInstruction::SetListingAvailability { available } => {
                 Processor::process_set_listing_availability(accounts, available, program_id)
+            }
+            StrangemoodInstruction::SetCharter { data } => {
+                Processor::process_set_charter(accounts, data)
             }
         }
     }
@@ -185,7 +188,7 @@ impl Processor {
         Ok(())
     }
 
-    fn process_purchase(accounts: &[AccountInfo], program_id: &Pubkey) -> ProgramResult {
+    fn process_purchase_listing(accounts: &[AccountInfo], program_id: &Pubkey) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
@@ -508,6 +511,23 @@ impl Processor {
 
         Ok(())
     }
+
+    fn process_set_charter(accounts: &[AccountInfo], data: Charter) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        // 0. [writable]
+        let charter_account = next_account_info(account_info_iter)?;
+        let mut charter = Charter::unpack_unchecked(&charter_account.try_borrow_data()?)?;
+
+        charter.expansion_rate_amount = data.expansion_rate_amount;
+        charter.expansion_rate_decimals = data.expansion_rate_decimals;
+        charter.contribution_rate_amount = data.contribution_rate_amount;
+        charter.contribution_rate_decimals = data.contribution_rate_decimals;
+        charter.realm_sol_token_account_pubkey = data.realm_sol_token_account_pubkey;
+
+        Charter::pack(charter, &mut charter_account.try_borrow_mut_data()?)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -671,7 +691,7 @@ mod tests {
         let result = Processor::process_set_listing_price(&accounts, 10, &Pubkey::new_unique());
         assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
 
-        let result = Processor::process_purchase(&accounts, &Pubkey::new_unique());
+        let result = Processor::process_purchase_listing(&accounts, &Pubkey::new_unique());
         assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
 
         let result = Processor::process_set_listing_authority(&accounts, &Pubkey::new_unique());
@@ -722,7 +742,7 @@ mod tests {
         let mut accts = [(&Pubkey::new_unique(), false, &mut acct)];
 
         let accounts = create_is_signer_account_infos(&mut accts);
-        let result = Processor::process_purchase(&accounts, &Pubkey::new_unique());
+        let result = Processor::process_purchase_listing(&accounts, &Pubkey::new_unique());
         assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
     }
 }

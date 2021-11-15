@@ -1,26 +1,20 @@
 import * as solana from '@solana/web3.js';
 import { struct, u32, ns64 } from '@solana/buffer-layout';
-import { asSigner, initListing } from './instructions';
+import * as ix from './instructions';
 
-// async function createAccount(
-//   conn: solana.Connection,
-//   keys: {
-//     payer: solana.PublicKey;
-//   }
-// ) {
-//   let nonceAccount = solana.Keypair.generate();
-//   let minimumAmountForNonceAccount = await conn.getMinimumBalanceForRentExemption(
-//     solana.NONCE_ACCOUNT_LENGTH
-//   );
-//   let createNonceAccountTransaction = new solana.Transaction().add(
-//     solana.SystemProgram.createNonceAccount({
-//       fromPubkey: payer.publicKey,
-//       noncePubkey: nonceAccount.publicKey,
-//       authorizedPubkey: payer.publicKey,
-//       lamports: minimumAmountForNonceAccount,
-//     })
-//   );
-// }
+async function createCharterrAccount(
+  conn: solana.Connection,
+  keys: {
+    payer: solana.PublicKey;
+  }
+) {
+  let nonceAccount = solana.Keypair.generate();
+  let minimumAmountForNonceAccount = await conn.getMinimumBalanceForRentExemption(
+    solana.NONCE_ACCOUNT_LENGTH
+  );
+
+  ix.createCharterAccount({});
+}
 
 export const main = async () => {
   let signer = solana.Keypair.generate();
