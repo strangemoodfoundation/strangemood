@@ -207,6 +207,8 @@ impl StrangemoodInstruction {
 #[cfg(test)]
 mod test {
 
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
@@ -265,28 +267,65 @@ mod test {
         assert_eq!(packed, unpacked.pack());
 
         // Tag 6 -> SetCharter
-        let pubkey = Pubkey::new_unique();
+        let pubkey = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
         let check = StrangemoodInstruction::SetCharter {
             data: Charter {
-                expansion_rate_amount: 10000,
+                expansion_rate_amount: 1,
                 expansion_rate_decimals: 2,
-                contribution_rate_amount: 100,
-                contribution_rate_decimals: 5,
+                contribution_rate_amount: 5,
+                contribution_rate_decimals: 2,
                 realm_sol_token_account_pubkey: pubkey,
             },
         };
         let packed = check.pack();
         let mut input: Vec<u8> = Vec::with_capacity(size_of::<StrangemoodInstruction>());
         input.push(6);
-        let exp_amount: u64 = 10000;
+        let exp_amount: u64 = 1;
         input.extend_from_slice(&exp_amount.to_le_bytes());
         input.push(2);
-        let cont_amount: u64 = 100;
+        let cont_amount: u64 = 5;
         input.extend_from_slice(&cont_amount.to_le_bytes());
-        input.push(5);
+        input.push(2);
         input.extend_from_slice(&pubkey.to_bytes());
         let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
         assert_eq!(packed, unpacked.pack());
+        assert_eq!(unpacked.pack().len(), 51);
+
+        let h = hex::encode(unpacked.pack());
+
+        assert_eq!(h, "060100000000000000020500000000000000020100000000000000000000000000000000000000000000000000000000000000");
+    }
+
+    #[test]
+    fn test_unpack_charter() {
+        let pubkey = Pubkey::new_unique();
+        let check = StrangemoodInstruction::SetCharter {
+            data: Charter {
+                expansion_rate_amount: 1,
+                expansion_rate_decimals: 2,
+                contribution_rate_amount: 5,
+                contribution_rate_decimals: 2,
+                realm_sol_token_account_pubkey: pubkey,
+            },
+        };
+        let packed = check.pack();
+        let mut input: Vec<u8> = Vec::with_capacity(size_of::<StrangemoodInstruction>());
+        input.push(6);
+        let exp_amount: u64 = 1;
+        input.extend_from_slice(&exp_amount.to_le_bytes());
+        input.push(2);
+        let cont_amount: u64 = 5;
+        input.extend_from_slice(&cont_amount.to_le_bytes());
+        input.push(2);
+        input.extend_from_slice(&pubkey.to_bytes());
+        assert_eq!(packed, input);
+
+        let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
+        let data = match unpacked {
+            StrangemoodInstruction::SetCharter { data } => data,
+            _ => panic!("oh no"),
+        };
+        assert_eq!(data.realm_sol_token_account_pubkey, pubkey);
     }
 
     #[test]

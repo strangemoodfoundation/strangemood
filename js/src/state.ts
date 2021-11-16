@@ -1,7 +1,17 @@
 import { struct, blob, u8 } from '@solana/buffer-layout';
 
-const publicKey = (prop: string) => blob(32, prop);
-const uint64 = (prop: string) => blob(8, prop);
+export const publicKey = (prop: string) => blob(32, prop);
+export const uint64 = (prop: string) => blob(8, prop);
+
+export const toBuffer = (arr: Buffer | Uint8Array | Array<number>): Buffer => {
+  if (Buffer.isBuffer(arr)) {
+    return arr;
+  } else if (arr instanceof Uint8Array) {
+    return Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength);
+  } else {
+    return Buffer.from(arr);
+  }
+};
 
 export const ListingLayout = struct([
   u8('is_initialized'),

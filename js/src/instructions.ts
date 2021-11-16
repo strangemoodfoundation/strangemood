@@ -1,9 +1,16 @@
 import * as solana from '@solana/web3.js';
-import { struct, u32, ns64, seq } from '@solana/buffer-layout';
+import { struct, u32, ns64, u8 } from '@solana/buffer-layout';
 import { AccountMeta as SolanaAccountMeta } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { STRANGEMOOD_PROGRAM_ID } from './constants';
-import { CharterLayout, ListingLayout } from './state';
+import {
+  CharterLayout,
+  ListingLayout,
+  publicKey,
+  toBuffer,
+  uint64,
+} from './state';
+import { Charter } from './types';
 
 const INDEXES = {
   INIT_LISTING: 0,
@@ -12,6 +19,7 @@ const INDEXES = {
   SET_LISTING_PRICE: 3,
   SET_LISTING_DEPOSIT: 4,
   SET_LISTING_AVAILABILITY: 5,
+  SET_CHARTER: 6,
 };
 
 const rent: ReadonlyAccountMeta = {
@@ -260,11 +268,46 @@ export function createEmptyCharterAccount(params: CreateCharterAccountParams) {
   });
 }
 
-export function setCharterAccount(params: CreateCharterAccountParams) {
-  let fields = Object.assign({ instruction: INDEXES.SET_LISTING_DEPOSIT });
-  let layout = struct([u32('instruction'), ns64('amount')]);
+export type SetCharterAccountParams = {
+  charterPubkey: solana.PublicKey;
+  charterData: Charter;
+};
+
+export function setCharterAccount(params: SetCharterAccountParams) {
+  let fields = Object.assign(
+    { instruction: INDEXES.SET_CHARTER },
+    {
+      expansion_rate_amount: params.charterData.expansion_rate_amount,
+      expansion_rate_decimals: params.charterData.expansion_rate_decimals,
+      contribution_rate_amount: params.charterData.contribution_rate_amount,
+      contribution_rate_decimals: params.charterData.contribution_rate_decimals,
+      realm_sol_token_account_pubkey: params.charterData.realm_sol_token_account_pubkey.toBytes(),
+    }
+  );
+
+  let layout = struct([
+    u8('instruction'),
+
+    ns64('expansion_rate_amount'),
+    u8('expansion_rate_decimals'),
+
+    ns64('contribution_rate_amount'),
+    u8('contribution_rate_decimals'),
+
+    publicKey('realm_sol_token_account_pubkey'),
+  ]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
+
+  console.log(data.length);
+  console.log(data.toString('hex'));
+
+  const keys = [asWritable(params.charterPubkey)];
+  return new solana.TransactionInstruction({
+    keys,
+    programId: STRANGEMOOD_PROGRAM_ID,
+    data,
+  });
 }
 
 export type CreateListingAccount = {
@@ -281,4 +324,53 @@ export function createListingAccount(params: CreateListingAccount) {
     space: ListingLayout.span,
     programId: STRANGEMOOD_PROGRAM_ID,
   });
+}
+
+export function argle() {
+  let key = solana.Keypair.generate();
+  let params = {
+    charterData: {
+      // 0.01 Strange per SOL contribution
+      expansion_rate_amount: 1,
+      expansion_rate_decimals: 2,
+
+      // contribution rate at 0.05 or 5%
+      contribution_rate_amount: 5,
+      contribution_rate_decimals: 2,
+
+      realm_sol_token_account_pubkey: new solana.PublicKey(
+        '4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM'
+      ),
+    },
+  };
+
+  let fields = Object.assign(
+    { instruction: INDEXES.SET_CHARTER },
+    {
+      expansion_rate_amount: params.charterData.expansion_rate_amount,
+      expansion_rate_decimals: params.charterData.expansion_rate_decimals,
+      contribution_rate_amount: params.charterData.contribution_rate_amount,
+      contribution_rate_decimals: params.charterData.contribution_rate_decimals,
+      realm_sol_token_account_pubkey: params.charterData.realm_sol_token_account_pubkey
+        .encode()
+        .reverse(),
+    }
+  );
+
+  let layout = struct([
+    u8('instruction'),
+
+    ns64('expansion_rate_amount'),
+    u8('expansion_rate_decimals'),
+
+    ns64('contribution_rate_amount'),
+    u8('contribution_rate_decimals'),
+
+    publicKey('realm_sol_token_account_pubkey'),
+  ]);
+  let data = Buffer.alloc(layout.span);
+  layout.encode(fields, data);
+
+  console.log(data.length);
+  console.log('hex', data.toString('hex'));
 }
