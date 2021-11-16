@@ -284,8 +284,17 @@ impl Processor {
 
         // 5. [] The realm account
         let realm_account = next_account_info(account_info_iter)?;
-        spl_governance::state::realm::assert_is_valid_realm(program_id, realm_account)?;
-        let realm = spl_governance::state::realm::get_realm_data(program_id, realm_account)?;
+
+        // BIG TODO: the program_ids here actually should be the program id of the deployed governance
+        // program for a strangemood governance.
+        spl_governance::state::realm::assert_is_valid_realm(
+            program_id, // TODO here!
+            realm_account,
+        )?;
+        let realm = spl_governance::state::realm::get_realm_data(
+            program_id, // TODO and here!
+            realm_account,
+        )?;
 
         // 6. [] The account governance account of the charter
         let charter_governance_account = next_account_info(account_info_iter)?;
@@ -484,7 +493,7 @@ impl Processor {
         Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
 
         // Make the program the authority over the app mint.
-        let (pda, _bump_seed) = Pubkey::find_program_address(&[b"strangemood"], program_id);
+        let (pda, _bump_seed) = Pubkey::find_program_address(&[b"strangemood_listing"], program_id);
         let owner_change_ix = match spl_token::instruction::set_authority(
             token_program_account.key,
             app_mint_account.key,
@@ -517,23 +526,33 @@ impl Processor {
 
         // 0. [signer]
         let signer_account = next_account_info(account_info_iter)?;
+        if !signer_account.is_signer {
+            msg!("Account #0 is missing required signature");
+            return Err(ProgramError::MissingRequiredSignature);
+        }
 
         // 1. [writable]
-        let charter_account = next_account_info(account_info_iter)?;
+        let charter_account = match next_account_info(account_info_iter) {
+            Ok(x) => x,
+            Err(e) => {
+                msg!("Is this happening?");
+                return ProgramResult::Err(e);
+            }
+        };
         let mut charter = Charter::unpack_unchecked(&charter_account.try_borrow_data()?)?;
+        if charter.authority != *signer_account.key {
+            return Err(ProgramError::IllegalOwner);
+        }
 
         charter.expansion_rate_amount = data.expansion_rate_amount;
         charter.expansion_rate_decimals = data.expansion_rate_decimals;
         charter.contribution_rate_amount = data.contribution_rate_amount;
         charter.contribution_rate_decimals = data.contribution_rate_decimals;
+        charter.authority = data.authority;
         charter.realm_sol_token_account_pubkey = data.realm_sol_token_account_pubkey;
 
+        msg!("Packing Charter");
         Charter::pack(charter, &mut charter_account.try_borrow_mut_data()?)?;
-
-        // Give the account back to the requester
-        let assign_ix =
-            solana_program::system_instruction::assign(signer_account.key, charter_account.key);
-        invoke(&assign_ix, &[signer_account.clone()])?;
 
         Ok(())
     }

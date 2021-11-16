@@ -12,6 +12,9 @@ use solana_program::{
 /// Note: keep in mind these fields are in-order!
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
 pub struct Charter {
+    // The pubkey of the keypair that can modify this charter.
+    pub authority: Pubkey,
+
     // The amount of voting tokens to give to a user per 1.0 wrapped SOL contributed
     // via community account contributions.
     //
@@ -150,6 +153,7 @@ mod tests {
     #[test]
     fn test_rate_calcs() {
         let charter = Charter {
+            authority: Pubkey::new_unique(),
             expansion_rate_amount: 1000,
             expansion_rate_decimals: 5,
             contribution_rate_amount: 2000,

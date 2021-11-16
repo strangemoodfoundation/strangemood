@@ -26,6 +26,11 @@ async function createCharterAccount(
     solana.NONCE_ACCOUNT_LENGTH
   );
 
+  let [pda, _] = await solana.PublicKey.findProgramAddress(
+    [Buffer.from('charter', 'utf8')],
+    STRANGEMOOD_PROGRAM_ID
+  );
+
   console.log('Create charter account');
   let tx = new solana.Transaction({
     feePayer: keys.payer.publicKey,
@@ -35,12 +40,15 @@ async function createCharterAccount(
       lamportsForRent: minimumBalance,
       payerPubkey: keys.payer.publicKey,
       newAccountPubkey: acctKeypair.publicKey,
-      owner: STRANGEMOOD_PROGRAM_ID,
+      owner: pda,
     })
   );
 
   console.log('sending and confirming charter account');
   await solana.sendAndConfirmTransaction(conn, tx, [keys.signer, acctKeypair]);
+
+  console.log(await conn.getAccountInfo(acctKeypair.publicKey));
+  console.log(await conn.getAccountInfo(keys.signer.publicKey));
 
   console.log('Setup charter account');
   tx = new solana.Transaction();
@@ -77,7 +85,7 @@ export const main = async () => {
     splToken.TOKEN_PROGRAM_ID,
     signer
   );
-  let act = await wrappedSol.getOrCreateAssociatedAccountInfo(signer.publicKey);
+  // let act = await wrappedSol.getOrCreateAssociatedAccountInfo(signer.publicKey);
 
   // Create a charter account
   console.log('Creating a charter account...');
