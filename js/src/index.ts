@@ -2,6 +2,7 @@ import * as solana from '@solana/web3.js';
 import * as ix from './instructions';
 import { Charter } from './types';
 import * as splToken from '@solana/spl-token';
+import { STRANGEMOOD_PROGRAM_ID } from './constants';
 
 async function createCharterAccount(
   conn: solana.Connection,
@@ -34,7 +35,7 @@ async function createCharterAccount(
       lamportsForRent: minimumBalance,
       payerPubkey: keys.payer.publicKey,
       newAccountPubkey: acctKeypair.publicKey,
-      owner: keys.owner.publicKey,
+      owner: STRANGEMOOD_PROGRAM_ID,
     })
   );
 
@@ -47,10 +48,10 @@ async function createCharterAccount(
     ix.setCharterAccount({
       charterData: charter,
       charterPubkey: acctKeypair.publicKey,
+      signer: keys.signer.publicKey,
     })
   );
 
-  console.log('testing if we can serialize');
   await solana.sendAndConfirmTransaction(conn, tx, [keys.signer]);
 
   return acctKeypair;

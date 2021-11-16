@@ -271,6 +271,7 @@ export function createEmptyCharterAccount(params: CreateCharterAccountParams) {
 export type SetCharterAccountParams = {
   charterPubkey: solana.PublicKey;
   charterData: Charter;
+  signer: solana.PublicKey;
 };
 
 export function setCharterAccount(params: SetCharterAccountParams) {
@@ -299,10 +300,8 @@ export function setCharterAccount(params: SetCharterAccountParams) {
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
 
-  console.log(data.length);
-  console.log(data.toString('hex'));
-
-  const keys = [asWritable(params.charterPubkey)];
+  const keys = [asSigner(params.signer), asWritable(params.charterPubkey)];
+  console.log('keys?', keys);
   return new solana.TransactionInstruction({
     keys,
     programId: STRANGEMOOD_PROGRAM_ID,

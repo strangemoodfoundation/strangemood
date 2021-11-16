@@ -77,9 +77,13 @@ pub enum StrangemoodInstruction {
     /// 8. `[]` The token program
     PurchaseListing {},
 
-    /// Setup a charter account. This is more of a convenience instruction,
+    /// Setup a charter account. Expects the charter
+    /// to be `assign`'ed to the strangemood program.
+    /// Fear not, the instruction will
+    /// return it back to you.
     ///
     /// Accounts expected:
+    /// 0. `[signer]`
     /// 0. `[writable]` The current charter account
     SetCharter { data: Charter },
 }

@@ -515,7 +515,10 @@ impl Processor {
     fn process_set_charter(accounts: &[AccountInfo], data: Charter) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
 
-        // 0. [writable]
+        // 0. [signer]
+        let signer_account = next_account_info(account_info_iter)?;
+
+        // 1. [writable]
         let charter_account = next_account_info(account_info_iter)?;
         let mut charter = Charter::unpack_unchecked(&charter_account.try_borrow_data()?)?;
 
@@ -526,6 +529,12 @@ impl Processor {
         charter.realm_sol_token_account_pubkey = data.realm_sol_token_account_pubkey;
 
         Charter::pack(charter, &mut charter_account.try_borrow_mut_data()?)?;
+
+        // Give the account back to the requester
+        let assign_ix =
+            solana_program::system_instruction::assign(signer_account.key, charter_account.key);
+        invoke(&assign_ix, &[signer_account.clone()])?;
+
         Ok(())
     }
 }
