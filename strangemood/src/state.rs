@@ -29,7 +29,7 @@ pub struct Charter {
     pub authority: Pubkey,
 
     // The community account of the realm that contributions go to
-    pub realm_sol_token_account_pubkey: Pubkey,
+    pub realm_sol_token_account: Pubkey,
 }
 
 pub(crate) fn amount_as_float(amount: u64, decimals: u8) -> f64 {
@@ -160,7 +160,7 @@ mod tests {
             expansion_rate_decimals: 5,
             contribution_rate_amount: 2000,
             contribution_rate_decimals: 0,
-            realm_sol_token_account_pubkey: Pubkey::new_unique(),
+            realm_sol_token_account: Pubkey::new_unique(),
         };
 
         assert_eq!(charter.expansion_rate(), 0.01000);
@@ -216,7 +216,7 @@ mod tests {
         let authority = Pubkey::from_str("HjqrPM6CHw8iem2sLtCAsGunGTN46juDFAHbvChyHiHV").unwrap();
         let charter = Charter {
             authority,
-            realm_sol_token_account_pubkey: sol_ta,
+            realm_sol_token_account: sol_ta,
             expansion_rate_amount: 1,
             expansion_rate_decimals: 2,
             contribution_rate_amount: 5,

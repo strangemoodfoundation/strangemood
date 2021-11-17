@@ -348,7 +348,7 @@ impl Processor {
         spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
-            &charter.realm_sol_token_account_pubkey,
+            &charter.realm_sol_token_account,
             initializer_account.key,
             &[],
             contribution_amount as u64,
@@ -556,7 +556,7 @@ impl Processor {
         charter.contribution_rate_amount = data.contribution_rate_amount;
         charter.contribution_rate_decimals = data.contribution_rate_decimals;
         charter.authority = data.authority;
-        charter.realm_sol_token_account_pubkey = data.realm_sol_token_account_pubkey;
+        charter.realm_sol_token_account = data.realm_sol_token_account;
 
         msg!("Packing Charter");
         Charter::pack(charter, &mut charter_account.try_borrow_mut_data()?)?;

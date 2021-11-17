@@ -277,7 +277,7 @@ export function setCharterAccount(params: SetCharterAccountParams) {
       contribution_rate_amount: params.charterData.contribution_rate_amount,
       contribution_rate_decimals: params.charterData.contribution_rate_decimals,
       authority: params.charterData.authority.toBytes(),
-      realm_sol_token_account_pubkey: params.charterData.realm_sol_token_account_pubkey.toBytes(),
+      realm_sol_token_account: params.charterData.realm_sol_token_account.toBytes(),
     }
   );
 
@@ -291,7 +291,7 @@ export function setCharterAccount(params: SetCharterAccountParams) {
     u8('contribution_rate_decimals'),
 
     publicKey('authority'),
-    publicKey('realm_sol_token_account_pubkey'),
+    publicKey('realm_sol_token_account'),
   ]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);

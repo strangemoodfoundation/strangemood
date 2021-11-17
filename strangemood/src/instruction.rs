@@ -118,7 +118,7 @@ impl StrangemoodInstruction {
                 let (auth_pubkey_bs, rest) = rest.split_at(32);
                 let authority = Self::unpack_pubkey(auth_pubkey_bs)?;
                 let (sol_pubkey_bs, _) = rest.split_at(32);
-                let realm_sol_token_account_pubkey = Self::unpack_pubkey(sol_pubkey_bs)?;
+                let realm_sol_token_account = Self::unpack_pubkey(sol_pubkey_bs)?;
 
                 Self::SetCharter {
                     data: Charter {
@@ -127,7 +127,7 @@ impl StrangemoodInstruction {
                         contribution_rate_amount,
                         contribution_rate_decimals,
                         authority,
-                        realm_sol_token_account_pubkey,
+                        realm_sol_token_account,
                     },
                 }
             }
@@ -205,7 +205,7 @@ impl StrangemoodInstruction {
                 buf.extend_from_slice(&data.contribution_rate_amount.to_le_bytes());
                 buf.push(data.contribution_rate_decimals);
                 buf.extend_from_slice(&data.authority.to_bytes());
-                buf.extend_from_slice(&data.realm_sol_token_account_pubkey.to_bytes());
+                buf.extend_from_slice(&data.realm_sol_token_account.to_bytes());
             }
         }
         buf
@@ -280,7 +280,7 @@ mod test {
         let check = StrangemoodInstruction::SetCharter {
             data: Charter {
                 authority,
-                realm_sol_token_account_pubkey: sol_ta,
+                realm_sol_token_account: sol_ta,
                 expansion_rate_amount: 1,
                 expansion_rate_decimals: 2,
                 contribution_rate_amount: 5,
@@ -318,7 +318,7 @@ mod test {
                 expansion_rate_decimals: 2,
                 contribution_rate_amount: 5,
                 contribution_rate_decimals: 2,
-                realm_sol_token_account_pubkey: sol_ta,
+                realm_sol_token_account: sol_ta,
                 authority: authority,
             },
         };
@@ -340,7 +340,7 @@ mod test {
             StrangemoodInstruction::SetCharter { data } => data,
             _ => panic!("oh no"),
         };
-        assert_eq!(data.realm_sol_token_account_pubkey, sol_ta);
+        assert_eq!(data.realm_sol_token_account, sol_ta);
     }
 
     #[test]

@@ -6,5 +6,5 @@ export type Charter = {
   contribution_rate_amount: number;
   contribution_rate_decimals: number;
   authority: solana.PublicKey;
-  realm_sol_token_account_pubkey: solana.PublicKey;
+  realm_sol_token_account: solana.PublicKey;
 };
