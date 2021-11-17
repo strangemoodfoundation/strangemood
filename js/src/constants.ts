@@ -3,3 +3,13 @@ import * as solana from '@solana/web3.js';
 export const STRANGEMOOD_PROGRAM_ID = new solana.PublicKey(
   'i2wXatLLgvNiVkDP9VrNm7mQ3vYs43MZP8D3ooY9Rgw'
 );
+
+export const STRANGEMOOD_INSTRUCTION_INDEXES = {
+  INIT_LISTING: 0,
+  PURCHASE_LISTING: 1,
+  SET_LISTING_AUTHORITY: 2,
+  SET_LISTING_PRICE: 3,
+  SET_LISTING_DEPOSIT: 4,
+  SET_LISTING_AVAILABILITY: 5,
+  SET_CHARTER: 6,
+};
