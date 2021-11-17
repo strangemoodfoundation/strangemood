@@ -408,6 +408,27 @@ impl Processor {
             msg!("Account #2 is not owned by the token program");
             return Err(ProgramError::IncorrectProgramId);
         }
+        let app_mint = spl_token::state::Mint::unpack(*app_mint_account.data.borrow())?;
+        if app_mint.decimals != 0 {
+            msg!("App Mint must '0' decimals.");
+            return Err(StrangemoodError::AppMintInvalid.into());
+        }
+        if app_mint.supply != 0 {
+            msg!("App Mint must be a new mint with 0 supply.");
+            return Err(StrangemoodError::AppMintInvalid.into());
+        }
+        // Prevent someone from passing in a mint from another listing
+        match app_mint.mint_authority {
+            solana_program::program_option::COption::None => {
+                msg!("App Mint authority must be the initalizer.");
+                return Err(StrangemoodError::AppMintInvalid.into());
+            }
+            solana_program::program_option::COption::Some(auth) => {
+                if auth != *initializer_account.key {
+                    return Err(StrangemoodError::AppMintInvalid.into());
+                }
+            }
+        };
 
         // 3. [] - The place to deposit SOL into
         let deposit_token_account = next_account_info(account_info_iter)?;

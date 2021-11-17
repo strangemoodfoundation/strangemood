@@ -75,6 +75,12 @@ pub enum StrangemoodError {
     /// just created
     #[error("The token mint used in price is not supported")]
     TokenMintNotSupported,
+
+    /// The mint passed in for the app is invalid
+    ///
+    /// This might happen if the decimals isn't 0.
+    #[error("App Mint Invalid")]
+    AppMintInvalid,
 }
 
 impl From<StrangemoodError> for ProgramError {
@@ -111,6 +117,7 @@ impl PrintProgramError for StrangemoodError {
             StrangemoodError::UnauthorizedCharter => todo!(),
             StrangemoodError::UnauthorizedListingAuthority => todo!(),
             StrangemoodError::UnauthorizedCharterAuthority => todo!(),
+            StrangemoodError::AppMintInvalid => todo!(),
         }
     }
 }

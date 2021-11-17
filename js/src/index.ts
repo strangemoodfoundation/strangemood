@@ -1,6 +1,6 @@
 import * as solana from '@solana/web3.js';
 import * as splToken from '@solana/spl-token';
-import { createCharterAccount, getCharterAccount } from './client';
+import { createCharter, getCharterAccount } from './client';
 
 export const main = async () => {
   // let signer = solana.Keypair.generate();
