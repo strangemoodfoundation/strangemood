@@ -276,6 +276,7 @@ export function setCharterAccount(params: SetCharterAccountParams) {
       expansion_rate_decimals: params.charterData.expansion_rate_decimals,
       contribution_rate_amount: params.charterData.contribution_rate_amount,
       contribution_rate_decimals: params.charterData.contribution_rate_decimals,
+      authority: params.charterData.authority.toBytes(),
       realm_sol_token_account_pubkey: params.charterData.realm_sol_token_account_pubkey.toBytes(),
     }
   );
@@ -289,13 +290,13 @@ export function setCharterAccount(params: SetCharterAccountParams) {
     ns64('contribution_rate_amount'),
     u8('contribution_rate_decimals'),
 
+    publicKey('authority'),
     publicKey('realm_sol_token_account_pubkey'),
   ]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
 
   const keys = [asSigner(params.signer), asWritable(params.charterPubkey)];
-  console.log('keys?', keys);
   return new solana.TransactionInstruction({
     keys,
     programId: STRANGEMOOD_PROGRAM_ID,
@@ -317,53 +318,4 @@ export function createListingAccount(params: CreateListingAccount) {
     space: ListingLayout.span,
     programId: STRANGEMOOD_PROGRAM_ID,
   });
-}
-
-export function argle() {
-  let key = solana.Keypair.generate();
-  let params = {
-    charterData: {
-      // 0.01 Strange per SOL contribution
-      expansion_rate_amount: 1,
-      expansion_rate_decimals: 2,
-
-      // contribution rate at 0.05 or 5%
-      contribution_rate_amount: 5,
-      contribution_rate_decimals: 2,
-
-      realm_sol_token_account_pubkey: new solana.PublicKey(
-        '4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM'
-      ),
-    },
-  };
-
-  let fields = Object.assign(
-    { instruction: INDEXES.SET_CHARTER },
-    {
-      expansion_rate_amount: params.charterData.expansion_rate_amount,
-      expansion_rate_decimals: params.charterData.expansion_rate_decimals,
-      contribution_rate_amount: params.charterData.contribution_rate_amount,
-      contribution_rate_decimals: params.charterData.contribution_rate_decimals,
-      realm_sol_token_account_pubkey: params.charterData.realm_sol_token_account_pubkey
-        .encode()
-        .reverse(),
-    }
-  );
-
-  let layout = struct([
-    u8('instruction'),
-
-    ns64('expansion_rate_amount'),
-    u8('expansion_rate_decimals'),
-
-    ns64('contribution_rate_amount'),
-    u8('contribution_rate_decimals'),
-
-    publicKey('realm_sol_token_account_pubkey'),
-  ]);
-  let data = Buffer.alloc(layout.span);
-  layout.encode(fields, data);
-
-  console.log(data.length);
-  console.log('hex', data.toString('hex'));
 }

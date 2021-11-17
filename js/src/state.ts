@@ -36,5 +36,6 @@ export const CharterLayout = struct([
   uint64('contribution_rate_amount'),
   u8('contribution_rate_decimals'),
 
+  publicKey('authority'),
   publicKey('realm_sol_token_account_pubkey'),
 ]);

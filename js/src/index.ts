@@ -26,11 +26,6 @@ async function createCharterAccount(
     solana.NONCE_ACCOUNT_LENGTH
   );
 
-  let [pda, _] = await solana.PublicKey.findProgramAddress(
-    [Buffer.from('charter', 'utf8')],
-    STRANGEMOOD_PROGRAM_ID
-  );
-
   console.log('Create charter account');
   let tx = new solana.Transaction({
     feePayer: keys.payer.publicKey,
@@ -40,7 +35,7 @@ async function createCharterAccount(
       lamportsForRent: minimumBalance,
       payerPubkey: keys.payer.publicKey,
       newAccountPubkey: acctKeypair.publicKey,
-      owner: pda,
+      owner: STRANGEMOOD_PROGRAM_ID,
     })
   );
 
@@ -105,6 +100,7 @@ export const main = async () => {
       contribution_rate_amount: 5,
       contribution_rate_decimals: 2,
 
+      authority: signer.publicKey,
       realm_sol_token_account_pubkey: new solana.PublicKey(
         '4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM'
       ),

@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use solana_program::pubkey::Pubkey;
 
 pub mod entrypoint;
@@ -14,4 +16,24 @@ impl StrangemoodPDA {
             &program_id,
         )
     }
+}
+
+fn is_zero(slice: &[u8]) -> bool {
+    for i in (0..slice.len()).step_by(16) {
+        if slice.len() - i >= 16 {
+            let arr: [u8; 16] = slice[i..i + 16]
+                .try_into()
+                .expect("this should always succeed");
+            if u128::from_be_bytes(arr) != 0 {
+                return false;
+            }
+        } else {
+            for i in i..slice.len() {
+                if slice[i] != 0 {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
 }

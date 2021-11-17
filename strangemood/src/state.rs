@@ -12,9 +12,6 @@ use solana_program::{
 /// Note: keep in mind these fields are in-order!
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
 pub struct Charter {
-    // The pubkey of the keypair that can modify this charter.
-    pub authority: Pubkey,
-
     // The amount of voting tokens to give to a user per 1.0 wrapped SOL contributed
     // via community account contributions.
     //
@@ -27,6 +24,9 @@ pub struct Charter {
     // The % of each purchase that goes to the community account.
     pub contribution_rate_amount: u64,
     pub contribution_rate_decimals: u8,
+
+    // The pubkey of the keypair that can modify this charter.
+    pub authority: Pubkey,
 
     // The community account of the realm that contributions go to
     pub realm_sol_token_account_pubkey: Pubkey,
@@ -55,7 +55,7 @@ impl Charter {
 impl Sealed for Charter {}
 
 impl Pack for Charter {
-    const LEN: usize = 50; // See "test_get_packed_len()" for explanation
+    const LEN: usize = 82; // See "test_get_packed_len()" for explanation
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let data = self.try_to_vec().unwrap();
@@ -148,6 +148,8 @@ impl Pack for Listing {
 #[cfg(test)]
 mod tests {
 
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
@@ -185,7 +187,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pack_unpack() {
+    fn test_pack_unpack_listing() {
         let dst = &mut [0u8; Listing::LEN];
         let listing = Listing {
             is_initialized: true,
@@ -204,5 +206,27 @@ mod tests {
         };
 
         Listing::pack(listing, dst).unwrap();
+    }
+
+    #[test]
+    fn test_pack_unpack_charter() {
+        let dst = &mut [0u8; Charter::LEN];
+
+        let sol_ta = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
+        let authority = Pubkey::from_str("HjqrPM6CHw8iem2sLtCAsGunGTN46juDFAHbvChyHiHV").unwrap();
+        let charter = Charter {
+            authority,
+            realm_sol_token_account_pubkey: sol_ta,
+            expansion_rate_amount: 1,
+            expansion_rate_decimals: 2,
+            contribution_rate_amount: 5,
+            contribution_rate_decimals: 2,
+        };
+
+        Charter::pack(charter, dst).unwrap();
+
+        let new_charter = Charter::unpack_unchecked(dst).unwrap();
+        assert_eq!(new_charter.expansion_rate_amount, 1);
+        assert_eq!(new_charter.expansion_rate_decimals, 2);
     }
 }

@@ -204,6 +204,7 @@ impl StrangemoodInstruction {
                 buf.push(data.expansion_rate_decimals);
                 buf.extend_from_slice(&data.contribution_rate_amount.to_le_bytes());
                 buf.push(data.contribution_rate_decimals);
+                buf.extend_from_slice(&data.authority.to_bytes());
                 buf.extend_from_slice(&data.realm_sol_token_account_pubkey.to_bytes());
             }
         }
@@ -275,7 +276,7 @@ mod test {
 
         // Tag 6 -> SetCharter
         let sol_ta = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
-        let authority = Pubkey::from_str("36NwNtB9gnX28Yg7xTdenuLcvXCNhdS1XHVk9tDK8fVF").unwrap();
+        let authority = Pubkey::from_str("HjqrPM6CHw8iem2sLtCAsGunGTN46juDFAHbvChyHiHV").unwrap();
         let check = StrangemoodInstruction::SetCharter {
             data: Charter {
                 authority,
@@ -299,12 +300,12 @@ mod test {
         input.extend_from_slice(&sol_ta.to_bytes());
         let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
         assert_eq!(packed, unpacked.pack());
-        assert_eq!(unpacked.pack().len(), 51);
-        assert_eq!(packed.len(), 51);
+        assert_eq!(unpacked.pack().len(), 83);
+        assert_eq!(packed.len(), 83);
 
         let h = hex::encode(unpacked.pack());
 
-        // assert_eq!(h, "060100000000000000020500000000000000020100000000000000000000000000000000000000000000000000000000000000");
+        assert_eq!(h, "06010000000000000002050000000000000002f8b49f0fe7d40af9e1eee29a263ef7972314ae90b5f227d65b210669e54624c00100000000000000000000000000000000000000000000000000000000000000");
     }
 
     #[test]
@@ -330,6 +331,7 @@ mod test {
         let cont_amount: u64 = 5;
         input.extend_from_slice(&cont_amount.to_le_bytes());
         input.push(2);
+        input.extend_from_slice(&authority.to_bytes());
         input.extend_from_slice(&sol_ta.to_bytes());
         assert_eq!(packed, input);
 

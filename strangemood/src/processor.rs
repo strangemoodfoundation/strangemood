@@ -15,6 +15,7 @@ use spl_token::{error::TokenError, state::Multisig};
 use crate::{
     error::StrangemoodError,
     instruction::StrangemoodInstruction,
+    is_zero,
     state::{float_as_amount, Charter, Listing, Price, Product, Seller},
     StrangemoodPDA,
 };
@@ -525,6 +526,7 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
+        msg!("Grabbing signer");
         let signer_account = next_account_info(account_info_iter)?;
         if !signer_account.is_signer {
             msg!("Account #0 is missing required signature");
@@ -532,6 +534,7 @@ impl Processor {
         }
 
         // 1. [writable]
+        msg!("Grabbing charter");
         let charter_account = match next_account_info(account_info_iter) {
             Ok(x) => x,
             Err(e) => {
@@ -539,8 +542,12 @@ impl Processor {
                 return ProgramResult::Err(e);
             }
         };
+        msg!("unpacking charter");
         let mut charter = Charter::unpack_unchecked(&charter_account.try_borrow_data()?)?;
-        if charter.authority != *signer_account.key {
+
+        let has_authority = is_zero(&charter.authority.to_bytes());
+        if !has_authority && charter.authority != *signer_account.key {
+            msg!("The signer is not the authority of this charter");
             return Err(ProgramError::IllegalOwner);
         }
 
