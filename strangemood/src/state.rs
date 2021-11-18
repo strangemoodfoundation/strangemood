@@ -22,14 +22,20 @@ pub struct Charter {
     pub expansion_rate_decimals: u8,
 
     // The % of each purchase that goes to the community account.
-    pub contribution_rate_amount: u64,
-    pub contribution_rate_decimals: u8,
+    pub sol_contribution_rate_amount: u64,
+    pub sol_contribution_rate_decimals: u8,
+
+    // The % of each vote token minting goes back to the governance to fund
+    // new ecosystem projects
+    pub vote_contribution_rate_amount: u64,
+    pub vote_contribution_rate_decimals: u8,
 
     // The pubkey of the keypair that can modify this charter.
     pub authority: Pubkey,
 
     // The community account of the realm that contributions go to
     pub realm_sol_token_account: Pubkey,
+    pub realm_vote_token_account: Pubkey,
 }
 
 pub(crate) fn amount_as_float(amount: u64, decimals: u8) -> f64 {
@@ -44,10 +50,16 @@ impl Charter {
     pub fn expansion_rate(&self) -> f64 {
         amount_as_float(self.expansion_rate_amount, self.expansion_rate_decimals)
     }
-    pub fn contribution_rate(&self) -> f64 {
+    pub fn sol_contribution_rate(&self) -> f64 {
         amount_as_float(
-            self.contribution_rate_amount,
-            self.contribution_rate_decimals,
+            self.sol_contribution_rate_amount,
+            self.sol_contribution_rate_decimals,
+        )
+    }
+    pub fn vote_contribution_rate(&self) -> f64 {
+        amount_as_float(
+            self.vote_contribution_rate_amount,
+            self.vote_contribution_rate_decimals,
         )
     }
 }
@@ -139,13 +151,16 @@ mod tests {
             authority: Pubkey::new_unique(),
             expansion_rate_amount: 1000,
             expansion_rate_decimals: 5,
-            contribution_rate_amount: 2000,
-            contribution_rate_decimals: 0,
+            sol_contribution_rate_amount: 2000,
+            sol_contribution_rate_decimals: 0,
+            vote_contribution_rate_amount: 2000,
+            vote_contribution_rate_decimals: 0,
             realm_sol_token_account: Pubkey::new_unique(),
+            realm_vote_token_account: Pubkey::new_unique(),
         };
 
         assert_eq!(charter.expansion_rate(), 0.01000);
-        assert_eq!(charter.contribution_rate(), 2000.0);
+        assert_eq!(charter.sol_contribution_rate(), 2000.0);
         assert_eq!(float_as_amount(0.01, 2), 1);
         assert_eq!(float_as_amount(amount_as_float(200, 2), 2), 200);
     }
@@ -189,14 +204,18 @@ mod tests {
         let dst = &mut [0u8; Charter::LEN];
 
         let sol_ta = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
+        let vote_ta = Pubkey::new_unique();
         let authority = Pubkey::from_str("HjqrPM6CHw8iem2sLtCAsGunGTN46juDFAHbvChyHiHV").unwrap();
         let charter = Charter {
             authority,
             realm_sol_token_account: sol_ta,
+            realm_vote_token_account: vote_ta,
             expansion_rate_amount: 1,
             expansion_rate_decimals: 2,
-            contribution_rate_amount: 5,
-            contribution_rate_decimals: 2,
+            sol_contribution_rate_amount: 5,
+            sol_contribution_rate_decimals: 2,
+            vote_contribution_rate_amount: 5,
+            vote_contribution_rate_decimals: 2,
         };
 
         Charter::pack(charter, dst).unwrap();

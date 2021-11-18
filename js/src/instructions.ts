@@ -17,6 +17,7 @@ export type InitListingParams = {
   charterGovernancePubkey: solana.PublicKey;
   charterPubkey: solana.PublicKey;
   priceInLamports: number;
+  governanceProgramId: solana.PublicKey;
 };
 
 export function initListing(params: InitListingParams) {
@@ -34,6 +35,7 @@ export function initListing(params: InitListingParams) {
     asReadonly(params.mintPubkey),
     asReadonly(params.solDepositPubkey),
     asReadonly(params.voteDepositPubkey),
+    asReadonly(params.governanceProgramId),
     asReadonly(params.realmPubkey),
     asReadonly(params.charterGovernancePubkey),
     asReadonly(params.charterPubkey),
@@ -158,6 +160,7 @@ export type PurchaseListingParams = {
   realmPubkey: solana.PublicKey;
   charterGovernancePubkey: solana.PublicKey;
   charterPubkey: solana.PublicKey;
+  governanceProgramId: solana.PublicKey;
 };
 
 export function purchaseListing(
@@ -174,6 +177,7 @@ export function purchaseListing(
     asReadonly(params.solTokenAccountPubkey),
     asReadonly(params.listingTokenAccountPubkey),
     asReadonly(params.listingTokenOwnerPubkey),
+    asReadonly(params.governanceProgramId),
     asReadonly(params.realmPubkey),
     asReadonly(params.charterGovernancePubkey),
     asReadonly(params.charterPubkey),

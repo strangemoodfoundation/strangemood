@@ -84,6 +84,7 @@ export async function createListing(
       charterGovernancePubkey: params.charterGovernancePubkey,
       charterPubkey: params.charter,
       priceInLamports: params.priceInLamports,
+      governanceProgramId: params.governanceProgramId,
     })
   );
 
@@ -107,6 +108,7 @@ export async function purchaseListing(
     realm: solana.PublicKey;
     charterGovernance: solana.PublicKey;
     charterPubkey: solana.PublicKey;
+    governanceProgramId: solana.PublicKey;
   }
 ) {
   const listing = await getListingAccount(conn, params.listing);
@@ -166,6 +168,7 @@ export async function purchaseListing(
       solTokenAccountPubkey: solTokenAccountToPayWith,
       listingTokenAccountPubkey: params.listingTokenAccountToReceive,
       listingTokenOwnerPubkey: multisig,
+      governanceProgramId: params.governanceProgramId,
       realmPubkey: params.realm,
       charterGovernancePubkey: params.charterGovernance,
       charterPubkey: params.charterPubkey,

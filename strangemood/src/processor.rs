@@ -283,34 +283,35 @@ impl Processor {
             return Err(StrangemoodError::ContractRequiredAsSigner.into());
         }
 
-        // 5. [] The realm account
+        // 5. [] The governance program id
+        let governance_program = next_account_info(account_info_iter)?;
+
+        // 6. [] The realm account
         let realm_account = next_account_info(account_info_iter)?;
 
-        // BIG TODO: the program_ids here actually should be the program id of the deployed governance
-        // program for a strangemood governance.
         spl_governance::state::realm::assert_is_valid_realm(
-            program_id, // TODO here!
+            governance_program.key, // TODO here!
             realm_account,
         )?;
         let realm = spl_governance::state::realm::get_realm_data(
-            program_id, // TODO and here!
+            governance_program.key, // TODO and here!
             realm_account,
         )?;
 
-        // 6. [] The account governance account of the charter
+        // 7. [] The account governance account of the charter
         let charter_governance_account = next_account_info(account_info_iter)?;
         let charter_governance = spl_governance::state::governance::get_governance_data(
-            program_id,
+            governance_program.key,
             charter_governance_account,
         )?;
         if charter_governance.realm != *realm_account.key {
             return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
         }
 
-        // 7. [] The charter account itself
+        // 8. [] The charter account itself
         let charter_account = next_account_info(account_info_iter)?;
         let gov_address = spl_governance::state::governance::get_account_governance_address(
-            program_id,
+            governance_program.key,
             &realm_account.key,
             charter_account.key,
         );
@@ -327,10 +328,10 @@ impl Processor {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
 
-        // 8. [] The token program
+        // 9. [] The token program
         let token_program_account = next_account_info(account_info_iter)?;
 
-        let deposit_rate = 1.0 - charter.contribution_rate();
+        let deposit_rate = 1.0 - charter.sol_contribution_rate();
         let deposit_amount = deposit_rate * listing.price as f64;
         let contribution_amount = listing.price as f64 - deposit_amount;
 
@@ -457,16 +458,20 @@ impl Processor {
             return Err(ProgramError::IncorrectProgramId);
         }
 
-        // 5. [] The realm account
+        // 5. [] governance program
+        let governance_program = next_account_info(account_info_iter)?;
+
+        // 6. [] The realm account
         let realm_account = next_account_info(account_info_iter)?;
-        spl_governance::state::realm::assert_is_valid_realm(program_id, realm_account)?;
-        let realm = spl_governance::state::realm::get_realm_data(program_id, realm_account)?;
+        spl_governance::state::realm::assert_is_valid_realm(governance_program.key, realm_account)?;
+        let realm =
+            spl_governance::state::realm::get_realm_data(governance_program.key, realm_account)?;
         realm.assert_is_valid_governing_token_mint(&community_token.mint)?;
 
-        // 6. [] The account governance account of the charter
+        // 7. [] The account governance account of the charter
         let charter_governance_account = next_account_info(account_info_iter)?;
         let charter_governance = spl_governance::state::governance::get_governance_data(
-            program_id,
+            governance_program.key,
             charter_governance_account,
         )?;
         if charter_governance.realm != *realm_account.key {
@@ -474,10 +479,10 @@ impl Processor {
             return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
         }
 
-        // 7. [] The charter account itself
+        // 8. [] The charter account itself
         let charter_account = next_account_info(account_info_iter)?;
         let gov_address = spl_governance::state::governance::get_account_governance_address(
-            program_id,
+            governance_program.key,
             &realm_account.key,
             charter_account.key,
         );
@@ -490,14 +495,14 @@ impl Processor {
             return Err(ProgramError::IllegalOwner);
         }
 
-        // 8. [] The rent sysvar
+        // 9. [] The rent sysvar
         let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
         if !rent.is_exempt(listing_account.lamports(), listing_account.data_len()) {
             msg!("The listing is not rent exempt");
             return Err(StrangemoodError::NotRentExempt.into());
         }
 
-        // 9. [] The token program
+        // 10. [] The token program
         let token_program_account = next_account_info(account_info_iter)?;
 
         // Initialize the listing
@@ -570,8 +575,8 @@ impl Processor {
 
         charter.expansion_rate_amount = data.expansion_rate_amount;
         charter.expansion_rate_decimals = data.expansion_rate_decimals;
-        charter.contribution_rate_amount = data.contribution_rate_amount;
-        charter.contribution_rate_decimals = data.contribution_rate_decimals;
+        charter.sol_contribution_rate_amount = data.sol_contribution_rate_amount;
+        charter.sol_contribution_rate_decimals = data.sol_contribution_rate_decimals;
         charter.authority = data.authority;
         charter.realm_sol_token_account = data.realm_sol_token_account;
 

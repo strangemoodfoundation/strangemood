@@ -19,11 +19,13 @@ pub enum StrangemoodInstruction {
     /// 3. `[]` The initializer's token account to deposit into. (must be SOL)
     /// 4. `[]` The voting token account where the lister will receive
     ///        community tokens at
-    /// 5. `[]` The realm account
-    /// 6. `[]` The account governance of the charter
-    /// 7. `[]` The account of the charter itself
-    /// 8. `[]` The rent sysvar
-    /// 9. `[]` The token program
+    /// 5. `[]` The governance program (this isn't static, people can deploy their
+    ///         own governance programs.
+    /// 6. `[]` The realm account
+    /// 7. `[]` The account governance of the charter
+    /// 8. `[]` The account of the charter itself
+    /// 9. `[]` The rent sysvar
+    /// 10. `[]` The token program
     InitListing { amount: u64 },
 
     /// Changes the current price of a listing
@@ -71,10 +73,12 @@ pub enum StrangemoodInstruction {
     /// 2. `[]` The token account that contains the tokens used to purchase the listing
     /// 3. `[]` The token account that will contain the app tokens of the listing (must be a multi-sig with the strangemood program m=2)
     /// 4. `[]` The multi-sig owner of the app token account (3)
-    /// 5. `[]` The realm account
-    /// 6. `[]` The account governance of the charter
-    /// 7. `[]` The account of the charter itself
-    /// 8. `[]` The token program
+    /// 5. `[]` The governance program (this isn't static, people can deploy their
+    ///         own governance programs.
+    /// 6. `[]` The realm account
+    /// 7. `[]` The account governance of the charter
+    /// 8. `[]` The account of the charter itself
+    /// 9. `[]` The token program
     PurchaseListing {},
 
     /// Setup a charter account. Expects the charter
@@ -111,23 +115,36 @@ impl StrangemoodInstruction {
                 let expansion_rate_amount = Self::unpack_amount(ex_rate_amount_bs)?;
                 let (ex_rate_decimal_bs, rest) = rest.split_at(1);
                 let expansion_rate_decimals = Self::unpack_decimal(ex_rate_decimal_bs)?;
-                let (co_rate_amount_bs, rest) = rest.split_at(8);
-                let contribution_rate_amount = Self::unpack_amount(co_rate_amount_bs)?;
-                let (co_rate_decimal_bs, rest) = rest.split_at(1);
-                let contribution_rate_decimals = Self::unpack_decimal(co_rate_decimal_bs)?;
+
+                let (sol_co_rate_amount_bs, rest) = rest.split_at(8);
+                let sol_contribution_rate_amount = Self::unpack_amount(sol_co_rate_amount_bs)?;
+                let (sol_co_rate_decimal_bs, rest) = rest.split_at(1);
+                let sol_contribution_rate_decimals = Self::unpack_decimal(sol_co_rate_decimal_bs)?;
+
+                let (vote_co_rate_amount_bs, rest) = rest.split_at(8);
+                let vote_contribution_rate_amount = Self::unpack_amount(vote_co_rate_amount_bs)?;
+                let (vote_co_rate_decimal_bs, rest) = rest.split_at(1);
+                let vote_contribution_rate_decimals =
+                    Self::unpack_decimal(vote_co_rate_decimal_bs)?;
+
                 let (auth_pubkey_bs, rest) = rest.split_at(32);
                 let authority = Self::unpack_pubkey(auth_pubkey_bs)?;
-                let (sol_pubkey_bs, _) = rest.split_at(32);
+                let (sol_pubkey_bs, rest) = rest.split_at(32);
                 let realm_sol_token_account = Self::unpack_pubkey(sol_pubkey_bs)?;
+                let (vote_pubkey_bs, _) = rest.split_at(32);
+                let realm_vote_token_account = Self::unpack_pubkey(vote_pubkey_bs)?;
 
                 Self::SetCharter {
                     data: Charter {
                         expansion_rate_amount,
                         expansion_rate_decimals,
-                        contribution_rate_amount,
-                        contribution_rate_decimals,
+                        sol_contribution_rate_amount,
+                        sol_contribution_rate_decimals,
+                        vote_contribution_rate_amount,
+                        vote_contribution_rate_decimals,
                         authority,
                         realm_sol_token_account,
+                        realm_vote_token_account,
                     },
                 }
             }
@@ -202,10 +219,13 @@ impl StrangemoodInstruction {
                 buf.push(6);
                 buf.extend_from_slice(&data.expansion_rate_amount.to_le_bytes());
                 buf.push(data.expansion_rate_decimals);
-                buf.extend_from_slice(&data.contribution_rate_amount.to_le_bytes());
-                buf.push(data.contribution_rate_decimals);
+                buf.extend_from_slice(&data.sol_contribution_rate_amount.to_le_bytes());
+                buf.push(data.sol_contribution_rate_decimals);
+                buf.extend_from_slice(&data.vote_contribution_rate_amount.to_le_bytes());
+                buf.push(data.vote_contribution_rate_decimals);
                 buf.extend_from_slice(&data.authority.to_bytes());
                 buf.extend_from_slice(&data.realm_sol_token_account.to_bytes());
+                buf.extend_from_slice(&data.realm_vote_token_account.to_bytes());
             }
         }
         buf
@@ -276,15 +296,19 @@ mod test {
 
         // Tag 6 -> SetCharter
         let sol_ta = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
+        let vote_ta = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
         let authority = Pubkey::from_str("HjqrPM6CHw8iem2sLtCAsGunGTN46juDFAHbvChyHiHV").unwrap();
         let check = StrangemoodInstruction::SetCharter {
             data: Charter {
                 authority,
                 realm_sol_token_account: sol_ta,
+                realm_vote_token_account: vote_ta,
                 expansion_rate_amount: 1,
                 expansion_rate_decimals: 2,
-                contribution_rate_amount: 5,
-                contribution_rate_decimals: 2,
+                sol_contribution_rate_amount: 5,
+                sol_contribution_rate_decimals: 2,
+                vote_contribution_rate_amount: 5,
+                vote_contribution_rate_decimals: 2,
             },
         };
         let packed = check.pack();
@@ -298,6 +322,7 @@ mod test {
         input.push(2);
         input.extend_from_slice(&authority.to_bytes());
         input.extend_from_slice(&sol_ta.to_bytes());
+        input.extend_from_slice(&vote_ta.to_bytes());
         let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
         assert_eq!(packed, unpacked.pack());
         assert_eq!(unpacked.pack().len(), 83);
@@ -311,15 +336,19 @@ mod test {
     #[test]
     fn test_unpack_charter() {
         let sol_ta = Pubkey::new_unique();
+        let vote_ta = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
         let check = StrangemoodInstruction::SetCharter {
             data: Charter {
                 expansion_rate_amount: 1,
                 expansion_rate_decimals: 2,
-                contribution_rate_amount: 5,
-                contribution_rate_decimals: 2,
+                sol_contribution_rate_amount: 5,
+                sol_contribution_rate_decimals: 2,
+                vote_contribution_rate_amount: 5,
+                vote_contribution_rate_decimals: 2,
                 realm_sol_token_account: sol_ta,
-                authority: authority,
+                realm_vote_token_account: vote_ta,
+                authority,
             },
         };
         let packed = check.pack();
@@ -328,11 +357,16 @@ mod test {
         let exp_amount: u64 = 1;
         input.extend_from_slice(&exp_amount.to_le_bytes());
         input.push(2);
-        let cont_amount: u64 = 5;
-        input.extend_from_slice(&cont_amount.to_le_bytes());
+        let sol_cont_amount: u64 = 5;
+        input.extend_from_slice(&sol_cont_amount.to_le_bytes());
         input.push(2);
+        let vote_cont_amount: u64 = 5;
+        input.extend_from_slice(&vote_cont_amount.to_le_bytes());
+        input.push(2);
+
         input.extend_from_slice(&authority.to_bytes());
         input.extend_from_slice(&sol_ta.to_bytes());
+        input.extend_from_slice(&vote_ta.to_bytes());
         assert_eq!(packed, input);
 
         let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
