@@ -10,7 +10,7 @@ import { asReadonly, asSigner, asWritable, rent, splToken } from './utils';
 export type InitListingParams = {
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
-  appMintPubkey: solana.PublicKey;
+  mintPubkey: solana.PublicKey;
   solDepositPubkey: solana.PublicKey;
   voteDepositPubkey: solana.PublicKey;
   realmPubkey: solana.PublicKey;
@@ -31,7 +31,7 @@ export function initListing(params: InitListingParams) {
   const keys = [
     asSigner(params.signerPubkey),
     asWritable(params.listingPubkey),
-    asReadonly(params.appMintPubkey),
+    asReadonly(params.mintPubkey),
     asReadonly(params.solDepositPubkey),
     asReadonly(params.voteDepositPubkey),
     asReadonly(params.realmPubkey),
@@ -153,8 +153,8 @@ export type PurchaseListingParams = {
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
   solTokenAccountPubkey: solana.PublicKey;
-  appTokenAccountPubkey: solana.PublicKey;
-  appTokenOwnerPubkey: solana.PublicKey;
+  listingTokenAccountPubkey: solana.PublicKey;
+  listingTokenOwnerPubkey: solana.PublicKey;
   realmPubkey: solana.PublicKey;
   charterGovernancePubkey: solana.PublicKey;
   charterPubkey: solana.PublicKey;
@@ -172,8 +172,8 @@ export function purchaseListing(
     asSigner(params.signerPubkey),
     asWritable(params.listingPubkey),
     asReadonly(params.solTokenAccountPubkey),
-    asReadonly(params.appTokenAccountPubkey),
-    asReadonly(params.appTokenOwnerPubkey),
+    asReadonly(params.listingTokenAccountPubkey),
+    asReadonly(params.listingTokenOwnerPubkey),
     asReadonly(params.realmPubkey),
     asReadonly(params.charterGovernancePubkey),
     asReadonly(params.charterPubkey),

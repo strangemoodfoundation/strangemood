@@ -1,5 +1,4 @@
 import * as solana from '@solana/web3.js';
-import * as splToken from '@solana/spl-token';
 import { getCharterAccount } from './governance';
 
 export const main = async () => {

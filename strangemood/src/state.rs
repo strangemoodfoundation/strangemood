@@ -71,36 +71,6 @@ impl Pack for Charter {
     }
 }
 
-/// "0.25 SOL"
-#[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
-pub struct Price {
-    /// The amount of SOL the lister wants.
-    ///
-    /// Note: remember the decimal place is defined
-    /// in the mint account.
-    pub amount: u64,
-}
-
-/// The user that's putting up the listing
-#[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
-pub struct Seller {
-    /// The seller's system account, effectively the authority.
-    pub authority: Pubkey,
-
-    /// The token account to deposit sol into
-    pub sol_token_account: Pubkey,
-
-    /// The token account to deposit community votes into
-    pub community_token_account: Pubkey,
-}
-
-/// The thing the user is buying
-#[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
-pub struct Product {
-    /// The token of the mint that they're buying
-    pub mint: Pubkey,
-}
-
 /// The user-space `data` field of
 /// the Listing's AccountInfo
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
@@ -115,9 +85,20 @@ pub struct Listing {
     // This binds this listing to a governance, bound by a charter.
     pub charter_governance: Pubkey,
 
-    pub seller: Seller,
-    pub price: Price,
-    pub product: Product,
+    /// The seller's system account, effectively the authority.
+    pub authority: Pubkey,
+
+    /// The token account to deposit sol into
+    pub sol_token_account: Pubkey,
+
+    /// The token account to deposit community votes into
+    pub community_token_account: Pubkey,
+
+    /// Lamports required to purchase
+    pub price: u64,
+
+    /// The mint that represents the token they're purchasing
+    pub mint: Pubkey,
 }
 
 impl Sealed for Listing {}
@@ -191,16 +172,11 @@ mod tests {
         let dst = &mut [0u8; Listing::LEN];
         let listing = Listing {
             is_initialized: true,
-
-            price: Price { amount: 10 },
-            seller: Seller {
-                authority: Pubkey::new_unique(),
-                sol_token_account: Pubkey::new_unique(),
-                community_token_account: Pubkey::new_unique(),
-            },
-            product: Product {
-                mint: Pubkey::new_unique(),
-            },
+            price: 10,
+            authority: Pubkey::new_unique(),
+            sol_token_account: Pubkey::new_unique(),
+            community_token_account: Pubkey::new_unique(),
+            mint: Pubkey::new_unique(),
             charter_governance: Pubkey::new_unique(),
             is_available: true,
         };

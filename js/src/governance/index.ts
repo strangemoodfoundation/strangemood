@@ -3,7 +3,9 @@ import { STRANGEMOOD_PROGRAM_ID } from '../constants';
 import { CharterLayout } from './state';
 import { Charter } from './types';
 import * as ix from './instructions';
+import splToken from '@solana/spl-token';
 
+// TODO: make this an account meta instead of just the data inside the account
 export async function getCharterAccount(
   conn: solana.Connection,
   charterPubkey: solana.PublicKey
@@ -12,9 +14,9 @@ export async function getCharterAccount(
   let object = CharterLayout.decode(charter.data);
 
   return {
-    expansion_rate_amount: (object.expansion_rate_amount as Buffer).readBigInt64LE(),
+    expansion_rate_amount: new splToken.u64(object.expansion_rate_amount),
     expansion_rate_decimals: object.expansion_rate_decimals,
-    contribution_rate_amount: (object.contribution_rate_amount as Buffer).readBigInt64LE(),
+    contribution_rate_amount: new splToken.u64(object.contribution_rate_amount),
     contribution_rate_decimals: object.contribution_rate_decimals,
     authority: new solana.PublicKey(object.authority),
     realm_sol_token_account: new solana.PublicKey(

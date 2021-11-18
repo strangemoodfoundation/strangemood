@@ -16,7 +16,7 @@ use crate::{
     error::StrangemoodError,
     instruction::StrangemoodInstruction,
     is_zero,
-    state::{float_as_amount, Charter, Listing, Price, Product, Seller},
+    state::{float_as_amount, Charter, Listing},
     StrangemoodPDA,
 };
 
@@ -75,11 +75,11 @@ impl Processor {
             return Err(ProgramError::IllegalOwner);
         }
         let mut listing = Listing::unpack(&listing_account.try_borrow_data()?)?;
-        if listing.seller.authority != *initializer_account.key {
+        if listing.authority != *initializer_account.key {
             return Err(StrangemoodError::UnauthorizedListingAuthority.into());
         }
 
-        listing.price.amount = amount;
+        listing.price = amount;
         Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
 
         Ok(())
@@ -105,13 +105,13 @@ impl Processor {
             return Err(ProgramError::IllegalOwner);
         }
         let mut listing = Listing::unpack(&listing_account.try_borrow_data()?)?;
-        if listing.seller.authority != *initializer_account.key {
+        if listing.authority != *initializer_account.key {
             return Err(StrangemoodError::UnauthorizedListingAuthority.into());
         }
 
         // 2. [] The new authority of the account
         let new_listing_authority = next_account_info(account_info_iter)?;
-        listing.seller.authority = *new_listing_authority.key;
+        listing.authority = *new_listing_authority.key;
         Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
 
         Ok(())
@@ -134,7 +134,7 @@ impl Processor {
             return Err(ProgramError::IllegalOwner);
         }
         let mut listing = Listing::unpack(&listing_account.try_borrow_data()?)?;
-        if listing.seller.authority != *initializer_account.key {
+        if listing.authority != *initializer_account.key {
             return Err(StrangemoodError::UnauthorizedListingAuthority.into());
         }
 
@@ -150,8 +150,8 @@ impl Processor {
         // 3. [] The new community deposit account
         let new_community_deposit_account = next_account_info(account_info_iter)?;
 
-        listing.seller.sol_token_account = *new_sol_deposit_account.key;
-        listing.seller.community_token_account = *new_community_deposit_account.key;
+        listing.sol_token_account = *new_sol_deposit_account.key;
+        listing.community_token_account = *new_community_deposit_account.key;
 
         Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
 
@@ -179,7 +179,7 @@ impl Processor {
             return Err(ProgramError::IllegalOwner);
         }
         let mut listing = Listing::unpack(&listing_account.try_borrow_data()?)?;
-        if listing.seller.authority != *initializer_account.key {
+        if listing.authority != *initializer_account.key {
             return Err(StrangemoodError::UnauthorizedListingAuthority.into());
         }
 
@@ -220,7 +220,7 @@ impl Processor {
         if purchase_token.owner != *initializer_account.key {
             return Err(StrangemoodError::DepositAccountNotOwnedBySigner.into());
         }
-        if purchase_token.amount != listing.price.amount {
+        if purchase_token.amount != listing.price {
             return Err(StrangemoodError::InvalidPurchaseAmount.into());
         }
         // The native mint pubkey
@@ -237,7 +237,7 @@ impl Processor {
             return Err(ProgramError::IncorrectProgramId);
         }
         let app_token = spl_token::state::Account::unpack(*app_token_account.data.borrow())?;
-        if app_token.mint != listing.product.mint {
+        if app_token.mint != listing.mint {
             // Someone tried to purchase something with the wrong type of token account
             return Err(spl_token::error::TokenError::InvalidMint.into());
         }
@@ -270,7 +270,7 @@ impl Processor {
         }
 
         let (app_mint_pda, _bump_seed) =
-            StrangemoodPDA::mint_authority(&program_id.clone(), &listing.product.mint);
+            StrangemoodPDA::mint_authority(&program_id.clone(), &listing.mint);
 
         // The user and the contract needs to sign in order to transfer this token
         //
@@ -331,14 +331,14 @@ impl Processor {
         let token_program_account = next_account_info(account_info_iter)?;
 
         let deposit_rate = 1.0 - charter.contribution_rate();
-        let deposit_amount = deposit_rate * listing.price.amount as f64;
-        let contribution_amount = listing.price.amount as f64 - deposit_amount;
+        let deposit_amount = deposit_rate * listing.price as f64;
+        let contribution_amount = listing.price as f64 - deposit_amount;
 
         // Transfer payment funds from the user to the developer
         spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
-            &listing.seller.sol_token_account,
+            &listing.sol_token_account,
             initializer_account.key,
             &[],
             deposit_amount as u64,
@@ -360,7 +360,7 @@ impl Processor {
         spl_token::instruction::mint_to(
             token_program_account.key,
             &realm.community_mint,
-            &listing.seller.community_token_account,
+            &listing.community_token_account,
             program_id,
             &[],
             votes as u64,
@@ -370,7 +370,7 @@ impl Processor {
         let signers = signers.iter().map(|pk| pk).collect::<Vec<_>>();
         spl_token::instruction::mint_to(
             token_program_account.owner,
-            &listing.product.mint,
+            &listing.mint,
             app_token_account.key,
             &app_mint_pda,
             &signers,
@@ -502,15 +502,11 @@ impl Processor {
 
         // Initialize the listing
         listing.is_initialized = true;
-        listing.price = Price { amount: amount };
-        listing.seller = Seller {
-            authority: *initializer_account.key,
-            sol_token_account: *deposit_token_account.key,
-            community_token_account: *community_token_account.key,
-        };
-        listing.product = Product {
-            mint: *app_mint_account.key,
-        };
+        listing.price = amount;
+        listing.authority = *initializer_account.key;
+        listing.sol_token_account = *deposit_token_account.key;
+        listing.community_token_account = *community_token_account.key;
+        listing.mint = *app_mint_account.key;
         listing.charter_governance = *charter_governance_account.key;
         Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
 
@@ -599,17 +595,11 @@ mod tests {
         let mut listing_account = Listing::unpack_unchecked(&listing_data).unwrap();
         listing_account.is_available = data.is_initialized;
         listing_account.is_initialized = data.is_initialized;
-        listing_account.price = Price {
-            amount: data.price.amount,
-        };
-        listing_account.seller = Seller {
-            authority: data.seller.authority,
-            sol_token_account: data.seller.sol_token_account,
-            community_token_account: data.seller.community_token_account,
-        };
-        listing_account.product = Product {
-            mint: data.product.mint,
-        };
+        listing_account.price = data.price;
+        listing_account.authority = data.authority;
+        listing_account.sol_token_account = data.sol_token_account;
+        listing_account.community_token_account = data.community_token_account;
+        listing_account.mint = data.mint;
         listing_account.charter_governance = data.charter_governance;
         Listing::pack(listing_account, &mut listing_data).unwrap();
         listing.data = listing_data;
@@ -658,15 +648,11 @@ mod tests {
                 is_initialized: false,
                 is_available: true,
                 charter_governance: Pubkey::new_unique(),
-                seller: Seller {
-                    authority: Pubkey::new_unique(),
-                    sol_token_account: Pubkey::new_unique(),
-                    community_token_account: Pubkey::new_unique(),
-                },
-                price: Price { amount: 10 },
-                product: Product {
-                    mint: Pubkey::new_unique(),
-                },
+                authority: Pubkey::new_unique(),
+                sol_token_account: Pubkey::new_unique(),
+                community_token_account: Pubkey::new_unique(),
+                price: 10,
+                mint: Pubkey::new_unique(),
             },
         );
 
@@ -711,15 +697,11 @@ mod tests {
                 is_initialized: true,
                 is_available: true,
                 charter_governance: Pubkey::new_unique(),
-                seller: Seller {
-                    authority: auth,
-                    sol_token_account: Pubkey::new_unique(),
-                    community_token_account: Pubkey::new_unique(),
-                },
-                price: Price { amount: 10 },
-                product: Product {
-                    mint: Pubkey::new_unique(),
-                },
+                authority: auth,
+                sol_token_account: Pubkey::new_unique(),
+                community_token_account: Pubkey::new_unique(),
+                price: 10,
+                mint: Pubkey::new_unique(),
             },
         );
         listing.owner = program_id;
@@ -772,15 +754,11 @@ mod tests {
                 is_initialized: true, // this is what we're testing
                 is_available: true,
                 charter_governance: Pubkey::new_unique(),
-                seller: Seller {
-                    authority: Pubkey::new_unique(),
-                    sol_token_account: Pubkey::new_unique(),
-                    community_token_account: Pubkey::new_unique(),
-                },
-                price: Price { amount: 10 },
-                product: Product {
-                    mint: Pubkey::new_unique(),
-                },
+                authority: Pubkey::new_unique(),
+                sol_token_account: Pubkey::new_unique(),
+                community_token_account: Pubkey::new_unique(),
+                price: 10,
+                mint: Pubkey::new_unique(),
             },
         );
         let mut accts = [
