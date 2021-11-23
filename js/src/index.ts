@@ -296,7 +296,6 @@ export const main = async () => {
     signer.publicKey
   );
 
-  console.log('creating listing');
   const listing = await createListing(
     conn,
     {
@@ -314,9 +313,7 @@ export const main = async () => {
     }
   );
 
-  console.log(listing);
-
-  // console.log('Created charter', charter, charter.authority);
+  console.log(listing.publicKey);
 };
 
 console.log('starting');

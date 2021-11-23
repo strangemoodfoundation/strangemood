@@ -52,33 +52,36 @@ export async function createListing(
   }
 ) {
   let acctKeypair = solana.Keypair.generate();
-  let minimumBalance = await conn.getMinimumBalanceForRentExemption(
+  let listingBalance = await conn.getMinimumBalanceForRentExemption(
     ListingLayout.span
   );
-
-  console.log('createMint');
-  const listing_mint = await splToken.Token.createMint(
-    conn,
-    keys.payer,
-    STRANGEMOOD_PROGRAM_ID,
-    STRANGEMOOD_PROGRAM_ID,
-    0,
-    splToken.TOKEN_PROGRAM_ID
+  let mintBalance = await conn.getMinimumBalanceForRentExemption(
+    splToken.MintLayout.span
   );
+
+  let mintKeypair = solana.Keypair.generate();
+  const create_mint_account_ix = solana.SystemProgram.createAccount({
+    fromPubkey: keys.payer.publicKey,
+    newAccountPubkey: mintKeypair.publicKey,
+    lamports: mintBalance,
+    space: splToken.MintLayout.span,
+    programId: splToken.TOKEN_PROGRAM_ID,
+  });
 
   let tx = new solana.Transaction({
     feePayer: keys.payer.publicKey,
   });
   tx.add(
+    create_mint_account_ix,
     ix.createListingAccount({
-      lamportsForRent: minimumBalance,
+      lamportsForRent: listingBalance,
       payerPubkey: keys.payer.publicKey,
       newAccountPubkey: acctKeypair.publicKey,
     }),
     ix.initListing({
       signerPubkey: keys.signer.publicKey,
       listingPubkey: acctKeypair.publicKey,
-      mintPubkey: listing_mint.publicKey,
+      mintPubkey: mintKeypair.publicKey,
       solDepositPubkey: params.solDeposit,
       voteDepositPubkey: params.voteDeposit,
       realmPubkey: params.realm,
@@ -89,7 +92,13 @@ export async function createListing(
     })
   );
 
-  await solana.sendAndConfirmTransaction(conn, tx, [keys.signer, acctKeypair]);
+  await solana.sendAndConfirmTransaction(conn, tx, [
+    keys.signer,
+    acctKeypair,
+    mintKeypair,
+  ]);
+
+  return acctKeypair
 }
 
 export async function purchaseListing(

@@ -32,7 +32,7 @@ export function initListing(params: InitListingParams) {
   const keys = [
     asSigner(params.signerPubkey),
     asWritable(params.listingPubkey),
-    asReadonly(params.mintPubkey),
+    asWritable(params.mintPubkey),
     asReadonly(params.solDepositPubkey),
     asReadonly(params.voteDepositPubkey),
     asReadonly(params.governanceProgramId),

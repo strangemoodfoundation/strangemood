@@ -15,7 +15,7 @@ pub enum StrangemoodInstruction {
     ///
     /// 0. `[signer]` The account that initializes the listing
     /// 1. `[writable]` The listing account that will store the price and the token
-    /// 2. `[]` The mint account of the app token
+    /// 2. `[writable]` The mint account of the app token
     /// 3. `[]` The initializer's token account to deposit into. (must be SOL)
     /// 4. `[]` The voting token account where the lister will receive
     ///        community tokens at

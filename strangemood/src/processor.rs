@@ -386,6 +386,7 @@ impl Processor {
         amount: u64,
         program_id: &Pubkey,
     ) -> ProgramResult {
+        msg!("init_listing");
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
@@ -405,10 +406,6 @@ impl Processor {
 
         // 2. [] - The uninitialized mint of the app token
         let app_mint_account = next_account_info(account_info_iter)?;
-        if *app_mint_account.owner != spl_token::id() {
-            msg!("Account #2 is not owned by the token program");
-            return Err(ProgramError::IncorrectProgramId);
-        }
 
         // 3. [] - The place to deposit SOL into
         let deposit_token_account = next_account_info(account_info_iter)?;
@@ -488,6 +485,7 @@ impl Processor {
         // Initialize the app mint
         // let (pda, _bump_seed) =
         // Pubkey::find_program_address(&[b"mint", &listing_account.key.to_bytes()], program_id);
+        msg!("invoking init mint");
         let init_mint_ix = spl_token::instruction::initialize_mint(
             &spl_token::id(),
             app_mint_account.key,
@@ -503,6 +501,7 @@ impl Processor {
                 token_program_account.clone(),
             ],
         )?;
+        msg!("invoked init mint");
 
         // Initialize the listing
         listing.is_initialized = true;
