@@ -1,6 +1,9 @@
 import * as solana from '@solana/web3.js';
-import { getCharterAccount } from './dao';
-import { createAccountGovernance, createRealm } from './dao/instructions';
+import {
+  createAccountGovernance,
+  createRealm,
+  depositGovernanceTokens,
+} from './dao/instructions';
 import splToken from '@solana/spl-token';
 import {
   GovernanceConfig,
@@ -8,10 +11,7 @@ import {
   VoteWeightSource,
 } from './dao/governance/accounts';
 import BN from 'bn.js';
-import {
-  getTransactionErrorMsg,
-  isSendTransactionError,
-} from './dao/governance/error';
+import { getTransactionErrorMsg } from './dao/governance/error';
 
 interface Governance {
   governanceProgramId: solana.PublicKey;
@@ -39,6 +39,12 @@ function randomString(len, charSet) {
     randomString += charSet.substring(randomPoz, randomPoz + 1);
   }
   return randomString;
+}
+
+function getTimestampFromDays(days: number) {
+  const SECONDS_PER_DAY = 86400;
+
+  return days * SECONDS_PER_DAY;
 }
 
 export const main = async () => {
@@ -78,6 +84,7 @@ export const main = async () => {
 
   // console.log(keypair.publicKey.toString());
 
+  // Create a community mint
   const communityMint = await splToken.Token.createMint(
     conn,
     signer,
@@ -85,6 +92,17 @@ export const main = async () => {
     signer.publicKey,
     9,
     splToken.TOKEN_PROGRAM_ID
+  );
+
+  // Mint some tokens
+  let myVoteTokenAccount = await communityMint.getOrCreateAssociatedAccountInfo(
+    signer.publicKey
+  );
+  await communityMint.mintTo(
+    myVoteTokenAccount.address,
+    signer.publicKey,
+    [],
+    1000
   );
 
   const [realm_ix, realm] = await createRealm({
@@ -95,16 +113,24 @@ export const main = async () => {
     governanceProgramId: test_governance.governanceProgramId,
   });
 
+  // Deposit the tokens into the realm so we can do stuff
+  const [deposit_tx] = await depositGovernanceTokens({
+    amount: new BN(100),
+    realm: realm,
+    governanceProgramId: test_governance.governanceProgramId,
+    governingTokenMint: communityMint.publicKey,
+    governingTokenOwner: signer.publicKey,
+    governingTokenSource: myVoteTokenAccount.address,
+    transferAuthority: signer.publicKey,
+    payer: signer.publicKey,
+  });
+
+  // Create or get a charter
   const charterPubkey = new solana.PublicKey(
     'GTPdQ3NVx7oavUPSGsxWWUZ8AnXz4yu5SR5B7emPqGPG'
   );
 
-  function getTimestampFromDays(days: number) {
-    const SECONDS_PER_DAY = 86400;
-
-    return days * SECONDS_PER_DAY;
-  }
-
+  // Create the Account governance for said charter
   const [ag_ix, accountGovernance] = await createAccountGovernance({
     authority: signer.publicKey,
     governanceProgramId: test_governance.governanceProgramId,
@@ -125,6 +151,7 @@ export const main = async () => {
 
   const tx = new solana.Transaction();
   tx.add(realm_ix);
+  tx.add(deposit_tx);
   tx.add(ag_ix);
 
   console.log('create realm and account gov');
