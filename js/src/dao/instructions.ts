@@ -10,13 +10,20 @@ import splToken from '@solana/spl-token';
 import {
   getRealmConfigAddress,
   getTokenHoldingAddress,
+  getTokenOwnerAddress,
+  GovernanceConfig,
   GOVERNANCE_PROGRAM_SEED,
   MintMaxVoteWeightSource,
   RealmConfigArgs,
 } from './governance/accounts';
-import { CreateRealmArgs } from './governance/instructions';
+import {
+  CreateAccountGovernanceArgs,
+  CreateRealmArgs,
+  DepositGoverningTokensArgs,
+} from './governance/instructions';
 import {
   getGovernanceSchema,
+  GOVERNANCE_SCHEMA,
   PROGRAM_VERSION_V2,
 } from './governance/serialization';
 import { CharterLayout } from './state';
@@ -41,6 +48,189 @@ export function createEmptyCharterAccount(params: CreateCharterAccountParams) {
     // since anyone could create their own governance program.
     programId: params.owner,
   });
+}
+
+export async function depositGovernanceTokens(params: {
+  amount: BN;
+  realm: solana.PublicKey;
+  governingTokenSource: solana.PublicKey;
+  governingTokenMint: solana.PublicKey;
+  governingTokenOwner: solana.PublicKey;
+  transferAuthority: solana.PublicKey;
+  governanceProgramId: solana.PublicKey;
+  payer: solana.PublicKey;
+}) {
+  const args = new DepositGoverningTokensArgs({ amount: params.amount });
+  const data = Buffer.from(
+    serialize(getGovernanceSchema(PROGRAM_VERSION_V2), args)
+  );
+
+  const tokenOwnerRecordAddress = await getTokenOwnerAddress(
+    params.governanceProgramId,
+    params.realm,
+    params.governingTokenMint,
+    params.governingTokenOwner
+  );
+
+  const [
+    governingTokenHoldingAddress,
+  ] = await solana.PublicKey.findProgramAddress(
+    [
+      Buffer.from(GOVERNANCE_PROGRAM_SEED),
+      params.realm.toBuffer(),
+      params.governingTokenMint.toBuffer(),
+    ],
+    params.governanceProgramId
+  );
+
+  const keys = [
+    {
+      pubkey: params.realm,
+      isWritable: false,
+      isSigner: false,
+    },
+    {
+      pubkey: governingTokenHoldingAddress,
+      isWritable: true,
+      isSigner: false,
+    },
+    {
+      pubkey: params.governingTokenSource,
+      isWritable: true,
+      isSigner: false,
+    },
+    {
+      pubkey: params.governingTokenOwner,
+      isWritable: false,
+      isSigner: true,
+    },
+    {
+      pubkey: params.transferAuthority,
+      isWritable: false,
+      isSigner: true,
+    },
+    {
+      pubkey: tokenOwnerRecordAddress,
+      isWritable: true,
+      isSigner: false,
+    },
+    {
+      pubkey: params.payer,
+      isWritable: false,
+      isSigner: true,
+    },
+    {
+      pubkey: solana.SystemProgram.programId,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: splToken.TOKEN_PROGRAM_ID,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: solana.SYSVAR_RENT_PUBKEY,
+      isWritable: false,
+      isSigner: false,
+    },
+  ];
+
+  return [
+    new solana.TransactionInstruction({
+      keys,
+      programId: params.governanceProgramId,
+      data,
+    }),
+  ];
+}
+
+export async function createAccountGovernance(params: {
+  authority: solana.PublicKey;
+  governanceProgramId: solana.PublicKey;
+  realm: solana.PublicKey;
+  governedAccount: solana.PublicKey;
+  config: GovernanceConfig;
+
+  // Technically anyone can create an account governance if they
+  // have enough tokens. This is the person who created it.
+  governingTokenOwner: solana.PublicKey;
+
+  // Technically anyone can create an account governance if they
+  // have enough tokens. This is the person who created it.
+  governingTokenMint: solana.PublicKey;
+
+  payer: solana.PublicKey;
+}): Promise<[solana.TransactionInstruction, solana.PublicKey]> {
+  const args = new CreateAccountGovernanceArgs({ config: params.config });
+  const data = Buffer.from(serialize(GOVERNANCE_SCHEMA, args));
+
+  const [governanceAddress] = await solana.PublicKey.findProgramAddress(
+    [
+      Buffer.from('account-governance'),
+      params.realm.toBuffer(),
+      params.governedAccount.toBuffer(),
+    ],
+    params.governanceProgramId
+  );
+
+  const tokenOwnerRecord = await getTokenOwnerAddress(
+    params.governanceProgramId,
+    params.realm,
+    params.governingTokenMint,
+    params.governingTokenOwner
+  );
+
+  const keys = [
+    {
+      pubkey: params.realm,
+      isWritable: false,
+      isSigner: false,
+    },
+    {
+      pubkey: governanceAddress,
+      isWritable: true,
+      isSigner: false,
+    },
+    {
+      pubkey: params.governedAccount,
+      isWritable: false,
+      isSigner: false,
+    },
+    {
+      pubkey: tokenOwnerRecord,
+      isWritable: false,
+      isSigner: false,
+    },
+    {
+      pubkey: params.payer,
+      isWritable: false,
+      isSigner: true,
+    },
+    {
+      pubkey: solana.SystemProgram.programId,
+      isWritable: false,
+      isSigner: false,
+    },
+    {
+      pubkey: solana.SYSVAR_RENT_PUBKEY,
+      isWritable: false,
+      isSigner: false,
+    },
+    {
+      pubkey: params.authority,
+      isWritable: false,
+      isSigner: true,
+    },
+  ];
+
+  const ix = new solana.TransactionInstruction({
+    keys,
+    programId: params.governanceProgramId,
+    data,
+  });
+
+  return [ix, governanceAddress];
 }
 
 export async function createRealm(params: {

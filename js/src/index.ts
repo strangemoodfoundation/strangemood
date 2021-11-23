@@ -1,7 +1,17 @@
 import * as solana from '@solana/web3.js';
 import { getCharterAccount } from './dao';
-import { createRealm } from './dao/instructions';
+import { createAccountGovernance, createRealm } from './dao/instructions';
 import splToken from '@solana/spl-token';
+import {
+  GovernanceConfig,
+  VoteThresholdPercentage,
+  VoteWeightSource,
+} from './dao/governance/accounts';
+import BN from 'bn.js';
+import {
+  getTransactionErrorMsg,
+  isSendTransactionError,
+} from './dao/governance/error';
 
 interface Governance {
   governanceProgramId: solana.PublicKey;
@@ -77,7 +87,7 @@ export const main = async () => {
     splToken.TOKEN_PROGRAM_ID
   );
 
-  const [ix, realm] = await createRealm({
+  const [realm_ix, realm] = await createRealm({
     authority: signer.publicKey,
     communityMint: communityMint.publicKey,
     payer: signer.publicKey,
@@ -85,13 +95,50 @@ export const main = async () => {
     governanceProgramId: test_governance.governanceProgramId,
   });
 
-  console.log(realm);
+  const charterPubkey = new solana.PublicKey(
+    'GTPdQ3NVx7oavUPSGsxWWUZ8AnXz4yu5SR5B7emPqGPG'
+  );
+
+  function getTimestampFromDays(days: number) {
+    const SECONDS_PER_DAY = 86400;
+
+    return days * SECONDS_PER_DAY;
+  }
+
+  const [ag_ix, accountGovernance] = await createAccountGovernance({
+    authority: signer.publicKey,
+    governanceProgramId: test_governance.governanceProgramId,
+    realm: realm,
+    governedAccount: charterPubkey,
+    governingTokenMint: communityMint.publicKey,
+    governingTokenOwner: signer.publicKey,
+    payer: signer.publicKey,
+    config: new GovernanceConfig({
+      voteThresholdPercentage: new VoteThresholdPercentage({ value: 60 }),
+      minCommunityTokensToCreateProposal: new BN(0),
+      minInstructionHoldUpTime: getTimestampFromDays(0),
+      maxVotingTime: getTimestampFromDays(3),
+      voteWeightSource: VoteWeightSource.Deposit,
+      minCouncilTokensToCreateProposal: new BN(1),
+    }),
+  });
 
   const tx = new solana.Transaction();
-  tx.add(ix);
+  tx.add(realm_ix);
+  tx.add(ag_ix);
 
-  console.log('create realm');
-  await solana.sendAndConfirmTransaction(conn, tx, [signer]);
+  console.log('create realm and account gov');
+  try {
+    await solana.sendAndConfirmTransaction(conn, tx, [signer]);
+  } catch (err) {
+    console.log(
+      'error',
+      JSON.stringify(err),
+      console.log(`${getTransactionErrorMsg(err).toString()}`)
+    );
+  }
+  console.log('realm', realm);
+  console.log('ag_ix', accountGovernance);
 
   // let charter = await getCharterAccount(
   //   conn,
