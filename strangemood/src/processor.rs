@@ -403,33 +403,12 @@ impl Processor {
             return Err(ProgramError::AccountAlreadyInitialized);
         }
 
-        // 2. [] - The mint of the app token
+        // 2. [] - The uninitialized mint of the app token
         let app_mint_account = next_account_info(account_info_iter)?;
         if *app_mint_account.owner != spl_token::id() {
             msg!("Account #2 is not owned by the token program");
             return Err(ProgramError::IncorrectProgramId);
         }
-        let app_mint = spl_token::state::Mint::unpack(*app_mint_account.data.borrow())?;
-        if app_mint.decimals != 0 {
-            msg!("App Mint must '0' decimals.");
-            return Err(StrangemoodError::AppMintInvalid.into());
-        }
-        if app_mint.supply != 0 {
-            msg!("App Mint must be a new mint with 0 supply.");
-            return Err(StrangemoodError::AppMintInvalid.into());
-        }
-        // Prevent someone from passing in a mint from another listing
-        match app_mint.mint_authority {
-            solana_program::program_option::COption::None => {
-                msg!("App Mint authority must be the initalizer.");
-                return Err(StrangemoodError::AppMintInvalid.into());
-            }
-            solana_program::program_option::COption::Some(auth) => {
-                if auth != *initializer_account.key {
-                    return Err(StrangemoodError::AppMintInvalid.into());
-                }
-            }
-        };
 
         // 3. [] - The place to deposit SOL into
         let deposit_token_account = next_account_info(account_info_iter)?;
@@ -496,7 +475,8 @@ impl Processor {
         }
 
         // 9. [] The rent sysvar
-        let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
+        let rent_account = next_account_info(account_info_iter)?;
+        let rent = &Rent::from_account_info(rent_account)?;
         if !rent.is_exempt(listing_account.lamports(), listing_account.data_len()) {
             msg!("The listing is not rent exempt");
             return Err(StrangemoodError::NotRentExempt.into());
@@ -504,6 +484,25 @@ impl Processor {
 
         // 10. [] The token program
         let token_program_account = next_account_info(account_info_iter)?;
+
+        // Initialize the app mint
+        // let (pda, _bump_seed) =
+        // Pubkey::find_program_address(&[b"mint", &listing_account.key.to_bytes()], program_id);
+        let init_mint_ix = spl_token::instruction::initialize_mint(
+            &spl_token::id(),
+            app_mint_account.key,
+            &program_id,
+            Some(program_id),
+            0,
+        )?;
+        invoke(
+            &init_mint_ix,
+            &[
+                app_mint_account.clone(),
+                rent_account.clone(),
+                token_program_account.clone(),
+            ],
+        )?;
 
         // Initialize the listing
         listing.is_initialized = true;
@@ -515,32 +514,6 @@ impl Processor {
         listing.charter_governance = *charter_governance_account.key;
         Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
 
-        // Make the program the authority over the app mint.
-        let (pda, _bump_seed) = Pubkey::find_program_address(&[b"strangemood_listing"], program_id);
-        let owner_change_ix = match spl_token::instruction::set_authority(
-            token_program_account.key,
-            app_mint_account.key,
-            Some(&pda),
-            spl_token::instruction::AuthorityType::AccountOwner,
-            initializer_account.key,
-            &[&initializer_account.key],
-        ) {
-            Ok(ix) => ix,
-            Err(e) => {
-                msg!("Invoking Token Program CPI 'SetAuthority' failed");
-                return Err(e);
-            }
-        };
-
-        invoke(
-            &owner_change_ix,
-            &[
-                app_mint_account.clone(),
-                initializer_account.clone(),
-                token_program_account.clone(),
-            ],
-        )?;
-
         Ok(())
     }
 
@@ -548,7 +521,6 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
-        msg!("Grabbing signer");
         let signer_account = next_account_info(account_info_iter)?;
         if !signer_account.is_signer {
             msg!("Account #0 is missing required signature");
@@ -556,7 +528,6 @@ impl Processor {
         }
 
         // 1. [writable]
-        msg!("Grabbing charter");
         let charter_account = match next_account_info(account_info_iter) {
             Ok(x) => x,
             Err(e) => {
@@ -564,7 +535,6 @@ impl Processor {
                 return ProgramResult::Err(e);
             }
         };
-        msg!("unpacking charter");
         let mut charter = Charter::unpack_unchecked(&charter_account.try_borrow_data()?)?;
 
         let has_authority = is_zero(&charter.authority.to_bytes());
@@ -577,10 +547,12 @@ impl Processor {
         charter.expansion_rate_decimals = data.expansion_rate_decimals;
         charter.sol_contribution_rate_amount = data.sol_contribution_rate_amount;
         charter.sol_contribution_rate_decimals = data.sol_contribution_rate_decimals;
+        charter.vote_contribution_rate_amount = data.vote_contribution_rate_amount;
+        charter.vote_contribution_rate_decimals = data.vote_contribution_rate_decimals;
         charter.authority = data.authority;
         charter.realm_sol_token_account = data.realm_sol_token_account;
+        charter.realm_vote_token_account = data.realm_vote_token_account;
 
-        msg!("Packing Charter");
         Charter::pack(charter, &mut charter_account.try_borrow_mut_data()?)?;
 
         Ok(())

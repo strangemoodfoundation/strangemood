@@ -449,10 +449,17 @@ export function setCharterAccount(params: SetCharterAccountParams) {
     {
       expansion_rate_amount: params.charterData.expansion_rate_amount,
       expansion_rate_decimals: params.charterData.expansion_rate_decimals,
-      contribution_rate_amount: params.charterData.contribution_rate_amount,
-      contribution_rate_decimals: params.charterData.contribution_rate_decimals,
+      sol_contribution_rate_amount:
+        params.charterData.sol_contribution_rate_amount,
+      sol_contribution_rate_decimals:
+        params.charterData.sol_contribution_rate_decimals,
+      vote_contribution_rate_amount:
+        params.charterData.vote_contribution_rate_amount,
+      vote_contribution_rate_decimals:
+        params.charterData.vote_contribution_rate_decimals,
       authority: params.charterData.authority.toBytes(),
       realm_sol_token_account: params.charterData.realm_sol_token_account.toBytes(),
+      realm_vote_token_account: params.charterData.realm_vote_token_account.toBytes(),
     }
   );
 
@@ -462,11 +469,15 @@ export function setCharterAccount(params: SetCharterAccountParams) {
     ns64('expansion_rate_amount'),
     u8('expansion_rate_decimals'),
 
-    ns64('contribution_rate_amount'),
-    u8('contribution_rate_decimals'),
+    ns64('sol_contribution_rate_amount'),
+    u8('sol_contribution_rate_decimals'),
+
+    ns64('vote_contribution_rate_amount'),
+    u8('vote_contribution_rate_decimals'),
 
     publicKey('authority'),
     publicKey('realm_sol_token_account'),
+    publicKey('realm_vote_token_account'),
   ]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);

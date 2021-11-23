@@ -46,7 +46,7 @@ export async function createListing(
     voteDeposit: solana.PublicKey;
     realm: solana.PublicKey;
     charter: solana.PublicKey;
-    charterGovernancePubkey: solana.PublicKey;
+    charterGovernance: solana.PublicKey;
     priceInLamports: number;
     governanceProgramId: solana.PublicKey;
   }
@@ -56,11 +56,12 @@ export async function createListing(
     ListingLayout.span
   );
 
+  console.log('createMint');
   const listing_mint = await splToken.Token.createMint(
     conn,
     keys.payer,
-    keys.signer.publicKey,
-    keys.signer.publicKey,
+    STRANGEMOOD_PROGRAM_ID,
+    STRANGEMOOD_PROGRAM_ID,
     0,
     splToken.TOKEN_PROGRAM_ID
   );
@@ -81,7 +82,7 @@ export async function createListing(
       solDepositPubkey: params.solDeposit,
       voteDepositPubkey: params.voteDeposit,
       realmPubkey: params.realm,
-      charterGovernancePubkey: params.charterGovernancePubkey,
+      charterGovernancePubkey: params.charterGovernance,
       charterPubkey: params.charter,
       priceInLamports: params.priceInLamports,
       governanceProgramId: params.governanceProgramId,

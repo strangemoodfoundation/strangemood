@@ -88,7 +88,7 @@ pub enum StrangemoodInstruction {
     ///
     /// Accounts expected:
     /// 0. `[signer]`
-    /// 0. `[writable]` The current charter account
+    /// 1. `[writable]` The current charter account
     SetCharter { data: Charter },
 }
 

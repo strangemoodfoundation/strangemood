@@ -67,7 +67,7 @@ impl Charter {
 impl Sealed for Charter {}
 
 impl Pack for Charter {
-    const LEN: usize = 82; // See "test_get_packed_len()" for explanation
+    const LEN: usize = 123; // See "test_get_packed_len()" for explanation
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let data = self.try_to_vec().unwrap();

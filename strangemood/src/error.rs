@@ -24,9 +24,6 @@ pub enum StrangemoodError {
     #[error("Not Rent Exempt")]
     NotRentExempt,
 
-    #[error("Account must be writable")]
-    NotWritableAccount,
-
     /// Someone has tried to purchase a listing for more or less
     /// than what the listing is for.
     #[error("Invalid Purchase Amount")]
@@ -100,9 +97,6 @@ impl PrintProgramError for StrangemoodError {
             }
             StrangemoodError::InvalidInstruction => {
                 msg!("Error: This instruction does not exist in the program")
-            }
-            StrangemoodError::NotWritableAccount => {
-                msg!("Error: This account passed in is read-only, but must be writable")
             }
             StrangemoodError::DepositAccountNotOwnedBySigner => {
                 msg!("Error: The deposit token account must be owned by the signer of the transaction")

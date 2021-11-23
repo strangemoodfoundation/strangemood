@@ -16,6 +16,7 @@ import {
 import BN from 'bn.js';
 import { CharterLayout } from './dao/state';
 import { STRANGEMOOD_PROGRAM_ID } from './constants';
+import { createListing } from './strangemood';
 
 interface Governance {
   governanceProgramId: solana.PublicKey;
@@ -53,13 +54,16 @@ function getTimestampFromDays(days: number) {
 
 async function createDAO(
   conn: solana.Connection,
+  governanceProgramId: solana.PublicKey,
   signer: solana.Keypair,
   initialVoteSupply: number,
   charter: {
     expansion_rate_amount: number;
     expansion_rate_decimals: number;
-    contribution_rate_amount: number;
-    contribution_rate_decimals: number;
+    sol_contribution_rate_amount: number;
+    sol_contribution_rate_decimals: number;
+    vote_contribution_rate_amount: number;
+    vote_contribution_rate_decimals: number;
     authority: solana.PublicKey;
   }
 ) {
@@ -84,19 +88,21 @@ async function createDAO(
     initialVoteSupply
   );
 
+  console.log('createRealm');
   const [realm_ix, realm] = await createRealm({
     authority: signer.publicKey,
     communityMint: communityMint.publicKey,
     payer: signer.publicKey,
     name: randomString(5, 'abcdefghijklmnopqrs'),
-    governanceProgramId: test_governance.governanceProgramId,
+    governanceProgramId: governanceProgramId,
   });
 
   // Deposit the tokens into the realm so we can do stuff
+  console.log('depositGovernanceTokens');
   const [deposit_tx] = await depositGovernanceTokens({
     amount: new BN(100),
     realm: realm,
-    governanceProgramId: test_governance.governanceProgramId,
+    governanceProgramId,
     governingTokenMint: communityMint.publicKey,
     governingTokenOwner: signer.publicKey,
     governingTokenSource: myVoteTokenAccount.address,
@@ -112,8 +118,9 @@ async function createDAO(
     signer
   );
   let realmSolTokenAccount = await wrappedSol.createAccount(signer.publicKey);
+
   const [sol_tg_tx, _] = await createTokenGovernance({
-    governanceProgramId: test_governance.governanceProgramId,
+    governanceProgramId,
     realm,
     tokenAccountToBeGoverned: realmSolTokenAccount,
     transferTokenOwner: true, // very important
@@ -136,8 +143,9 @@ async function createDAO(
   let realmVoteTokenAccount = await communityMint.createAccount(
     signer.publicKey
   );
+
   const [vote_tg_tx, __] = await createTokenGovernance({
-    governanceProgramId: test_governance.governanceProgramId,
+    governanceProgramId,
     realm,
     tokenAccountToBeGoverned: realmVoteTokenAccount,
     transferTokenOwner: true, // very important
@@ -162,6 +170,7 @@ async function createDAO(
   let balance = await conn.getMinimumBalanceForRentExemption(
     CharterLayout.span
   );
+  console.log('createEmptyCharterAccount');
   const create_empty_charter_tx = createEmptyCharterAccount({
     lamportsForRent: balance,
     payerPubkey: signer.publicKey,
@@ -170,12 +179,15 @@ async function createDAO(
   });
 
   // Update the charter details
+  console.log('setCharterAccount');
   const set_charter_tx = setCharterAccount({
     charterData: {
       expansion_rate_amount: charter.expansion_rate_amount,
       expansion_rate_decimals: charter.expansion_rate_decimals,
-      contribution_rate_amount: charter.contribution_rate_amount,
-      contribution_rate_decimals: charter.contribution_rate_decimals,
+      sol_contribution_rate_amount: charter.sol_contribution_rate_amount,
+      sol_contribution_rate_decimals: charter.sol_contribution_rate_decimals,
+      vote_contribution_rate_amount: charter.vote_contribution_rate_amount,
+      vote_contribution_rate_decimals: charter.vote_contribution_rate_decimals,
 
       // TODO: Look how token governances assign their authorities
       // and then use that to give the update authority of the charter
@@ -196,7 +208,7 @@ async function createDAO(
   // Create the Account governance for said charter
   const [ag_ix, accountGovernance] = await createAccountGovernance({
     authority: signer.publicKey,
-    governanceProgramId: test_governance.governanceProgramId,
+    governanceProgramId: governanceProgramId,
     realm: realm,
     governedAccount: charterKeypair.publicKey,
     governingTokenMint: communityMint.publicKey,
@@ -221,10 +233,10 @@ async function createDAO(
   tx.add(set_charter_tx);
   tx.add(ag_ix);
 
-  await solana.sendAndConfirmTransaction(conn, tx, [signer]);
+  await solana.sendAndConfirmTransaction(conn, tx, [signer, charterKeypair]);
 
   return {
-    accountGovernance,
+    charterGovernance: accountGovernance,
     realm,
     communityMint: communityMint.publicKey,
     charterKeypair: charterKeypair,
@@ -242,75 +254,67 @@ export const main = async () => {
   );
   await conn.confirmTransaction(airdropSignature);
 
-  // let act = await wrappedSol.getOrCreateAssociatedAccountInfo(signer.publicKey);
+  console.log('creating dao');
+  const dao = await createDAO(
+    conn,
+    test_governance.governanceProgramId,
+    signer,
+    100000, // inital supply
+    {
+      expansion_rate_amount: 1,
+      expansion_rate_decimals: 2,
 
-  // // Create a charter account
-  // const keypair = await createCharterAccount(
-  //   conn,
-  //   {
-  //     payer: signer,
-  //     signer,
-  //     owner: signer,
-  //   },
-  //   {
-  //     // 0.01 Strange per SOL contribution
-  //     expansion_rate_amount: 1,
-  //     expansion_rate_decimals: 2,
+      sol_contribution_rate_amount: 5,
+      sol_contribution_rate_decimals: 2,
 
-  //     // contribution rate at 0.05 or 5%
-  //     contribution_rate_amount: 5,
-  //     contribution_rate_decimals: 2,
+      vote_contribution_rate_amount: 5,
+      vote_contribution_rate_decimals: 2,
 
-  //     authority: signer.publicKey,
-  //     realm_sol_token_account_pubkey: act.address,
-  //   }
-  // );
+      authority: signer.publicKey,
+    }
+  );
+  console.log('Created DAO!');
 
-  // console.log(keypair.publicKey.toString());
+  // Create a SOL account for the charter governance
+  let wrappedSol = new splToken.Token(
+    conn,
+    splToken.NATIVE_MINT,
+    splToken.TOKEN_PROGRAM_ID,
+    signer
+  );
+  let sol_acct = await wrappedSol.getOrCreateAssociatedAccountInfo(
+    signer.publicKey
+  );
 
-  const dao = createDAO(conn, signer, 100000, {
-    expansion_rate_amount: 1,
-    expansion_rate_decimals: 2,
+  let votes = new splToken.Token(
+    conn,
+    dao.communityMint,
+    splToken.TOKEN_PROGRAM_ID,
+    signer
+  );
+  let vote_acct = await votes.getOrCreateAssociatedAccountInfo(
+    signer.publicKey
+  );
 
-    contribution_rate_amount: 5,
-    contribution_rate_decimals: 2,
+  console.log('creating listing');
+  const listing = await createListing(
+    conn,
+    {
+      signer: signer,
+      payer: signer,
+    },
+    {
+      solDeposit: sol_acct.address,
+      voteDeposit: vote_acct.address,
+      realm: dao.realm,
+      charter: dao.charterKeypair.publicKey,
+      charterGovernance: dao.charterGovernance,
+      governanceProgramId: test_governance.governanceProgramId,
+      priceInLamports: 1000,
+    }
+  );
 
-    authority: signer.publicKey,
-  });
-
-  // let charter = await getCharterAccount(
-  //   conn,
-  //   new solana.PublicKey('GTPdQ3NVx7oavUPSGsxWWUZ8AnXz4yu5SR5B7emPqGPG')
-  // );
-
-  // // Create a SOL account for the charter governance
-  // let wrappedSol = new splToken.Token(
-  //   conn,
-  //   splToken.NATIVE_MINT,
-  //   splToken.TOKEN_PROGRAM_ID,
-  //   signer
-  // );
-  // let sol_acct = await wrappedSol.getOrCreateAssociatedAccountInfo(signer.publicKey);
-
-  // let wrappedSol = new splToken.Token(
-  //   conn,
-  //   splToken.NATIVE_MINT,
-  //   splToken.TOKEN_PROGRAM_ID,
-  //   signer
-  // );
-  // let vote_acct = await wrappedSol.getOrCreateAssociatedAccountInfo(signer.publicKey);
-
-  // createListing(
-  //   conn,
-  //   {
-  //     signer: signer,
-  //     payer: signer,
-  //   },
-  //   {
-  //     solDeposit: act.address,
-  //     voteDeposit:
-  //   }
-  // );
+  console.log(listing);
 
   // console.log('Created charter', charter, charter.authority);
 };
