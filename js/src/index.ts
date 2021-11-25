@@ -7,7 +7,7 @@ import {
   depositGovernanceTokens,
   setCharterAccount,
 } from './dao/instructions';
-import splToken, { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import splToken from '@solana/spl-token';
 import {
   GovernanceConfig,
   VoteThresholdPercentage,
@@ -17,14 +17,6 @@ import BN from 'bn.js';
 import { CharterLayout } from './dao/state';
 import { STRANGEMOOD_PROGRAM_ID } from './constants';
 import { createListing, purchaseListing } from './strangemood';
-
-interface Governance {
-  governanceProgramId: solana.PublicKey;
-  realm: solana.PublicKey;
-  communityMint: solana.PublicKey;
-  charterGovernance: solana.PublicKey;
-  charter: solana.PublicKey;
-}
 
 const test_governance = {
   governanceProgramId: new solana.PublicKey(
@@ -270,7 +262,6 @@ export const main = async () => {
   );
   console.log('Created DAO!');
 
-  // Create a SOL account for the charter governance
   let wrappedSol = new splToken.Token(
     conn,
     splToken.NATIVE_MINT,

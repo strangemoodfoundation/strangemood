@@ -123,7 +123,6 @@ export async function purchaseListing(
     governanceProgramId: solana.PublicKey;
   }
 ) {
-  console.log('get seeds');
   const listing = await getListingAccount(conn, params.listing);
 
   let listingToken = new splToken.Token(
@@ -147,7 +146,9 @@ export async function purchaseListing(
     keys.signer.publicKey,
     pda,
   ]);
-  let listingTokenAccount = await listingToken.createAccount(multisig);
+  let listingTokenAccount = await listingToken.getOrCreateAssociatedAccountInfo(
+    multisig
+  );
 
   let tx = new solana.Transaction({
     feePayer: keys.payer.publicKey,
@@ -157,7 +158,7 @@ export async function purchaseListing(
       signerPubkey: keys.signer.publicKey,
       listingPubkey: params.listing,
       solTokenAccountPubkey: params.solTokenAccountToPayWith,
-      listingTokenAccountPubkey: listingTokenAccount,
+      listingTokenAccountPubkey: listingTokenAccount.address,
       listingTokenOwnerPubkey: multisig,
       governanceProgramId: params.governanceProgramId,
       realmPubkey: params.realm,
