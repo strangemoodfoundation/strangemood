@@ -116,7 +116,6 @@ export async function purchaseListing(
   },
   params: {
     listing: solana.PublicKey;
-    solTokenAccountToPayWith: solana.PublicKey;
     realm: solana.PublicKey;
     charterGovernance: solana.PublicKey;
     charter: solana.PublicKey;
@@ -124,6 +123,14 @@ export async function purchaseListing(
   }
 ) {
   const listing = await getListingAccount(conn, params.listing);
+
+  let solTokenAccountToPayWith = await splToken.Token.createWrappedNativeAccount(
+    conn,
+    splToken.TOKEN_PROGRAM_ID,
+    keys.signer.publicKey,
+    keys.payer,
+    listing.data.price.toNumber()
+  );
 
   let listingToken = new splToken.Token(
     conn,
@@ -157,7 +164,7 @@ export async function purchaseListing(
     ix.purchaseListing({
       signerPubkey: keys.signer.publicKey,
       listingPubkey: params.listing,
-      solTokenAccountPubkey: params.solTokenAccountToPayWith,
+      solTokenAccountPubkey: solTokenAccountToPayWith,
       listingTokenAccountPubkey: listingTokenAccount.address,
       listingTokenOwnerPubkey: multisig,
       governanceProgramId: params.governanceProgramId,

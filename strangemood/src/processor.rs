@@ -10,14 +10,13 @@ use solana_program::{
     sysvar::Sysvar,
 };
 use spl_governance;
-use spl_token::{error::TokenError, state::Multisig};
+use spl_token::error::TokenError;
 
 use crate::{
     error::StrangemoodError,
     instruction::StrangemoodInstruction,
     is_zero,
     state::{float_as_amount, Charter, Listing},
-    StrangemoodPDA,
 };
 
 pub struct Processor;
@@ -193,8 +192,8 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
-        let initializer_account = next_account_info(account_info_iter)?;
-        if !initializer_account.is_signer {
+        let signer = next_account_info(account_info_iter)?;
+        if !signer.is_signer {
             msg!("Account #0 is missing required signature");
             return Err(ProgramError::MissingRequiredSignature);
         }
@@ -217,7 +216,7 @@ impl Processor {
         }
         let purchase_token =
             spl_token::state::Account::unpack(*purchase_token_account.data.borrow())?;
-        if purchase_token.owner != *initializer_account.key {
+        if purchase_token.owner != *signer.key {
             return Err(StrangemoodError::DepositAccountNotOwnedBySigner.into());
         }
         if purchase_token.amount != listing.price {
@@ -225,68 +224,47 @@ impl Processor {
         }
         // The native mint pubkey
         if purchase_token.mint != spl_token::native_mint::id() {
-            return Err(StrangemoodError::InvalidPurchaseToken.into());
+            return Err(StrangemoodError::TokenMintNotSupported.into());
         }
 
-        // 3. [] The app token
-        let app_token_account = next_account_info(account_info_iter)?;
-        if *app_token_account.owner != spl_token::id() {
+        // 3. [] listing token account that will contain the app
+        let listing_token_account = next_account_info(account_info_iter)?;
+        if *listing_token_account.owner != spl_token::id() {
             msg!("Account #3 is not owned by the token program");
             // The token account that's receiving the token needs to be owned
             // by the SPL token program
             return Err(ProgramError::IncorrectProgramId);
         }
-        let app_token = spl_token::state::Account::unpack(*app_token_account.data.borrow())?;
-        if app_token.mint != listing.mint {
+        let listing_token =
+            spl_token::state::Account::unpack(*listing_token_account.data.borrow())?;
+        if listing_token.mint != listing.mint {
             // Someone tried to purchase something with the wrong type of token account
             return Err(spl_token::error::TokenError::InvalidMint.into());
         }
 
-        // 4. [] The multi-sig owner of the app token account
-        let app_token_owner_account = next_account_info(account_info_iter)?;
-        if *app_token_owner_account.owner != spl_token::id() {
-            msg!("Account #4 is not owned by the token program");
-            // The token account that's receiving the token needs to be owned
-            // by the SPL token program
-            return Err(ProgramError::IncorrectProgramId);
-        }
-        if app_token.owner != *app_token_owner_account.key {
+        if listing_token.owner != *signer.key {
             return Err(TokenError::OwnerMismatch.into());
         }
 
-        // We borrowed this directly from spl-token, so this is apparently the
-        // way you check if something is a multisig
-        let is_multisig_account = app_token_owner_account.data_len() == Multisig::get_packed_len();
-        if !is_multisig_account {
-            return Err(StrangemoodError::MultisigRequired.into());
+        // 4. [] SolDeposit
+        let sol_deposit_account = next_account_info(account_info_iter)?;
+        if *sol_deposit_account.key != listing.sol_token_account {
+            return Err(ProgramError::InvalidArgument);
         }
 
-        let app_token_owner =
-            spl_token::state::Multisig::unpack(*app_token_owner_account.data.borrow())?;
+        // 5. [] VoteDeposit
+        let vote_deposit_account = next_account_info(account_info_iter)?;
 
-        // There should be 2 signers; both need to sign.
-        if !(app_token_owner.m == 2 && app_token_owner.n == 2) {
-            return Err(ProgramError::MissingRequiredSignature);
-        }
+        // 6. [] SolContribution
+        let sol_contribution_account = next_account_info(account_info_iter)?;
 
-        let (app_token_owner_pda, _bump_seed) =
-            StrangemoodPDA::mint_authority(&program_id.clone(), &listing.mint);
+        // 7. [] VoteContribution
+        let vote_contribution_account = next_account_info(account_info_iter)?;
 
-        // The user and the contract needs to sign in order to transfer this token
-        //
-        // This allows the lister to control resellability,
-        // or potentially to put royalties on reselling.
-        let signers = &app_token_owner.signers[..2];
-        let correct_signers =
-            signers.contains(&app_token_owner_pda) && signers.contains(initializer_account.key);
-        if !correct_signers {
-            return Err(StrangemoodError::ContractRequiredAsSigner.into());
-        }
-
-        // 5. [] The governance program id
+        // 8. [] The governance program id
         let governance_program = next_account_info(account_info_iter)?;
 
-        // 6. [] The realm account
+        // 9. [] The realm account
         let realm_account = next_account_info(account_info_iter)?;
 
         spl_governance::state::realm::assert_is_valid_realm(
@@ -298,7 +276,7 @@ impl Processor {
             realm_account,
         )?;
 
-        // 7. [] The account governance account of the charter
+        // 10. [] The account governance account of the charter
         let charter_governance_account = next_account_info(account_info_iter)?;
         let charter_governance = spl_governance::state::governance::get_governance_data(
             governance_program.key,
@@ -308,7 +286,7 @@ impl Processor {
             return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
         }
 
-        // 8. [] The charter account itself
+        // 11. [] The charter account itself
         let charter_account = next_account_info(account_info_iter)?;
         let gov_address = spl_governance::state::governance::get_account_governance_address(
             governance_program.key,
@@ -328,7 +306,10 @@ impl Processor {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
 
-        // 9. [] The token program
+        // 12. [] rent sysvar
+        let rent_account = next_account_info(account_info_iter)?;
+
+        // 13. [] The token program
         let token_program_account = next_account_info(account_info_iter)?;
 
         let deposit_rate = 1.0 - charter.sol_contribution_rate();
@@ -337,22 +318,30 @@ impl Processor {
 
         // Transfer payment funds from the user to the lister
         msg!("Transfer funds from user to lister");
-        spl_token::instruction::transfer(
+        let transfer_payment_ix = spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
             &listing.sol_token_account,
-            initializer_account.key,
+            signer.key,
             &[],
             deposit_amount as u64,
+        )?;
+        invoke(
+            &transfer_payment_ix,
+            &[
+                purchase_token_account.clone(),
+                rent_account.clone(),
+                token_program_account.clone(),
+            ],
         )?;
 
         // Transfer contribution amount to the realm's sol account
         msg!("Transfer funds from user to realm contribution amount");
-        spl_token::instruction::transfer(
+        let transfer_contribution_ix = spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
             &charter.realm_sol_token_account,
-            initializer_account.key,
+            signer.key,
             &[],
             contribution_amount as u64,
         )?;
@@ -361,7 +350,7 @@ impl Processor {
         let votes = float_as_amount(contribution_amount, spl_token::native_mint::DECIMALS) as f64
             * charter.expansion_rate();
         msg!("Mint votes to lister");
-        spl_token::instruction::mint_to(
+        let mint_votes_to_lister_ix = spl_token::instruction::mint_to(
             token_program_account.key,
             &realm.community_mint,
             &listing.community_token_account,
@@ -371,16 +360,27 @@ impl Processor {
         )?;
 
         // Mint an app token that proves the user bought the app
-        let signers = signers.iter().map(|pk| pk).collect::<Vec<_>>();
         msg!("Mint votes to realm");
-        spl_token::instruction::mint_to(
+        let mint_votes_to_realm_ix = spl_token::instruction::mint_to(
             token_program_account.owner,
             &listing.mint,
-            app_token_account.key,
-            app_token_owner_account.key,
-            &signers,
+            listing_token_account.key,
+            signer.key,
+            &[],
             1,
         )?;
+
+        // Freeze the app token account of the user,
+        // which prevents transfer and makes this actually a license.
+        //
+        // Listings should not trust tokens that are unfrozen
+        let freeze_account_ix = spl_token::instruction::freeze_account(
+            token_program_account.key,
+            listing_token_account.key,
+            &listing.mint,
+            &program_id,
+            &[],
+        );
 
         Ok(())
     }
@@ -543,7 +543,7 @@ impl Processor {
         let has_authority = is_zero(&charter.authority.to_bytes());
         if !has_authority && charter.authority != *signer_account.key {
             msg!("The signer is not the authority of this charter");
-            return Err(ProgramError::IllegalOwner);
+            return Err(StrangemoodError::UnauthorizedCharterAuthority.into());
         }
 
         charter.expansion_rate_amount = data.expansion_rate_amount;

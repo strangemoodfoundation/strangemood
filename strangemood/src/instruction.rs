@@ -3,7 +3,6 @@ use solana_program::pubkey::Pubkey;
 use std::convert::TryInto;
 use std::mem::size_of;
 
-use crate::error::StrangemoodError::InvalidInstruction;
 use crate::state::Charter;
 
 // inside instruction.rs
@@ -70,21 +69,22 @@ pub enum StrangemoodInstruction {
     ///
     /// 0. `[signer]` The account of the person initializing the listing
     /// 1. `[]` The listing account that you're trying to purchase from
-    /// 2. `[]` The token account that contains the tokens used to purchase the listing
-    /// 3. `[]` The token account that will contain the app tokens of the listing (must be a multi-sig with the strangemood program m=2)
-    /// 4. `[]` The multi-sig owner of the app token account (3)
-    /// 5. `[]` The governance program (this isn't static, people can deploy their
-    ///         own governance programs.
-    /// 6. `[]` The realm account
-    /// 7. `[]` The account governance of the charter
-    /// 8. `[]` The account of the charter itself
-    /// 9. `[]` The token program
+    /// 2. `[]` ToPurchaseWith - The token account that contains the tokens used to purchase the listing
+    /// 3. `[]` ListingTokenAccount - The token account that will contain the app tokens of the listing. Owner must be signer.
+    /// 4. `[]` SolDeposit - The listing's deposit account for sol
+    /// 5. `[]` VoteDeposit - The listing's deposit account for votes
+    /// 6. `[]` SolContribution - The realm's sol account
+    /// 7. `[]` VoteContribution - The realm's vote account
+    /// 8. `[]` The governance program (this isn't static, people can deploy their own governance programs.)
+    /// 9. `[]` The realm account
+    /// 10. `[]` The account governance of the charter
+    /// 11. `[]` The account of the charter itself
+    /// 12. `[]` The rent sysvar
+    /// 13. `[]` The token program
     PurchaseListing {},
 
-    /// Setup a charter account. Expects the charter
-    /// to be `assign`'ed to the strangemood program.
-    /// Fear not, the instruction will
-    /// return it back to you.
+    /// Setup a charter account. Expects the charter to
+    /// be owned by the Strangemood Program
     ///
     /// Accounts expected:
     /// 0. `[signer]`
@@ -95,7 +95,9 @@ pub enum StrangemoodInstruction {
 impl StrangemoodInstruction {
     /// Unpacks a byte buffer into a [StrangemoodInstruction](enum.StrangemoodInstruction.html).
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
-        let (tag, rest) = input.split_first().ok_or(InvalidInstruction)?;
+        let (tag, rest) = input
+            .split_first()
+            .ok_or(ProgramError::InvalidInstructionData)?;
 
         Ok(match tag {
             0 => Self::InitListing {
@@ -148,7 +150,7 @@ impl StrangemoodInstruction {
                     },
                 }
             }
-            _ => return Err(InvalidInstruction.into()),
+            _ => return Err(ProgramError::InvalidInstructionData.into()),
         })
     }
 
@@ -158,7 +160,7 @@ impl StrangemoodInstruction {
             let pk = Pubkey::new(key);
             Ok(pk)
         } else {
-            Err(InvalidInstruction.into())
+            Err(ProgramError::InvalidInstructionData.into())
         }
     }
 
@@ -167,7 +169,7 @@ impl StrangemoodInstruction {
             .get(..8)
             .and_then(|slice| slice.try_into().ok())
             .map(u64::from_le_bytes)
-            .ok_or(InvalidInstruction)?;
+            .ok_or(ProgramError::InvalidInstructionData)?;
         Ok(amount)
     }
 
@@ -176,20 +178,20 @@ impl StrangemoodInstruction {
             .get(..1)
             .and_then(|slice| slice.try_into().ok())
             .map(u8::from_le_bytes)
-            .ok_or(InvalidInstruction)?;
+            .ok_or(ProgramError::InvalidInstructionData)?;
         Ok(decimal)
     }
 
     fn unpack_bool(input: &[u8]) -> Result<bool, ProgramError> {
         if input.len() != 1 {
-            return Err(InvalidInstruction.into());
+            return Err(ProgramError::InvalidInstructionData.into());
         }
         if input[0] == 0 {
             Ok(false)
         } else if input[0] == 1 {
             Ok(true)
         } else {
-            Err(InvalidInstruction.into())
+            Err(ProgramError::InvalidInstructionData.into())
         }
     }
 
@@ -381,11 +383,11 @@ mod test {
     fn test_unpack_bool() {
         assert_eq!(
             StrangemoodInstruction::unpack_bool(&[0, 1]),
-            Err(InvalidInstruction.into())
+            Err(ProgramError::InvalidInstructionData)
         );
         assert_eq!(
             StrangemoodInstruction::unpack_bool(&[2]),
-            Err(InvalidInstruction.into())
+            Err(ProgramError::InvalidInstructionData)
         );
         assert_eq!(StrangemoodInstruction::unpack_bool(&[0]), Ok(false));
         assert_eq!(StrangemoodInstruction::unpack_bool(&[1]), Ok(true));

@@ -6,14 +6,14 @@ use solana_program::{
     pubkey::Pubkey,
 };
 
-/// The rules of the governance; controlled by a governance account
+/// The rules of the governance; controlled by a governance account.
 /// There should only be one charter per realm.
 ///
 /// Note: keep in mind these fields are in-order!
 #[derive(BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
 pub struct Charter {
-    // The amount of voting tokens to give to a user per 1.0 wrapped SOL contributed
-    // via community account contributions.
+    // The amount of voting tokens to give to a user per
+    // 1.0 wrapped SOL contributed via community account contributions.
     //
     // Note that Borsh doesn't support floats, and so we carry over the pattern
     // used in the token program of having an "amount" and a "decimals".

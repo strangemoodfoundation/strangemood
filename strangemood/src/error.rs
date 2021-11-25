@@ -9,9 +9,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Copy, Clone)]
 pub enum StrangemoodError {
-    #[error("Invalid Instruction")]
-    InvalidInstruction,
-
     /// Some accounts, like listings, are required to be rent
     /// exempt.
     ///
@@ -29,18 +26,9 @@ pub enum StrangemoodError {
     #[error("Invalid Purchase Amount")]
     InvalidPurchaseAmount,
 
-    /// A regular token owner account was passed in when a multisignature
-    /// account was expected
-    #[error("Multisig Required")]
-    MultisigRequired,
-
     /// A charter was passed in that isn't owned by the realm
     #[error("Unauthorized Charter")]
     UnauthorizedCharter,
-
-    /// This contract must be one of the signers of a multisignature account
-    #[error("Contract Required as Signer")]
-    ContractRequiredAsSigner,
 
     /// You tried to write to the listing, but you're not the authority
     #[error("Unauthorized Listing Authority")]
@@ -49,11 +37,6 @@ pub enum StrangemoodError {
     /// You tried to write to the charter, but you're not the authority
     #[error("Unauthorized Charter Authority")]
     UnauthorizedCharterAuthority,
-
-    /// Someone has tried to purchase a listing with the
-    /// the wrong type of token, should be SOL
-    #[error("Invalid Purchase Token")]
-    InvalidPurchaseToken,
 
     /// Deposit Accounts are required to be owned by
     /// the signer to prevent phishing.
@@ -64,7 +47,7 @@ pub enum StrangemoodError {
     #[error("Deposit Token Account not owned by signer")]
     DepositAccountNotOwnedBySigner,
 
-    /// Tokens must be wrapped SOL.
+    /// Payment must be must be wrapped SOL.
     ///
     /// If the contract allowed any token, then someone
     /// could drain funds from the DAO by uploading large
@@ -72,12 +55,6 @@ pub enum StrangemoodError {
     /// just created
     #[error("The token mint used in price is not supported")]
     TokenMintNotSupported,
-
-    /// The mint passed in for the app is invalid
-    ///
-    /// This might happen if the decimals isn't 0.
-    #[error("App Mint Invalid")]
-    AppMintInvalid,
 }
 
 impl From<StrangemoodError> for ProgramError {
@@ -95,9 +72,6 @@ impl PrintProgramError for StrangemoodError {
             StrangemoodError::NotRentExempt => {
                 msg!("Error: Lamport balance below rent-exempt threshold")
             }
-            StrangemoodError::InvalidInstruction => {
-                msg!("Error: This instruction does not exist in the program")
-            }
             StrangemoodError::DepositAccountNotOwnedBySigner => {
                 msg!("Error: The deposit token account must be owned by the signer of the transaction")
             }
@@ -105,13 +79,9 @@ impl PrintProgramError for StrangemoodError {
                 msg!("Error: The token mint used must be one of the supported tokens")
             }
             StrangemoodError::InvalidPurchaseAmount => todo!(),
-            StrangemoodError::InvalidPurchaseToken => todo!(),
-            StrangemoodError::MultisigRequired => todo!(),
-            StrangemoodError::ContractRequiredAsSigner => todo!(),
             StrangemoodError::UnauthorizedCharter => todo!(),
             StrangemoodError::UnauthorizedListingAuthority => todo!(),
             StrangemoodError::UnauthorizedCharterAuthority => todo!(),
-            StrangemoodError::AppMintInvalid => todo!(),
         }
     }
 }
