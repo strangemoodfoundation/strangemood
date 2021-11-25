@@ -200,11 +200,6 @@ async function createDAO(
     signer: signer.publicKey,
   });
 
-  // Create or get a charter
-  // const charterPubkey = new solana.PublicKey(
-  //   'GTPdQ3NVx7oavUPSGsxWWUZ8AnXz4yu5SR5B7emPqGPG'
-  // );
-
   // Create the Account governance for said charter
   const [ag_ix, accountGovernance] = await createAccountGovernance({
     authority: signer.publicKey,
