@@ -7,7 +7,7 @@ import {
   depositGovernanceTokens,
   setCharterAccount,
 } from './dao/instructions';
-import splToken from '@solana/spl-token';
+import splToken, { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
   GovernanceConfig,
   VoteThresholdPercentage,
@@ -16,7 +16,7 @@ import {
 import BN from 'bn.js';
 import { CharterLayout } from './dao/state';
 import { STRANGEMOOD_PROGRAM_ID } from './constants';
-import { createListing } from './strangemood';
+import { createListing, purchaseListing } from './strangemood';
 
 interface Governance {
   governanceProgramId: solana.PublicKey;
@@ -250,7 +250,7 @@ export const main = async () => {
   // Get some SOL to pay for the transactions
   let airdropSignature = await conn.requestAirdrop(
     signer.publicKey,
-    solana.LAMPORTS_PER_SOL
+    solana.LAMPORTS_PER_SOL * 10
   );
   await conn.confirmTransaction(airdropSignature);
 
@@ -296,7 +296,7 @@ export const main = async () => {
     signer.publicKey
   );
 
-  const listing = await createListing(
+  const { listing, listingMint } = await createListing(
     conn,
     {
       signer: signer,
@@ -313,7 +313,34 @@ export const main = async () => {
     }
   );
 
-  console.log(listing.publicKey);
+  // Airdrop some SOL to purchase the listing with
+  console.log('Creating wrapped native account');
+  let paymentAccount = await splToken.Token.createWrappedNativeAccount(
+    conn,
+    splToken.TOKEN_PROGRAM_ID,
+    signer.publicKey,
+    signer,
+    5000
+  );
+
+  console.log('purchasing listing');
+  const listingTokenAccount = await purchaseListing(
+    conn,
+    {
+      signer: signer,
+      payer: signer,
+    },
+    {
+      listing: listing.publicKey,
+      solTokenAccountToPayWith: paymentAccount,
+      realm: dao.realm,
+      charterGovernance: dao.charterGovernance,
+      charter: dao.charterKeypair.publicKey,
+      governanceProgramId: test_governance.governanceProgramId,
+    }
+  );
+
+  console.log('purchased listing', listingTokenAccount);
 };
 
 console.log('starting');

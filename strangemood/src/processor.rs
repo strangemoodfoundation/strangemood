@@ -269,7 +269,7 @@ impl Processor {
             return Err(ProgramError::MissingRequiredSignature);
         }
 
-        let (app_mint_pda, _bump_seed) =
+        let (app_token_owner_pda, _bump_seed) =
             StrangemoodPDA::mint_authority(&program_id.clone(), &listing.mint);
 
         // The user and the contract needs to sign in order to transfer this token
@@ -278,7 +278,7 @@ impl Processor {
         // or potentially to put royalties on reselling.
         let signers = &app_token_owner.signers[..2];
         let correct_signers =
-            signers.contains(&app_mint_pda) && signers.contains(initializer_account.key);
+            signers.contains(&app_token_owner_pda) && signers.contains(initializer_account.key);
         if !correct_signers {
             return Err(StrangemoodError::ContractRequiredAsSigner.into());
         }
@@ -335,7 +335,8 @@ impl Processor {
         let deposit_amount = deposit_rate * listing.price as f64;
         let contribution_amount = listing.price as f64 - deposit_amount;
 
-        // Transfer payment funds from the user to the developer
+        // Transfer payment funds from the user to the lister
+        msg!("Transfer funds from user to lister");
         spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
@@ -346,6 +347,7 @@ impl Processor {
         )?;
 
         // Transfer contribution amount to the realm's sol account
+        msg!("Transfer funds from user to realm contribution amount");
         spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
@@ -358,6 +360,7 @@ impl Processor {
         // Provide voting tokens to the lister
         let votes = float_as_amount(contribution_amount, spl_token::native_mint::DECIMALS) as f64
             * charter.expansion_rate();
+        msg!("Mint votes to lister");
         spl_token::instruction::mint_to(
             token_program_account.key,
             &realm.community_mint,
@@ -369,11 +372,12 @@ impl Processor {
 
         // Mint an app token that proves the user bought the app
         let signers = signers.iter().map(|pk| pk).collect::<Vec<_>>();
+        msg!("Mint votes to realm");
         spl_token::instruction::mint_to(
             token_program_account.owner,
             &listing.mint,
             app_token_account.key,
-            &app_mint_pda,
+            app_token_owner_account.key,
             &signers,
             1,
         )?;

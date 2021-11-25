@@ -98,7 +98,10 @@ export async function createListing(
     mintKeypair,
   ]);
 
-  return acctKeypair
+  return {
+    listing: acctKeypair,
+    listingMint: mintKeypair,
+  };
 }
 
 export async function purchaseListing(
@@ -114,37 +117,14 @@ export async function purchaseListing(
   params: {
     listing: solana.PublicKey;
     solTokenAccountToPayWith: solana.PublicKey;
-    listingTokenAccountToReceive: solana.PublicKey;
     realm: solana.PublicKey;
     charterGovernance: solana.PublicKey;
-    charterPubkey: solana.PublicKey;
+    charter: solana.PublicKey;
     governanceProgramId: solana.PublicKey;
   }
 ) {
+  console.log('get seeds');
   const listing = await getListingAccount(conn, params.listing);
-
-  let wrappedSol = new splToken.Token(
-    conn,
-    splToken.NATIVE_MINT,
-    splToken.TOKEN_PROGRAM_ID,
-    keys.payer
-  );
-
-  // Move sol into an account we can give the program ownership over
-  let usersSolAccount = await wrappedSol.getOrCreateAssociatedAccountInfo(
-    keys.signer.publicKey
-  );
-  let solTokenAccountToPayWith = await wrappedSol.createAccount(
-    STRANGEMOOD_PROGRAM_ID
-  );
-  let tx_transfer = splToken.Token.createTransferInstruction(
-    splToken.TOKEN_PROGRAM_ID,
-    usersSolAccount.address,
-    solTokenAccountToPayWith,
-    keys.signer.publicKey,
-    [],
-    listing.data.price
-  );
 
   let listingToken = new splToken.Token(
     conn,
@@ -153,7 +133,8 @@ export async function purchaseListing(
     keys.payer
   );
 
-  const pda = await solana.PublicKey.createProgramAddress(
+  console.log('find program address');
+  const [pda, _] = await solana.PublicKey.findProgramAddress(
     [
       Buffer.from('strangemood'),
       Buffer.from('mint_authority'),
@@ -166,24 +147,26 @@ export async function purchaseListing(
     keys.signer.publicKey,
     pda,
   ]);
+  let listingTokenAccount = await listingToken.createAccount(multisig);
 
   let tx = new solana.Transaction({
     feePayer: keys.payer.publicKey,
   });
   tx.add(
-    tx_transfer,
     ix.purchaseListing({
       signerPubkey: keys.signer.publicKey,
       listingPubkey: params.listing,
-      solTokenAccountPubkey: solTokenAccountToPayWith,
-      listingTokenAccountPubkey: params.listingTokenAccountToReceive,
+      solTokenAccountPubkey: params.solTokenAccountToPayWith,
+      listingTokenAccountPubkey: listingTokenAccount,
       listingTokenOwnerPubkey: multisig,
       governanceProgramId: params.governanceProgramId,
       realmPubkey: params.realm,
       charterGovernancePubkey: params.charterGovernance,
-      charterPubkey: params.charterPubkey,
+      charterPubkey: params.charter,
     })
   );
 
   await solana.sendAndConfirmTransaction(conn, tx, [keys.signer]);
+
+  return listingTokenAccount;
 }
