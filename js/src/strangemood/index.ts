@@ -126,6 +126,9 @@ export async function purchaseListing(
   const listing = await getListingAccount(conn, params.listing);
   const charter = await getCharterAccount(conn, params.charter);
 
+  console.log(charter);
+  console.log(listing);
+
   let solTokenAccountToPayWith = await splToken.Token.createWrappedNativeAccount(
     conn,
     splToken.TOKEN_PROGRAM_ID,
@@ -141,22 +144,8 @@ export async function purchaseListing(
     keys.payer
   );
 
-  console.log('find program address');
-  const [pda, _] = await solana.PublicKey.findProgramAddress(
-    [
-      Buffer.from('strangemood'),
-      Buffer.from('mint_authority'),
-      listing.data.mint.toBuffer(),
-    ],
-    STRANGEMOOD_PROGRAM_ID
-  );
-
-  const multisig = await listingToken.createMultisig(2, [
-    keys.signer.publicKey,
-    pda,
-  ]);
   let listingTokenAccount = await listingToken.getOrCreateAssociatedAccountInfo(
-    multisig
+    keys.signer.publicKey
   );
 
   const realm = await getRealmAccount(conn, params.realm);

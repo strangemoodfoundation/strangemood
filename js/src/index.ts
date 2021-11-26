@@ -299,16 +299,6 @@ export const main = async () => {
     }
   );
 
-  // Airdrop some SOL to purchase the listing with
-  console.log('Creating wrapped native account');
-  let paymentAccount = await splToken.Token.createWrappedNativeAccount(
-    conn,
-    splToken.TOKEN_PROGRAM_ID,
-    signer.publicKey,
-    signer,
-    5000
-  );
-
   console.log('purchasing listing');
   const listingTokenAccount = await purchaseListing(
     conn,
@@ -318,7 +308,6 @@ export const main = async () => {
     },
     {
       listing: listing.publicKey,
-      solTokenAccountToPayWith: paymentAccount,
       realm: dao.realm,
       charterGovernance: dao.charterGovernance,
       charter: dao.charterKeypair.publicKey,
