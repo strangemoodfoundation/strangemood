@@ -309,6 +309,7 @@ export const main = async () => {
     {
       listing: listing.publicKey,
       realm: dao.realm,
+      communityMint: dao.communityMint,
       charterGovernance: dao.charterGovernance,
       charter: dao.charterKeypair.publicKey,
       governanceProgramId: test_governance.governanceProgramId,

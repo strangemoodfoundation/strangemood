@@ -10,8 +10,8 @@ export async function getListingAccount(
   pubkey: solana.PublicKey
 ) {
   const listing = await conn.getAccountInfo(pubkey);
-
   let object = ListingLayout.decode(listing.data);
+
   return {
     executable: listing.executable,
     lamports: listing.lamports,
@@ -27,7 +27,7 @@ export async function getListingAccount(
         object.community_token_account
       ),
       mint: new solana.PublicKey(object.mint),
-      price: new splToken.u64(object.price),
+      price: splToken.u64.fromBuffer(object.price),
     },
   };
 }
@@ -118,6 +118,7 @@ export async function purchaseListing(
   params: {
     listing: solana.PublicKey;
     realm: solana.PublicKey;
+    communityMint: solana.PublicKey;
     charterGovernance: solana.PublicKey;
     charter: solana.PublicKey;
     governanceProgramId: solana.PublicKey;
@@ -126,9 +127,6 @@ export async function purchaseListing(
   const listing = await getListingAccount(conn, params.listing);
   const charter = await getCharterAccount(conn, params.charter);
 
-  console.log(charter);
-  console.log(listing);
-
   let solTokenAccountToPayWith = await splToken.Token.createWrappedNativeAccount(
     conn,
     splToken.TOKEN_PROGRAM_ID,
@@ -136,6 +134,7 @@ export async function purchaseListing(
     keys.payer,
     listing.data.price.toNumber()
   );
+  console.log('created sol token account to pay with');
 
   let listingToken = new splToken.Token(
     conn,
@@ -148,16 +147,16 @@ export async function purchaseListing(
     keys.signer.publicKey
   );
 
-  const realm = await getRealmAccount(conn, params.realm);
-
   let [realmMintAuthority, __] = await solana.PublicKey.findProgramAddress(
-    [realm.data.communityMint.toBuffer()],
+    [params.communityMint.toBuffer()],
     STRANGEMOOD_PROGRAM_ID
   );
   let [listingMintAuthority, ___] = await solana.PublicKey.findProgramAddress(
     [listing.data.mint.toBuffer()],
     STRANGEMOOD_PROGRAM_ID
   );
+
+  console.log('created PDAs');
 
   let tx = new solana.Transaction({
     feePayer: keys.payer.publicKey,
@@ -174,7 +173,7 @@ export async function purchaseListing(
       solContributionPubkey: charter.data.realm_sol_token_account,
       voteContributionPubkey: charter.data.realm_vote_token_account,
 
-      realmMintPubkey: realm.data.communityMint,
+      realmMintPubkey: params.communityMint,
       listingMintPubkey: listing.data.mint,
       realmMintAuthority: realmMintAuthority,
       listingMintAuthority: listingMintAuthority,
@@ -185,6 +184,8 @@ export async function purchaseListing(
       charterPubkey: params.charter,
     })
   );
+
+  console.log('about to send and confirm transaction');
 
   await solana.sendAndConfirmTransaction(conn, tx, [keys.signer]);
 

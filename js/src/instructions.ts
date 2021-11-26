@@ -1,11 +1,19 @@
 import * as solana from '@solana/web3.js';
-import { struct, u32, ns64, u8 } from '@solana/buffer-layout';
+import { struct, ns64, u8 } from '@solana/buffer-layout';
 import {
   STRANGEMOOD_PROGRAM_ID,
   STRANGEMOOD_INSTRUCTION_INDEXES as INDEXES,
 } from './constants';
 import { ListingLayout } from './state';
-import { asReadonly, asSigner, asWritable, rent, splToken } from './utils';
+import {
+  asReadonly,
+  asSigner,
+  asWritable,
+  rent,
+  splToken,
+  uint64,
+} from './utils';
+import token from '@solana/spl-token';
 
 export type InitListingParams = {
   signerPubkey: solana.PublicKey;
@@ -23,11 +31,13 @@ export type InitListingParams = {
 export function initListing(params: InitListingParams) {
   let fields = Object.assign(
     { instruction: INDEXES.INIT_LISTING },
-    { amount: params.priceInLamports }
+    { amount: new token.u64(params.priceInLamports).toBuffer() }
   );
-  let layout = struct([u32('instruction'), ns64('amount')]);
+  let layout = struct([u8('instruction'), uint64('amount')]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
+
+  console.log('encoded listing', data, params.priceInLamports);
 
   const keys = [
     asSigner(params.signerPubkey),
@@ -60,7 +70,7 @@ export function setListingPrice(params: SetListingPriceParams) {
     { instruction: INDEXES.SET_LISTING_PRICE },
     { amount: params.priceInLamports }
   );
-  let layout = struct([u32('instruction'), ns64('amount')]);
+  let layout = struct([u8('instruction'), ns64('amount')]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
 
@@ -83,7 +93,7 @@ export type SetListingAuthorityParams = {
 
 export function setListingAuthority(params: SetListingAuthorityParams) {
   let fields = { instruction: INDEXES.SET_LISTING_AUTHORITY };
-  let layout = struct([u32('instruction')]);
+  let layout = struct([u8('instruction')]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
 
@@ -108,7 +118,7 @@ export type SetListingDepositParams = {
 
 export function setListingDeposit(params: SetListingDepositParams) {
   let fields = { instruction: INDEXES.SET_LISTING_DEPOSIT };
-  let layout = struct([u32('instruction')]);
+  let layout = struct([u8('instruction')]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
 
@@ -136,7 +146,11 @@ export function setListingAvailability(params: SetListingAvailabilityParams) {
     { instruction: INDEXES.SET_LISTING_AVAILABILITY },
     { available: params.isAvailable }
   );
-  let layout = struct([u32('instruction'), ns64('amount')]);
+  let layout = struct([
+    u8('instruction'),
+
+    ns64('available'), // todo: this shouldn't be a ns64
+  ]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
 
@@ -177,7 +191,7 @@ export function purchaseListing(
   params: PurchaseListingParams
 ): solana.TransactionInstruction {
   let fields = Object.assign({ instruction: INDEXES.SET_LISTING_DEPOSIT });
-  let layout = struct([u32('instruction'), ns64('amount')]);
+  let layout = struct([u8('instruction'), ns64('amount')]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
 
