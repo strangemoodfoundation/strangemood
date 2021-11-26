@@ -104,7 +104,7 @@ pub struct Listing {
     pub sol_token_account: Pubkey,
 
     /// The token account to deposit community votes into
-    pub community_token_account: Pubkey,
+    pub vote_token_account: Pubkey,
 
     /// Lamports required to purchase
     pub price: u64,
@@ -190,7 +190,7 @@ mod tests {
             price: 10,
             authority: Pubkey::new_unique(),
             sol_token_account: Pubkey::new_unique(),
-            community_token_account: Pubkey::new_unique(),
+            vote_token_account: Pubkey::new_unique(),
             mint: Pubkey::new_unique(),
             charter_governance: Pubkey::new_unique(),
             is_available: true,

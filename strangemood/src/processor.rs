@@ -150,7 +150,7 @@ impl Processor {
         let new_community_deposit_account = next_account_info(account_info_iter)?;
 
         listing.sol_token_account = *new_sol_deposit_account.key;
-        listing.community_token_account = *new_community_deposit_account.key;
+        listing.vote_token_account = *new_community_deposit_account.key;
 
         Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
 
@@ -254,6 +254,9 @@ impl Processor {
 
         // 5. [] VoteDeposit
         let vote_deposit_account = next_account_info(account_info_iter)?;
+        if *vote_deposit_account.key != listing.vote_token_account {
+            return Err(ProgramError::InvalidArgument);
+        }
 
         // 6. [] SolContribution
         let sol_contribution_account = next_account_info(account_info_iter)?;
@@ -301,6 +304,14 @@ impl Processor {
         }
         let charter = Charter::unpack_unchecked(&charter_account.try_borrow_data()?)?;
 
+        // Check if 6 and 7 match the charter
+        if *sol_contribution_account.key != charter.realm_sol_token_account {
+            return Err(ProgramError::InvalidArgument);
+        }
+        if *vote_contribution_account.key != charter.realm_vote_token_account {
+            return Err(ProgramError::InvalidArgument);
+        }
+
         // Ensure that the listing is referring to this charter governance
         if listing.charter_governance != *charter_account.key {
             return Err(StrangemoodError::UnauthorizedCharter.into());
@@ -330,7 +341,8 @@ impl Processor {
             &transfer_payment_ix,
             &[
                 purchase_token_account.clone(),
-                rent_account.clone(),
+                sol_deposit_account.clone(),
+                signer.clone(),
                 token_program_account.clone(),
             ],
         )?;
@@ -345,6 +357,15 @@ impl Processor {
             &[],
             contribution_amount as u64,
         )?;
+        invoke(
+            &transfer_contribution_ix,
+            &[
+                purchase_token_account.clone(),
+                sol_contribution_account.clone(),
+                signer.clone(),
+                token_program_account.clone(),
+            ],
+        )?;
 
         // Provide voting tokens to the lister
         let votes = float_as_amount(contribution_amount, spl_token::native_mint::DECIMALS) as f64
@@ -353,7 +374,7 @@ impl Processor {
         let mint_votes_to_lister_ix = spl_token::instruction::mint_to(
             token_program_account.key,
             &realm.community_mint,
-            &listing.community_token_account,
+            &listing.vote_token_account,
             program_id,
             &[],
             votes as u64,
@@ -512,7 +533,7 @@ impl Processor {
         listing.price = amount;
         listing.authority = *initializer_account.key;
         listing.sol_token_account = *deposit_token_account.key;
-        listing.community_token_account = *community_token_account.key;
+        listing.vote_token_account = *community_token_account.key;
         listing.mint = *app_mint_account.key;
         listing.charter_governance = *charter_governance_account.key;
         Listing::pack(listing, &mut listing_account.try_borrow_mut_data()?)?;
@@ -578,7 +599,7 @@ mod tests {
         listing_account.price = data.price;
         listing_account.authority = data.authority;
         listing_account.sol_token_account = data.sol_token_account;
-        listing_account.community_token_account = data.community_token_account;
+        listing_account.vote_token_account = data.vote_token_account;
         listing_account.mint = data.mint;
         listing_account.charter_governance = data.charter_governance;
         Listing::pack(listing_account, &mut listing_data).unwrap();
@@ -630,7 +651,7 @@ mod tests {
                 charter_governance: Pubkey::new_unique(),
                 authority: Pubkey::new_unique(),
                 sol_token_account: Pubkey::new_unique(),
-                community_token_account: Pubkey::new_unique(),
+                vote_token_account: Pubkey::new_unique(),
                 price: 10,
                 mint: Pubkey::new_unique(),
             },
@@ -679,7 +700,7 @@ mod tests {
                 charter_governance: Pubkey::new_unique(),
                 authority: auth,
                 sol_token_account: Pubkey::new_unique(),
-                community_token_account: Pubkey::new_unique(),
+                vote_token_account: Pubkey::new_unique(),
                 price: 10,
                 mint: Pubkey::new_unique(),
             },
@@ -736,7 +757,7 @@ mod tests {
                 charter_governance: Pubkey::new_unique(),
                 authority: Pubkey::new_unique(),
                 sol_token_account: Pubkey::new_unique(),
-                community_token_account: Pubkey::new_unique(),
+                vote_token_account: Pubkey::new_unique(),
                 price: 10,
                 mint: Pubkey::new_unique(),
             },
