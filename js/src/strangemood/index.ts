@@ -3,6 +3,7 @@ import * as ix from '../instructions';
 import { ListingLayout } from '../state';
 import splToken from '@solana/spl-token';
 import { STRANGEMOOD_PROGRAM_ID } from '../constants';
+import { getCharterAccount, getRealmAccount } from '../dao';
 
 export async function getListingAccount(
   conn: solana.Connection,
@@ -123,6 +124,7 @@ export async function purchaseListing(
   }
 ) {
   const listing = await getListingAccount(conn, params.listing);
+  const charter = await getCharterAccount(conn, params.charter);
 
   let solTokenAccountToPayWith = await splToken.Token.createWrappedNativeAccount(
     conn,
@@ -157,6 +159,17 @@ export async function purchaseListing(
     multisig
   );
 
+  const realm = await getRealmAccount(conn, params.realm);
+
+  let [realmMintAuthority, __] = await solana.PublicKey.findProgramAddress(
+    [realm.data.communityMint.toBuffer()],
+    STRANGEMOOD_PROGRAM_ID
+  );
+  let [listingMintAuthority, ___] = await solana.PublicKey.findProgramAddress(
+    [listing.data.mint.toBuffer()],
+    STRANGEMOOD_PROGRAM_ID
+  );
+
   let tx = new solana.Transaction({
     feePayer: keys.payer.publicKey,
   });
@@ -165,8 +178,18 @@ export async function purchaseListing(
       signerPubkey: keys.signer.publicKey,
       listingPubkey: params.listing,
       solTokenAccountPubkey: solTokenAccountToPayWith,
-      listingTokenAccountPubkey: listingTokenAccount.address,
-      listingTokenOwnerPubkey: multisig,
+      purchasersListingTokenAccountPubkey: listingTokenAccount.address,
+
+      solDepositPubkey: listing.data.solTokenAccount,
+      voteDepositPubkey: listing.data.communityTokenAccount,
+      solContributionPubkey: charter.data.realm_sol_token_account,
+      voteContributionPubkey: charter.data.realm_vote_token_account,
+
+      realmMintPubkey: realm.data.communityMint,
+      listingMintPubkey: listing.data.mint,
+      realmMintAuthority: realmMintAuthority,
+      listingMintAuthority: listingMintAuthority,
+
       governanceProgramId: params.governanceProgramId,
       realmPubkey: params.realm,
       charterGovernancePubkey: params.charterGovernance,

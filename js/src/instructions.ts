@@ -155,12 +155,22 @@ export type PurchaseListingParams = {
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
   solTokenAccountPubkey: solana.PublicKey;
-  listingTokenAccountPubkey: solana.PublicKey;
-  listingTokenOwnerPubkey: solana.PublicKey;
+  purchasersListingTokenAccountPubkey: solana.PublicKey;
+
+  solDepositPubkey: solana.PublicKey;
+  voteDepositPubkey: solana.PublicKey;
+  solContributionPubkey: solana.PublicKey;
+  voteContributionPubkey: solana.PublicKey;
+
+  realmMintPubkey: solana.PublicKey;
+  listingMintPubkey: solana.PublicKey;
+  realmMintAuthority: solana.PublicKey;
+  listingMintAuthority: solana.PublicKey;
+
+  governanceProgramId: solana.PublicKey;
   realmPubkey: solana.PublicKey;
   charterGovernancePubkey: solana.PublicKey;
   charterPubkey: solana.PublicKey;
-  governanceProgramId: solana.PublicKey;
 };
 
 export function purchaseListing(
@@ -175,8 +185,18 @@ export function purchaseListing(
     asSigner(params.signerPubkey),
     asWritable(params.listingPubkey),
     asReadonly(params.solTokenAccountPubkey),
-    asReadonly(params.listingTokenAccountPubkey),
-    asReadonly(params.listingTokenOwnerPubkey),
+    asReadonly(params.purchasersListingTokenAccountPubkey),
+
+    asReadonly(params.solDepositPubkey),
+    asReadonly(params.voteDepositPubkey),
+    asReadonly(params.solContributionPubkey),
+    asReadonly(params.voteContributionPubkey),
+
+    asReadonly(params.realmMintPubkey),
+    asReadonly(params.listingMintPubkey),
+    asReadonly(params.realmMintAuthority),
+    asReadonly(params.listingMintAuthority),
+
     asReadonly(params.governanceProgramId),
     asReadonly(params.realmPubkey),
     asReadonly(params.charterGovernancePubkey),

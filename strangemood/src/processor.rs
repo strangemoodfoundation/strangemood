@@ -472,6 +472,7 @@ impl Processor {
         // which prevents transfer and makes this actually a license.
         //
         // Listings should not trust tokens that are unfrozen
+        msg!("freeze the token account we just minted to");
         let freeze_account_ix = spl_token::instruction::freeze_account(
             token_program_account.key,
             purchaser_listing_token_account.key,

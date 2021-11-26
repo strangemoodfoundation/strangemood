@@ -4,6 +4,26 @@ import { CharterLayout } from './state';
 import { Charter } from './types';
 import * as ix from './instructions';
 import splToken from '@solana/spl-token';
+import {
+  getGovernanceSchema,
+  PROGRAM_VERSION_V2,
+} from './governance/serialization';
+import { deserialize } from 'borsh';
+import { Realm } from './governance/accounts';
+
+export async function getRealmAccount(
+  conn: solana.Connection,
+  realmPubkey: solana.PublicKey
+) {
+  let realmAccount = await conn.getAccountInfo(realmPubkey);
+
+  let gov = getGovernanceSchema(PROGRAM_VERSION_V2);
+  let realm = deserialize(gov, Realm, realmAccount.data);
+
+  return {
+    data: realm,
+  };
+}
 
 // TODO: make this an account meta instead of just the data inside the account
 export async function getCharterAccount(
@@ -14,14 +34,29 @@ export async function getCharterAccount(
   let object = CharterLayout.decode(charter.data);
 
   return {
-    expansion_rate_amount: new splToken.u64(object.expansion_rate_amount),
-    expansion_rate_decimals: object.expansion_rate_decimals,
-    contribution_rate_amount: new splToken.u64(object.contribution_rate_amount),
-    contribution_rate_decimals: object.contribution_rate_decimals,
-    authority: new solana.PublicKey(object.authority),
-    realm_sol_token_account: new solana.PublicKey(
-      object.realm_sol_token_account
-    ),
+    data: {
+      expansion_rate_amount: new splToken.u64(object.expansion_rate_amount),
+      expansion_rate_decimals: object.expansion_rate_decimals,
+
+      sol_contribution_rate_amount: new splToken.u64(
+        object.sol_contribution_rate_amount
+      ),
+      sol_contribution_rate_decimals: object.sol_contribution_rate_decimals,
+
+      vote_contribution_rate_amount: new splToken.u64(
+        object.vote_contribution_rate_amount
+      ),
+      vote_contribution_rate_decimals: object.vote_contribution_rate_decimals,
+
+      authority: new solana.PublicKey(object.authority),
+
+      realm_sol_token_account: new solana.PublicKey(
+        object.realm_sol_token_account
+      ),
+      realm_vote_token_account: new solana.PublicKey(
+        object.realm_vote_token_account
+      ),
+    },
   };
 }
 
