@@ -2,7 +2,7 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
     msg,
-    program::invoke,
+    program::{invoke, invoke_signed},
     program_error::ProgramError,
     program_pack::{IsInitialized, Pack},
     pubkey::Pubkey,
@@ -17,6 +17,7 @@ use crate::{
     instruction::StrangemoodInstruction,
     is_zero,
     state::{float_as_amount, Charter, Listing},
+    StrangemoodPDA,
 };
 
 pub struct Processor;
@@ -264,10 +265,21 @@ impl Processor {
         // 7. [] VoteContribution
         let vote_contribution_account = next_account_info(account_info_iter)?;
 
-        // 8. [] The governance program id
+        // 8. [] RealmMint
+        let realm_mint = next_account_info(account_info_iter)?;
+
+        // 9. [] ListingMint
+        let listing_mint = next_account_info(account_info_iter)?;
+
+        // Ensure the listing is actually the expected listing mint
+        if listing.mint != *listing_mint.key {
+            return Err(ProgramError::InvalidArgument);
+        }
+
+        // 10. [] The governance program id
         let governance_program = next_account_info(account_info_iter)?;
 
-        // 9. [] The realm account
+        // 11. [] The realm account
         let realm_account = next_account_info(account_info_iter)?;
 
         spl_governance::state::realm::assert_is_valid_realm(
@@ -279,7 +291,12 @@ impl Processor {
             realm_account,
         )?;
 
-        // 10. [] The account governance account of the charter
+        // Ensure the realm mint is actually the realm mint
+        if realm.community_mint != *realm_mint.key {
+            return Err(ProgramError::InvalidArgument);
+        }
+
+        // 12. [] The account governance account of the charter
         let charter_governance_account = next_account_info(account_info_iter)?;
         let charter_governance = spl_governance::state::governance::get_governance_data(
             governance_program.key,
@@ -289,7 +306,7 @@ impl Processor {
             return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
         }
 
-        // 11. [] The charter account itself
+        // 13. [] The charter account itself
         let charter_account = next_account_info(account_info_iter)?;
         let gov_address = spl_governance::state::governance::get_account_governance_address(
             governance_program.key,
@@ -317,10 +334,7 @@ impl Processor {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
 
-        // 12. [] rent sysvar
-        let rent_account = next_account_info(account_info_iter)?;
-
-        // 13. [] The token program
+        // 14. [] The token program
         let token_program_account = next_account_info(account_info_iter)?;
 
         let deposit_rate = 1.0 - charter.sol_contribution_rate();
@@ -340,10 +354,10 @@ impl Processor {
         invoke(
             &transfer_payment_ix,
             &[
-                purchase_token_account.clone(),
-                sol_deposit_account.clone(),
-                signer.clone(),
-                token_program_account.clone(),
+                *purchase_token_account,
+                *sol_deposit_account,
+                *signer,
+                *token_program_account,
             ],
         )?;
 
@@ -360,33 +374,63 @@ impl Processor {
         invoke(
             &transfer_contribution_ix,
             &[
-                purchase_token_account.clone(),
-                sol_contribution_account.clone(),
-                signer.clone(),
-                token_program_account.clone(),
+                *purchase_token_account,
+                *sol_contribution_account,
+                *signer,
+                *token_program_account,
             ],
         )?;
 
         // Provide voting tokens to the lister
         let votes = float_as_amount(contribution_amount, spl_token::native_mint::DECIMALS) as f64
             * charter.expansion_rate();
+
+        let deposit_rate = 1.0 - charter.vote_contribution_rate();
+        let deposit_amount = deposit_rate * votes as f64;
+        let contribution_amount = votes - deposit_amount;
+
         msg!("Mint votes to lister");
+        let mint_bytes = realm.community_mint.to_bytes();
+        let (community_mint_authority, bump_seed) =
+            StrangemoodPDA::mint_authority(&program_id, &realm.community_mint);
+        let authority_signature_seeds = [&mint_bytes[..32], &[bump_seed]];
+        let signers = &[&authority_signature_seeds[..]];
         let mint_votes_to_lister_ix = spl_token::instruction::mint_to(
             token_program_account.key,
             &realm.community_mint,
             &listing.vote_token_account,
             program_id,
             &[],
-            votes as u64,
+            deposit_amount as u64,
         )?;
+        invoke_signed(
+            &mint_votes_to_lister_ix,
+            &[
+                *realm_mint,
+                *vote_deposit_account,
+                *community_mint_authority, // wait wtf, why are we passing in the account info of a PDA?????????
+                *token_program_account,
+            ],
+            signers,
+        );
 
-        // Mint an app token that proves the user bought the app
         msg!("Mint votes to realm");
         let mint_votes_to_realm_ix = spl_token::instruction::mint_to(
+            token_program_account.key,
+            &realm.community_mint,
+            &listing.vote_token_account,
+            program_id,
+            &[],
+            contribution_amount as u64,
+        )?;
+
+        // Mint an lister token that proves the user bought the app
+        msg!("Mint an lister token to user");
+        let mint_lister_token_ix = spl_token::instruction::mint_to(
             token_program_account.owner,
             &listing.mint,
             listing_token_account.key,
-            signer.key,
+            program_id,
             &[],
             1,
         )?;

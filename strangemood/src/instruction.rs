@@ -75,12 +75,13 @@ pub enum StrangemoodInstruction {
     /// 5. `[]` VoteDeposit - The listing's deposit account for votes
     /// 6. `[]` SolContribution - The realm's sol account
     /// 7. `[]` VoteContribution - The realm's vote account
-    /// 8. `[]` The governance program (this isn't static, people can deploy their own governance programs.)
-    /// 9. `[]` The realm account
-    /// 10. `[]` The account governance of the charter
-    /// 11. `[]` The account of the charter itself
-    /// 12. `[]` The rent sysvar
-    /// 13. `[]` The token program
+    /// 8. `[]` RealmMint - The mint account for the community mint
+    /// 9. `[]` ListingMint - The mint account for this listing
+    /// 10. `[]` The governance program (this isn't static, people can deploy their own governance programs.)
+    /// 11. `[]` The realm account
+    /// 12. `[]` The account governance of the charter
+    /// 13. `[]` The account of the charter itself
+    /// 14. `[]` The token program
     PurchaseListing {},
 
     /// Setup a charter account. Expects the charter to
