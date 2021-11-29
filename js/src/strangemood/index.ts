@@ -3,7 +3,7 @@ import * as ix from '../instructions';
 import { ListingLayout } from '../state';
 import splToken from '@solana/spl-token';
 import { STRANGEMOOD_PROGRAM_ID } from '../constants';
-import { getCharterAccount, getRealmAccount } from '../dao';
+import { getCharterAccount } from '../dao';
 
 export async function getListingAccount(
   conn: solana.Connection,

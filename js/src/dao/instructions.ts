@@ -6,7 +6,7 @@ import {
   STRANGEMOOD_PROGRAM_ID,
 } from '../constants';
 import { asSigner, asWritable, publicKey } from '../utils';
-import splToken from '@solana/spl-token';
+import * as splToken from '@solana/spl-token';
 import {
   getRealmConfigAddress,
   getTokenHoldingAddress,
