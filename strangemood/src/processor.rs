@@ -618,6 +618,7 @@ impl Processor {
 
         // Initialize the listing
         listing.is_initialized = true;
+        listing.is_available = false;
         listing.price = amount;
         listing.authority = *initializer_account.key;
         listing.sol_token_account = *deposit_token_account.key;

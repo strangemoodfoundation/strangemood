@@ -1,5 +1,8 @@
 import * as solana from '@solana/web3.js';
+import * as splToken from '@solana/spl-token';
 import { createDAO, DAO } from './dao';
+import { createListing, getListingAccount } from './strangemood';
+import BN from 'bn.js';
 
 const TEST_GOVERNANCE_PROGRAM = new solana.PublicKey(
   'eyoXCKW5rkxbHc1fAXQJry5i6jYyyXk1iDGfKLYErbX'
@@ -65,4 +68,70 @@ afterAll(() => {
 
 test('Setup sanity check', () => {
   expect(dao).toBeTruthy();
+});
+
+test('Can create a listing', () => {
+  return (async function() {
+    let signer = solana.Keypair.generate();
+
+    let airdropSignature = await conn.requestAirdrop(
+      signer.publicKey,
+      solana.LAMPORTS_PER_SOL * 10
+    );
+    await conn.confirmTransaction(airdropSignature);
+
+    let wrappedSol = new splToken.Token(
+      conn,
+      splToken.NATIVE_MINT,
+      splToken.TOKEN_PROGRAM_ID,
+      signer
+    );
+    let sol_acct = await wrappedSol.getOrCreateAssociatedAccountInfo(
+      signer.publicKey
+    );
+
+    let votes = new splToken.Token(
+      conn,
+      dao.communityMint,
+      splToken.TOKEN_PROGRAM_ID,
+      signer
+    );
+    let vote_acct = await votes.getOrCreateAssociatedAccountInfo(
+      signer.publicKey
+    );
+
+    const { listing, listingMint } = await createListing(
+      conn,
+      {
+        signer: signer,
+        payer: signer,
+      },
+      {
+        solDeposit: sol_acct.address,
+        voteDeposit: vote_acct.address,
+        realm: dao.realm,
+        charter: dao.charter,
+        charterGovernance: dao.charterGovernance,
+        governanceProgramId: TEST_GOVERNANCE_PROGRAM,
+        priceInLamports: 1000,
+      }
+    );
+
+    expect(listing).toBeTruthy();
+    expect(listingMint).toBeTruthy();
+
+    const acct = await getListingAccount(conn, listing.publicKey);
+    expect(acct.data.price.eq(new BN(1000))).toBeTruthy();
+    expect(acct.data.authority.equals(signer.publicKey)).toBeTruthy();
+    expect(
+      acct.data.charterGovernance.equals(dao.charterGovernance)
+    ).toBeTruthy();
+    expect(
+      acct.data.communityTokenAccount.equals(vote_acct.address)
+    ).toBeTruthy();
+    expect(acct.data.solTokenAccount.equals(sol_acct.address)).toBeTruthy();
+    expect(acct.data.mint.equals(listingMint.publicKey)).toBeTruthy();
+    expect(acct.data.isAvailable).toBeFalsy();
+    expect(acct.data.isInitialized).toBeTruthy();
+  })();
 });

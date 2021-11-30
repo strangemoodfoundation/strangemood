@@ -13,7 +13,7 @@ import {
   splToken,
   uint64,
 } from './utils';
-import token from '@solana/spl-token';
+import * as token from '@solana/spl-token';
 
 export type InitListingParams = {
   signerPubkey: solana.PublicKey;
@@ -36,8 +36,6 @@ export function initListing(params: InitListingParams) {
   let layout = struct([u8('instruction'), uint64('amount')]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
-
-  console.log('encoded listing', data, params.priceInLamports);
 
   const keys = [
     asSigner(params.signerPubkey),

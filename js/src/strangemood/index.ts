@@ -1,7 +1,7 @@
 import * as solana from '@solana/web3.js';
 import * as ix from '../instructions';
 import { ListingLayout } from '../state';
-import splToken from '@solana/spl-token';
+import * as splToken from '@solana/spl-token';
 import { STRANGEMOOD_PROGRAM_ID } from '../constants';
 import { getCharterAccount } from '../dao';
 
