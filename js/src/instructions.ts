@@ -1,9 +1,6 @@
 import * as solana from '@solana/web3.js';
 import { struct, ns64, u8 } from '@solana/buffer-layout';
-import {
-  STRANGEMOOD_PROGRAM_ID,
-  STRANGEMOOD_INSTRUCTION_INDEXES as INDEXES,
-} from './constants';
+import { STRANGEMOOD_INSTRUCTION_INDEXES as INDEXES } from './constants';
 import { ListingLayout } from './state';
 import {
   asReadonly,
@@ -16,6 +13,7 @@ import {
 import * as token from '@solana/spl-token';
 
 export type InitListingParams = {
+  strangemoodProgramId: solana.PublicKey;
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
   mintPubkey: solana.PublicKey;
@@ -52,12 +50,13 @@ export function initListing(params: InitListingParams) {
   ];
   return new solana.TransactionInstruction({
     keys,
-    programId: STRANGEMOOD_PROGRAM_ID,
+    programId: params.strangemoodProgramId,
     data,
   });
 }
 
 export type SetListingPriceParams = {
+  strangemoodProgramId: solana.PublicKey;
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
   priceInLamports: number;
@@ -78,12 +77,13 @@ export function setListingPrice(params: SetListingPriceParams) {
   ];
   return new solana.TransactionInstruction({
     keys,
-    programId: STRANGEMOOD_PROGRAM_ID,
+    programId: params.strangemoodProgramId,
     data,
   });
 }
 
 export type SetListingAuthorityParams = {
+  strangemoodProgramId: solana.PublicKey;
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
   authorityPubkey: solana.PublicKey;
@@ -102,12 +102,13 @@ export function setListingAuthority(params: SetListingAuthorityParams) {
   ];
   return new solana.TransactionInstruction({
     keys,
-    programId: STRANGEMOOD_PROGRAM_ID,
+    programId: params.strangemoodProgramId,
     data,
   });
 }
 
 export type SetListingDepositParams = {
+  strangemoodProgramId: solana.PublicKey;
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
   solDepositPubkey: solana.PublicKey;
@@ -128,12 +129,13 @@ export function setListingDeposit(params: SetListingDepositParams) {
   ];
   return new solana.TransactionInstruction({
     keys,
-    programId: STRANGEMOOD_PROGRAM_ID,
+    programId: params.strangemoodProgramId,
     data,
   });
 }
 
 export type SetListingAvailabilityParams = {
+  strangemoodProgramId: solana.PublicKey;
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
   isAvailable: boolean;
@@ -158,12 +160,13 @@ export function setListingAvailability(params: SetListingAvailabilityParams) {
   ];
   return new solana.TransactionInstruction({
     keys,
-    programId: STRANGEMOOD_PROGRAM_ID,
+    programId: params.strangemoodProgramId,
     data,
   });
 }
 
 export type PurchaseListingParams = {
+  strangemoodProgramId: solana.PublicKey;
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
   solTokenAccountPubkey: solana.PublicKey;
@@ -218,12 +221,13 @@ export function purchaseListing(
   ];
   return new solana.TransactionInstruction({
     keys,
-    programId: STRANGEMOOD_PROGRAM_ID,
+    programId: params.governanceProgramId,
     data,
   });
 }
 
 export type CreateListingAccount = {
+  strangemoodProgramId: solana.PublicKey;
   lamportsForRent: number;
   payerPubkey: solana.PublicKey;
   newAccountPubkey: solana.PublicKey;
@@ -235,6 +239,6 @@ export function createListingAccount(params: CreateListingAccount) {
     newAccountPubkey: params.newAccountPubkey,
     lamports: params.lamportsForRent,
     space: ListingLayout.span,
-    programId: STRANGEMOOD_PROGRAM_ID,
+    programId: params.strangemoodProgramId,
   });
 }

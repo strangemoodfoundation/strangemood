@@ -33,6 +33,7 @@ export async function getListingAccount(
 
 export async function createListing(
   conn: solana.Connection, // Note that these keys can all be the same
+  strangemoodProgramId: solana.PublicKey,
   // keypair.
   keys: {
     // Who pays the rent?
@@ -77,6 +78,7 @@ export async function createListing(
       lamportsForRent: listingBalance,
       payerPubkey: keys.payer.publicKey,
       newAccountPubkey: acctKeypair.publicKey,
+      strangemoodProgramId,
     }),
     ix.initListing({
       signerPubkey: keys.signer.publicKey,
@@ -89,6 +91,7 @@ export async function createListing(
       charterPubkey: params.charter,
       priceInLamports: params.priceInLamports,
       governanceProgramId: params.governanceProgramId,
+      strangemoodProgramId: strangemoodProgramId,
     })
   );
 
@@ -179,6 +182,7 @@ export async function purchaseListing(
       realmPubkey: params.realm,
       charterGovernancePubkey: params.charterGovernance,
       charterPubkey: params.charter,
+      strangemoodProgramId,
     })
   );
 
