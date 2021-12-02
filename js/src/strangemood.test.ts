@@ -132,6 +132,5 @@ test('Can create a listing', () => {
     expect(acct.data.solTokenAccount.equals(sol_acct.address)).toBeTruthy();
     expect(acct.data.mint.equals(listingMint.publicKey)).toBeTruthy();
     expect(acct.data.isAvailable).toBeFalsy();
-    expect(acct.data.isInitialized).toBeTruthy();
   })();
 });
