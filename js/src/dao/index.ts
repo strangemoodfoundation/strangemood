@@ -1,5 +1,4 @@
 import * as solana from '@solana/web3.js';
-import { STRANGEMOOD_PROGRAM_ID } from '../constants';
 import { CharterLayout } from './state';
 import { Charter } from './types';
 import * as ix from './instructions';
@@ -68,6 +67,7 @@ export async function getCharterAccount(
 
 export async function createCharter(
   conn: solana.Connection,
+  governanceProgramId: solana.Keypair,
 
   // Note that these keys can all be the same
   // keypair.
@@ -96,7 +96,7 @@ export async function createCharter(
       lamportsForRent: minimumBalance,
       payerPubkey: keys.payer.publicKey,
       newAccountPubkey: acctKeypair.publicKey,
-      owner: STRANGEMOOD_PROGRAM_ID,
+      owner: governanceProgramId.publicKey,
     })
   );
 
@@ -119,6 +119,7 @@ export async function createCharter(
 export async function createDAO(
   conn: solana.Connection,
   governanceProgramId: solana.PublicKey,
+  strangemoodProgramId: solana.PublicKey,
   signer: solana.Keypair,
   initialVoteSupply: number,
   name: string,
@@ -238,7 +239,7 @@ export async function createDAO(
     lamportsForRent: balance,
     payerPubkey: signer.publicKey,
     newAccountPubkey: charterKeypair.publicKey,
-    owner: STRANGEMOOD_PROGRAM_ID,
+    owner: strangemoodProgramId,
   });
 
   // Update the charter details

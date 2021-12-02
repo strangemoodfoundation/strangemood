@@ -2,7 +2,6 @@ import * as solana from '@solana/web3.js';
 import * as ix from '../instructions';
 import { ListingLayout } from '../state';
 import * as splToken from '@solana/spl-token';
-import { STRANGEMOOD_PROGRAM_ID } from '../constants';
 import { getCharterAccount } from '../dao';
 
 export async function getListingAccount(
@@ -107,6 +106,7 @@ export async function createListing(
 
 export async function purchaseListing(
   conn: solana.Connection, // Note that these keys can all be the same
+  strangemoodProgramId: solana.PublicKey,
   // keypair.
   keys: {
     // Who pays the rent?
@@ -134,7 +134,6 @@ export async function purchaseListing(
     keys.payer,
     listing.data.price.toNumber()
   );
-  console.log('created sol token account to pay with');
 
   let listingToken = new splToken.Token(
     conn,
@@ -149,14 +148,12 @@ export async function purchaseListing(
 
   let [realmMintAuthority, __] = await solana.PublicKey.findProgramAddress(
     [params.communityMint.toBuffer()],
-    STRANGEMOOD_PROGRAM_ID
+    strangemoodProgramId
   );
   let [listingMintAuthority, ___] = await solana.PublicKey.findProgramAddress(
     [listing.data.mint.toBuffer()],
-    STRANGEMOOD_PROGRAM_ID
+    strangemoodProgramId
   );
-
-  console.log('created PDAs');
 
   let tx = new solana.Transaction({
     feePayer: keys.payer.publicKey,
@@ -184,8 +181,6 @@ export async function purchaseListing(
       charterPubkey: params.charter,
     })
   );
-
-  console.log('about to send and confirm transaction');
 
   await solana.sendAndConfirmTransaction(conn, tx, [keys.signer]);
 
