@@ -1,10 +1,14 @@
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use num_traits::ToPrimitive;
 use solana_program::{
     msg,
     program_error::ProgramError,
     program_pack::{IsInitialized, Pack, Sealed},
     pubkey::Pubkey,
 };
+
+const CHARTER_TAG: u8 = 0u8;
+const LISTING_TAG: u8 = 1u8;
 
 /// The rules of the governance; controlled by a governance account.
 /// There should only be one charter per realm.
@@ -67,11 +71,12 @@ impl Charter {
 impl Sealed for Charter {}
 
 impl Pack for Charter {
-    const LEN: usize = 123; // See "test_get_packed_len()" for explanation
+    const LEN: usize = 124; // See "test_get_packed_len()" for explanation
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let data = self.try_to_vec().unwrap();
-        dst[..data.len()].copy_from_slice(&data);
+        dst[0] = CHARTER_TAG;
+        dst[1..(data.len() + 1)].copy_from_slice(&data);
     }
 
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
@@ -122,11 +127,13 @@ impl IsInitialized for Listing {
 }
 
 impl Pack for Listing {
-    const LEN: usize = 170; // See "test_get_packed_len()" for explanation
+    const LEN: usize = 171; // See "test_get_packed_len()" for explanation
 
     fn pack_into_slice(&self, dst: &mut [u8]) {
         let data = self.try_to_vec().unwrap();
-        dst[..data.len()].copy_from_slice(&data);
+
+        dst[0] = LISTING_TAG;
+        dst[1..(data.len() + 1)].copy_from_slice(&data);
     }
 
     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
@@ -163,6 +170,58 @@ mod tests {
         assert_eq!(charter.sol_contribution_rate(), 2000.0);
         assert_eq!(float_as_amount(0.01, 2), 1);
         assert_eq!(float_as_amount(amount_as_float(200, 2), 2), 200);
+    }
+
+    #[test]
+    fn test_tags() {
+        let dst = &mut [0u8; Listing::LEN];
+        let listing = Listing {
+            is_initialized: false,
+            price: 10,
+            authority: Pubkey::new_unique(),
+            sol_token_account: Pubkey::new_unique(),
+            vote_token_account: Pubkey::new_unique(),
+            mint: Pubkey::new_unique(),
+            charter_governance: Pubkey::new_unique(),
+            is_available: true,
+        };
+
+        Listing::pack(listing, dst).unwrap();
+        assert_eq!(dst.starts_with(&[LISTING_TAG]), true);
+
+        // testing again just to make sure it's not reading first byte
+        let dst = &mut [0u8; Listing::LEN];
+        let listing = Listing {
+            is_initialized: false,
+            price: 10,
+            authority: Pubkey::new_unique(),
+            sol_token_account: Pubkey::new_unique(),
+            vote_token_account: Pubkey::new_unique(),
+            mint: Pubkey::new_unique(),
+            charter_governance: Pubkey::new_unique(),
+            is_available: true,
+        };
+        Listing::pack(listing, dst).unwrap();
+        assert_eq!(dst.starts_with(&[LISTING_TAG]), true);
+
+        // Charter
+        let dst = &mut [0u8; Charter::LEN];
+        let sol_ta = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
+        let vote_ta = Pubkey::new_unique();
+        let authority = Pubkey::from_str("HjqrPM6CHw8iem2sLtCAsGunGTN46juDFAHbvChyHiHV").unwrap();
+        let charter = Charter {
+            authority,
+            realm_sol_token_account: sol_ta,
+            realm_vote_token_account: vote_ta,
+            expansion_rate_amount: 1,
+            expansion_rate_decimals: 2,
+            sol_contribution_rate_amount: 5,
+            sol_contribution_rate_decimals: 2,
+            vote_contribution_rate_amount: 5,
+            vote_contribution_rate_decimals: 2,
+        };
+        Charter::pack(charter, dst).unwrap();
+        assert_eq!(dst.starts_with(&[CHARTER_TAG]), true);
     }
 
     #[test]
