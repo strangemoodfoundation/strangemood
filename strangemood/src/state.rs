@@ -1,5 +1,3 @@
-use std::str::Utf8Error;
-
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use solana_program::{
     msg,
