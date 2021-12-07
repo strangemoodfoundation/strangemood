@@ -1,6 +1,7 @@
 use std::convert::TryInto;
 
 use solana_program::pubkey::Pubkey;
+use std::io::Write;
 
 pub mod entrypoint;
 pub mod error;
@@ -33,4 +34,8 @@ fn is_zero(slice: &[u8]) -> bool {
         }
     }
     return true;
+}
+
+fn fill_from_str(mut bytes: &mut [u8], s: &str) {
+    bytes.write(s.as_bytes()).unwrap();
 }
