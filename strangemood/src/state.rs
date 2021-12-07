@@ -44,16 +44,10 @@ pub struct Charter {
 
     // The WHATWG URL host that off-chain services live on for this governance.
     // Example: "https://strangemood.org", "http://localhost:3000", "https://api.strangemood.org:4040"
-    pub uri: [u8; 128], // A utf-8 string. Call
+    pub uri: [u8; 128], // A utf-8 string
 
     /// Reserved space for future versions
     pub reserved: [u8; 64],
-}
-
-impl Charter {
-    fn uri_as_str(&self) -> Result<&str, Utf8Error> {
-        std::str::from_utf8(&self.uri)
-    }
 }
 
 pub(crate) fn amount_as_float(amount: u64, decimals: u8) -> f64 {
