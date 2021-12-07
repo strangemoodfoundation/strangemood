@@ -1,10 +1,7 @@
-import { ns64, struct, u8 } from '@solana/buffer-layout';
+import { ns64, struct, u8, seq } from '@solana/buffer-layout';
 import * as solana from '@solana/web3.js';
 import { serialize } from 'borsh';
-import {
-  STRANGEMOOD_INSTRUCTION_INDEXES as INDEXES,
-  STRANGEMOOD_PROGRAM_ID,
-} from '../constants';
+import { STRANGEMOOD_INSTRUCTION_INDEXES as INDEXES } from '../constants';
 import { asSigner, asWritable, publicKey } from '../utils';
 import * as splToken from '@solana/spl-token';
 import {
@@ -441,6 +438,7 @@ export type SetCharterAccountParams = {
   charterPubkey: solana.PublicKey;
   charterData: Charter;
   signer: solana.PublicKey;
+  strangemoodProgramId: solana.PublicKey;
 };
 
 export function setCharterAccount(params: SetCharterAccountParams) {
@@ -460,6 +458,7 @@ export function setCharterAccount(params: SetCharterAccountParams) {
       authority: params.charterData.authority.toBytes(),
       realm_sol_token_account: params.charterData.realm_sol_token_account.toBytes(),
       realm_vote_token_account: params.charterData.realm_vote_token_account.toBytes(),
+      uri: new TextEncoder().encode(params.charterData.uri),
     }
   );
 
@@ -478,6 +477,9 @@ export function setCharterAccount(params: SetCharterAccountParams) {
     publicKey('authority'),
     publicKey('realm_sol_token_account'),
     publicKey('realm_vote_token_account'),
+
+    seq(u8(), 128, 'uri'),
+    seq(u8(), 64, 'reserved'), // Reserved space for future versions
   ]);
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
@@ -485,7 +487,7 @@ export function setCharterAccount(params: SetCharterAccountParams) {
   const keys = [asSigner(params.signer), asWritable(params.charterPubkey)];
   return new solana.TransactionInstruction({
     keys,
-    programId: STRANGEMOOD_PROGRAM_ID,
+    programId: params.strangemoodProgramId,
     data,
   });
 }

@@ -42,7 +42,6 @@ import * as ix from './dao/instructions';
 //     }
 //   );
 //   console.log('Created DAO!');
-
 //   let wrappedSol = new splToken.Token(
 //     conn,
 //     splToken.NATIVE_MINT,
@@ -120,6 +119,7 @@ async function main() {
   let realm_sol_token_account = new solana.PublicKey(args[0]);
   let realm_vote_token_account = new solana.PublicKey(args[1]);
 
+  console.log('Creating a connection to testnet');
   const conn = new solana.Connection(
     solana.clusterApiUrl('testnet'),
     'confirmed'
@@ -145,8 +145,10 @@ async function main() {
     authority: signer.publicKey,
     realm_sol_token_account,
     realm_vote_token_account,
+    uri: 'https://strangemood.org',
   };
 
+  console.log('Creating empty charter account');
   const create_empty_charter_tx = ix.createEmptyCharterAccount({
     lamportsForRent: balance,
     payerPubkey: signer.publicKey,
@@ -156,30 +158,22 @@ async function main() {
 
   // Update the charter details
   const set_charter_tx = ix.setCharterAccount({
-    charterData: {
-      expansion_rate_amount: charter.expansion_rate_amount,
-      expansion_rate_decimals: charter.expansion_rate_decimals,
-      sol_contribution_rate_amount: charter.sol_contribution_rate_amount,
-      sol_contribution_rate_decimals: charter.sol_contribution_rate_decimals,
-      vote_contribution_rate_amount: charter.vote_contribution_rate_amount,
-      vote_contribution_rate_decimals: charter.vote_contribution_rate_decimals,
-
-      // TODO: Look how token governances assign their authorities
-      // and then use that to give the update authority of the charter
-      // to the Realm.
-      authority: signer.publicKey,
-      realm_sol_token_account: MAINNET.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT,
-      realm_vote_token_account: MAINNET.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT,
-    },
+    charterData: charter,
     charterPubkey: charterKeypair.publicKey,
+    strangemoodProgramId: MAINNET.STRANGEMOOD_PROGRAM_ID,
     signer: signer.publicKey,
   });
 
+  console.log('creating solana transaction');
   const tx = new solana.Transaction();
   tx.add(create_empty_charter_tx);
   tx.add(set_charter_tx);
 
+  console.log('sending and confirming transaction');
   await solana.sendAndConfirmTransaction(conn, tx, [signer, charterKeypair]);
+
+  console.log('Charter is', charterKeypair.publicKey.toString());
 }
 
+console.log('Starting charter creation');
 main().catch(console.error);

@@ -40,7 +40,7 @@ pub struct Charter {
     pub realm_sol_token_account: Pubkey,
     pub realm_vote_token_account: Pubkey,
 
-    // The WHATWG URL host that off-chain services live on for this governance.
+    // The URL host where off-chain services can be found for this governance.
     // Example: "https://strangemood.org", "http://localhost:3000", "https://api.strangemood.org:4040"
     pub uri: [u8; 128], // A utf-8 string
 

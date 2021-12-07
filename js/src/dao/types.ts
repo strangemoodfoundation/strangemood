@@ -10,4 +10,5 @@ export type Charter = {
   authority: solana.PublicKey;
   realm_sol_token_account: solana.PublicKey;
   realm_vote_token_account: solana.PublicKey;
+  uri: string;
 };
