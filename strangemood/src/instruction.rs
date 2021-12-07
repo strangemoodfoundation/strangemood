@@ -3,6 +3,7 @@ use solana_program::pubkey::Pubkey;
 use std::convert::TryInto;
 use std::mem::size_of;
 
+use crate::fill_from_str;
 use crate::state::Charter;
 
 // inside instruction.rs
@@ -136,8 +137,12 @@ impl StrangemoodInstruction {
                 let authority = Self::unpack_pubkey(auth_pubkey_bs)?;
                 let (sol_pubkey_bs, rest) = rest.split_at(32);
                 let realm_sol_token_account = Self::unpack_pubkey(sol_pubkey_bs)?;
-                let (vote_pubkey_bs, _) = rest.split_at(32);
+                let (vote_pubkey_bs, rest) = rest.split_at(32);
                 let realm_vote_token_account = Self::unpack_pubkey(vote_pubkey_bs)?;
+
+                let (uri_bytes, _) = rest.split_at(128);
+                let mut uri: [u8; 128] = [0; 128];
+                uri.copy_from_slice(uri_bytes);
 
                 Self::SetCharter {
                     data: Charter {
@@ -150,6 +155,8 @@ impl StrangemoodInstruction {
                         authority,
                         realm_sol_token_account,
                         realm_vote_token_account,
+                        uri,
+                        reserved: [0; 64],
                     },
                 }
             }
@@ -231,6 +238,21 @@ impl StrangemoodInstruction {
                 buf.extend_from_slice(&data.authority.to_bytes());
                 buf.extend_from_slice(&data.realm_sol_token_account.to_bytes());
                 buf.extend_from_slice(&data.realm_vote_token_account.to_bytes());
+
+                let mut s: [u8; 128] = [0; 128];
+                s.copy_from_slice(&data.uri);
+                // let bs = data.uri.as_bytes();
+
+                // for (i, b) in bs.iter().enumerate() {
+                //     if i >= 128 {
+                //         msg!("Charter URI too long");
+                //         continue;
+                //     }
+                //     s[i] = *b;
+                // }
+                buf.extend_from_slice(&s);
+
+                buf.extend_from_slice(&[0; 64]); // reserved
             }
         }
         buf
@@ -241,6 +263,9 @@ impl StrangemoodInstruction {
 mod test {
 
     use std::str::FromStr;
+
+    use crate::fill_from_str;
+    use solana_program::program_pack::Pack;
 
     use super::*;
 
@@ -303,6 +328,9 @@ mod test {
         let sol_ta = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
         let vote_ta = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
         let authority = Pubkey::from_str("HjqrPM6CHw8iem2sLtCAsGunGTN46juDFAHbvChyHiHV").unwrap();
+        let mut bs: [u8; 128] = [0; 128];
+        fill_from_str(&mut bs, &"https://strangemood.org".to_string());
+        input.extend_from_slice(&bs);
         let check = StrangemoodInstruction::SetCharter {
             data: Charter {
                 authority,
@@ -314,6 +342,8 @@ mod test {
                 sol_contribution_rate_decimals: 2,
                 vote_contribution_rate_amount: 5,
                 vote_contribution_rate_decimals: 2,
+                uri: bs,
+                reserved: [0; 64],
             },
         };
         let packed = check.pack();
@@ -323,19 +353,35 @@ mod test {
         input.extend_from_slice(&exp_amount.to_le_bytes());
         input.push(2);
         let cont_amount: u64 = 5;
+
+        // Sol contr amount
         input.extend_from_slice(&cont_amount.to_le_bytes());
         input.push(2);
+
+        // Vote contr amount
+        input.extend_from_slice(&cont_amount.to_le_bytes());
+        input.push(2);
+
         input.extend_from_slice(&authority.to_bytes());
         input.extend_from_slice(&sol_ta.to_bytes());
         input.extend_from_slice(&vote_ta.to_bytes());
+
+        // uri
+        let mut bs: [u8; 128] = [0; 128];
+        fill_from_str(&mut bs, &"https://strangemood.org".to_string());
+        input.extend_from_slice(&bs);
+
+        // Reserved
+        input.extend_from_slice(&[0; 64]);
+
         let unpacked = StrangemoodInstruction::unpack(&input).unwrap();
         assert_eq!(packed, unpacked.pack());
-        assert_eq!(unpacked.pack().len(), 83);
-        assert_eq!(packed.len(), 83);
+        assert_eq!(unpacked.pack().len(), Charter::LEN);
+        assert_eq!(packed.len(), Charter::LEN);
 
         let h = hex::encode(unpacked.pack());
 
-        assert_eq!(h, "06010000000000000002050000000000000002f8b49f0fe7d40af9e1eee29a263ef7972314ae90b5f227d65b210669e54624c00100000000000000000000000000000000000000000000000000000000000000");
+        assert_eq!(h, "06010000000000000002050000000000000002050000000000000002f8b49f0fe7d40af9e1eee29a263ef7972314ae90b5f227d65b210669e54624c00100000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000068747470733a2f2f737472616e67656d6f6f642e6f726700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
     }
 
     #[test]
@@ -343,6 +389,8 @@ mod test {
         let sol_ta = Pubkey::new_unique();
         let vote_ta = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
+        let mut bs: [u8; 128] = [0; 128];
+        fill_from_str(&mut bs, &"https://strangemood.org".to_string());
         let check = StrangemoodInstruction::SetCharter {
             data: Charter {
                 expansion_rate_amount: 1,
@@ -354,6 +402,8 @@ mod test {
                 realm_sol_token_account: sol_ta,
                 realm_vote_token_account: vote_ta,
                 authority,
+                uri: bs,
+                reserved: [0; 64],
             },
         };
         let packed = check.pack();
@@ -372,6 +422,14 @@ mod test {
         input.extend_from_slice(&authority.to_bytes());
         input.extend_from_slice(&sol_ta.to_bytes());
         input.extend_from_slice(&vote_ta.to_bytes());
+
+        let mut bs: [u8; 128] = [0; 128];
+        fill_from_str(&mut bs, &"https://strangemood.org".to_string());
+        input.extend_from_slice(&bs);
+
+        // Reserved
+        input.extend_from_slice(&[0; 64]);
+
         assert_eq!(packed, input);
 
         let unpacked = StrangemoodInstruction::unpack(&input).unwrap();

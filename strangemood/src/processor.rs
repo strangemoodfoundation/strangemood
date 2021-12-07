@@ -743,6 +743,7 @@ mod tests {
                 vote_token_account: Pubkey::new_unique(),
                 price: 10,
                 mint: Pubkey::new_unique(),
+                reserved: [0; 64],
             },
         );
 
@@ -792,6 +793,7 @@ mod tests {
                 vote_token_account: Pubkey::new_unique(),
                 price: 10,
                 mint: Pubkey::new_unique(),
+                reserved: [0; 64],
             },
         );
         listing.owner = program_id;
@@ -849,6 +851,7 @@ mod tests {
                 vote_token_account: Pubkey::new_unique(),
                 price: 10,
                 mint: Pubkey::new_unique(),
+                reserved: [0; 64],
             },
         );
         let mut accts = [
