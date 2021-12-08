@@ -836,7 +836,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_instructions_require_listing_owner() {
+    fn test_update_instructions_require_listing_owned_by_program() {
         let program_id = Pubkey::new_unique();
         let mut signer = create_account_for_test(&Rent::default());
         let mut listing = create_account_for_test(&Rent::default());
