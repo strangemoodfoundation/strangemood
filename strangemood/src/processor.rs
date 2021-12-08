@@ -872,4 +872,89 @@ mod tests {
         let result = Processor::process_purchase_listing(&accounts, &Pubkey::new_unique());
         assert_eq!(Err(ProgramError::MissingRequiredSignature), result);
     }
+
+    #[test]
+    fn test_purchase_fails_if_listing_uninitialized() {
+        let program_id = Pubkey::new_unique();
+        let mut signer = create_account_for_test(&Rent::default());
+        let mut listing = create_account_for_test(&Rent::default());
+        listing.owner = program_id;
+
+        // Setup Listing
+        set_listing(
+            &mut listing,
+            &Listing {
+                is_initialized: false,
+                is_available: true,
+                charter_governance: Pubkey::new_unique(),
+                authority: Pubkey::new_unique(),
+                sol_token_account: Pubkey::new_unique(),
+                vote_token_account: Pubkey::new_unique(),
+                price: 10,
+                mint: Pubkey::new_unique(),
+                reserved: [0; 64],
+            },
+        );
+
+        let mut accts = [
+            (&Pubkey::new_unique(), true, &mut signer),
+            (&Pubkey::new_unique(), false, &mut listing)
+        ];
+
+        let accounts = create_is_signer_account_infos(&mut accts);
+        let result = Processor::process_purchase_listing(&accounts, &program_id);
+        assert_eq!(Err(ProgramError::UninitializedAccount), result);
+    }
+
+    #[test]
+    fn test_purchase_fails_if_incorrect_amount() {
+        let program_id = Pubkey::new_unique();
+        let mut signer = create_account_for_test(&Rent::default());
+        let signer_key = Pubkey::new_unique();
+        let mut listing = create_account_for_test(&Rent::default());
+        listing.owner = program_id;
+        let mut purchase_token_account = create_account_for_test(&Rent::default());
+        purchase_token_account.owner = spl_token::id();
+
+        // Setup Listing
+        set_listing(
+            &mut listing,
+            &Listing {
+                is_initialized: true,
+                is_available: true,
+                charter_governance: Pubkey::new_unique(),
+                authority: Pubkey::new_unique(),
+                sol_token_account: Pubkey::new_unique(),
+                vote_token_account: Pubkey::new_unique(),
+                price: 10,
+                mint: Pubkey::new_unique(),
+                reserved: [0; 64],
+            },
+        );
+
+        // Setup purchase token account
+        set_token_account(
+            &mut purchase_token_account,
+            &spl_token::state::Account {
+                mint: spl_token::native_mint::id(),
+                owner: signer_key,
+                amount: 5, // This amount is incorrect
+                delegate: COption::None,
+                state: spl_token::state::AccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 0,
+                close_authority: COption::None,
+            },
+        );
+
+        let mut accts = [
+            (&signer_key, true, &mut signer),
+            (&Pubkey::new_unique(), false, &mut listing),
+            (&Pubkey::new_unique(), false, &mut purchase_token_account)
+        ];
+
+        let accounts = create_is_signer_account_infos(&mut accts);
+        let result = Processor::process_purchase_listing(&accounts, &program_id);
+        assert_eq!(Err(StrangemoodError::InvalidPurchaseAmount.into()), result);
+    }
 }
