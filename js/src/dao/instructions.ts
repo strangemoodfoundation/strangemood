@@ -27,6 +27,7 @@ import {
 import { CharterLayout } from './state';
 import { Charter } from './types';
 import BN from 'bn.js';
+import { strToFixedBytes, toUTF8Array } from './utils';
 
 export type CreateCharterAccountParams = {
   lamportsForRent: number;
@@ -458,29 +459,11 @@ export function setCharterAccount(params: SetCharterAccountParams) {
       authority: params.charterData.authority.toBytes(),
       realm_sol_token_account: params.charterData.realm_sol_token_account.toBytes(),
       realm_vote_token_account: params.charterData.realm_vote_token_account.toBytes(),
-      uri: new TextEncoder().encode(params.charterData.uri),
+      uri: strToFixedBytes(params.charterData.uri, 128),
     }
   );
 
-  let layout = struct([
-    u8('instruction'),
-
-    ns64('expansion_rate_amount'),
-    u8('expansion_rate_decimals'),
-
-    ns64('sol_contribution_rate_amount'),
-    u8('sol_contribution_rate_decimals'),
-
-    ns64('vote_contribution_rate_amount'),
-    u8('vote_contribution_rate_decimals'),
-
-    publicKey('authority'),
-    publicKey('realm_sol_token_account'),
-    publicKey('realm_vote_token_account'),
-
-    seq(u8(), 128, 'uri'),
-    seq(u8(), 64, 'reserved'), // Reserved space for future versions
-  ]);
+  let layout = CharterLayout;
   let data = Buffer.alloc(layout.span);
   layout.encode(fields, data);
 

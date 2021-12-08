@@ -1,3 +1,32 @@
+export function strToFixedBytes(str: string, size: number) {
+  return padBytes(toUTF8Array(str), size);
+}
+
+export function fixedBytesToStr(bytes: any[]) {
+  return fromUTF8Array(trimEndNullPaddingBytes(bytes));
+}
+
+export function padBytes(bytes: any[], size: number) {
+  let newArr = bytes.map(b => b); // copy for non-destructive
+  for (let i = 0; i < size - bytes.length; i++) {
+    newArr.push(0x0);
+  }
+  return newArr;
+}
+
+// Trims 0 bytes from the end of a utf-8 string
+export function trimEndNullPaddingBytes(bytes: any[]) {
+  let newArr = [];
+
+  for (let b of bytes) {
+    if (b !== 0x0) {
+      newArr.push(b);
+    }
+  }
+
+  return newArr;
+}
+
 export function toUTF8Array(str: string) {
   let utf8 = [];
   for (var i = 0; i < str.length; i++) {
