@@ -926,6 +926,48 @@ mod tests {
     }
 
     #[test]
+    fn test_update_instructions_require_signer_owns_listing() {
+        let program_id = Pubkey::new_unique();
+        let mut signer = create_account_for_test(&Rent::default());
+        let mut listing = create_account_for_test(&Rent::default());
+        listing.owner = program_id; 
+
+        set_listing(
+            &mut listing,
+            &Listing {
+                is_initialized: true, 
+                is_available: true,
+                charter_governance: Pubkey::new_unique(),
+                authority: Pubkey::new_unique(), // this is what we're testing
+                sol_token_account: Pubkey::new_unique(),
+                vote_token_account: Pubkey::new_unique(),
+                price: 10,
+                mint: Pubkey::new_unique(),
+                reserved: [0; 64],
+            },
+        );
+
+        let mut accts = [
+            (&Pubkey::new_unique(), true, &mut signer),
+            (&Pubkey::new_unique(), false, &mut listing)
+        ];
+        let accounts = create_is_signer_account_infos(&mut accts);
+
+        let result = Processor::process_set_listing_price(&accounts, 10, &program_id);
+        assert_eq!(Err(StrangemoodError::UnauthorizedListingAuthority.into()), result);
+
+        let result = Processor::process_set_listing_authority(&accounts, &program_id);
+        assert_eq!(Err(StrangemoodError::UnauthorizedListingAuthority.into()), result);
+
+        let result =
+            Processor::process_set_listing_availability(&accounts, true, &program_id);
+        assert_eq!(Err(StrangemoodError::UnauthorizedListingAuthority.into()), result);
+
+        let result = Processor::process_set_listing_deposit(&accounts, &program_id);
+        assert_eq!(Err(StrangemoodError::UnauthorizedListingAuthority.into()), result);
+    }
+
+    #[test]
     fn test_init_listing_cannot_be_reinitalized() {
         let mut signer = create_account_for_test(&Rent::default());
         let mut listing = create_account_for_test(&Rent::default());
