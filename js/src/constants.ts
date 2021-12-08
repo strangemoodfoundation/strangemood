@@ -2,7 +2,7 @@ import * as solana from '@solana/web3.js';
 
 export const MAINNET = {
   STRANGEMOOD_PROGRAM_ID: new solana.PublicKey(
-    'smRTqb2UbcSmFu1XLVDiLpVaGdoc4spJdF3BVxfCdum'
+    'smtaswNwG1JkZY2EbogfBn9JmRdsjgMrRHgLvfikoVq'
   ),
   GOVERNANCE_PROGRAM_ID: new solana.PublicKey(
     'smfjietFKFJ4Sbw1cqESBTpPhF4CwbMwN8kBEC1e5ui'

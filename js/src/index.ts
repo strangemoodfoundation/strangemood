@@ -105,6 +105,8 @@ import * as ix from './dao/instructions';
 //   .then(() => console.log('done'));
 
 import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
 import { Charter } from './dao/types';
 import { CharterLayout } from './dao/state';
 import { MAINNET } from './constants';
@@ -126,7 +128,10 @@ async function main() {
   );
 
   const defaultKeypairArray = JSON.parse(
-    await fs.readFile('~/.config/solana/id.json', 'utf8')
+    await fs.readFile(
+      path.join(os.homedir(), '/.config/solana/id.json'),
+      'utf8'
+    )
   );
   const secretKey = Uint8Array.from(defaultKeypairArray);
   let signer = solana.Keypair.fromSecretKey(secretKey);
