@@ -4,6 +4,31 @@ import { ListingLayout } from '../state';
 import * as splToken from '@solana/spl-token';
 import { getCharterAccount } from '../dao';
 
+// Listings start with a 1 byte in order to be filterable
+const LISTING_TAG = '1';
+
+export async function getAllListings(
+  conn: solana.Connection,
+  strangemoodProgramId: solana.PublicKey,
+  params?: {
+    commitmentLevel?: solana.Commitment;
+  }
+) {
+  const commit = params?.commitmentLevel || 'confirmed';
+
+  return conn.getProgramAccounts(strangemoodProgramId, {
+    commitment: commit,
+    filters: [
+      {
+        memcmp: {
+          offset: 0,
+          bytes: LISTING_TAG,
+        },
+      },
+    ],
+  });
+}
+
 export async function getListingAccount(
   conn: solana.Connection,
   pubkey: solana.PublicKey

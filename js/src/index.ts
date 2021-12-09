@@ -1,6 +1,6 @@
 import * as ix from './dao/instructions';
 import * as client from './strangemood';
-import { MAINNET, TESTNET, STRANGEMOOD_INSTRUCTION_INDEXES } from './constants';
+import { MAINNET, TESTNET } from './constants';
 
 export default {
   MAINNET,
