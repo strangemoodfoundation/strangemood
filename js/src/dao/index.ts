@@ -67,7 +67,8 @@ export async function getCharterAccount(
 
 export async function createCharter(
   conn: solana.Connection,
-  governanceProgramId: solana.Keypair,
+  governanceProgramId: solana.PublicKey,
+  strangemoodProgramId: solana.PublicKey,
 
   // Note that these keys can all be the same
   // keypair.
@@ -96,7 +97,7 @@ export async function createCharter(
       lamportsForRent: minimumBalance,
       payerPubkey: keys.payer.publicKey,
       newAccountPubkey: acctKeypair.publicKey,
-      owner: governanceProgramId.publicKey,
+      owner: governanceProgramId,
     })
   );
 
@@ -108,6 +109,7 @@ export async function createCharter(
       charterData: charter,
       charterPubkey: acctKeypair.publicKey,
       signer: keys.signer.publicKey,
+      strangemoodProgramId: strangemoodProgramId,
     })
   );
 
@@ -131,6 +133,7 @@ export async function createDAO(
     vote_contribution_rate_amount: number;
     vote_contribution_rate_decimals: number;
     authority: solana.PublicKey;
+    uri: string;
   }
 ): Promise<DAO> {
   // Create a community mint
@@ -258,7 +261,10 @@ export async function createDAO(
       authority: signer.publicKey,
       realm_sol_token_account: realmSolTokenAccount,
       realm_vote_token_account: realmVoteTokenAccount,
+
+      uri: charter.uri,
     },
+    strangemoodProgramId: strangemoodProgramId,
     charterPubkey: charterKeypair.publicKey,
     signer: signer.publicKey,
   });

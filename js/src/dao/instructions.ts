@@ -442,6 +442,8 @@ export type SetCharterAccountParams = {
   strangemoodProgramId: solana.PublicKey;
 };
 
+const CHARTER_URI_BYTE_SIZE = 128;
+
 export function setCharterAccount(params: SetCharterAccountParams) {
   let fields = Object.assign(
     { instruction: INDEXES.SET_CHARTER },
@@ -459,7 +461,8 @@ export function setCharterAccount(params: SetCharterAccountParams) {
       authority: params.charterData.authority.toBytes(),
       realm_sol_token_account: params.charterData.realm_sol_token_account.toBytes(),
       realm_vote_token_account: params.charterData.realm_vote_token_account.toBytes(),
-      uri: strToFixedBytes(params.charterData.uri, 128),
+      uri: strToFixedBytes(params.charterData.uri, CHARTER_URI_BYTE_SIZE),
+      reserved: new Array(64).fill(0),
     }
   );
 

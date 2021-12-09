@@ -123,7 +123,7 @@ async function main() {
 
   console.log('Creating a connection to testnet');
   const conn = new solana.Connection(
-    solana.clusterApiUrl('testnet'),
+    solana.clusterApiUrl('mainnet-beta'),
     'confirmed'
   );
 
