@@ -1,10 +1,12 @@
-import * as solana from '@solana/web3.js';
 import * as ix from './dao/instructions';
-import * as Strangemood from './strangemood';
+import * as client from './strangemood';
+import { MAINNET, TESTNET, STRANGEMOOD_INSTRUCTION_INDEXES } from './constants';
 
 export default {
+  MAINNET,
+  TESTNET,
   ix,
-  Strangemood,
+  client,
 };
 
 // const test_governance = {
