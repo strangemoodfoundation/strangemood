@@ -284,7 +284,19 @@ impl Processor {
 
         // 12. [] The governance program id
         let governance_program = next_account_info(account_info_iter)?;
+       
+        // Ensure sol contribution account is owned by governance
+        if sol_contribution_account.owner != governance_program.key {
+            msg!("Account #6 is not owned by the governance");
+            return Err(ProgramError::IllegalOwner);
+        }
 
+        // Ensure vote contribution account is owned by realm
+        if vote_contribution_account.owner != governance_program.key {
+            msg!("Account #7 is not owned by the governance");
+            return Err(ProgramError::IllegalOwner);
+        }
+        
         // 13. [] The realm account
         let realm_account = next_account_info(account_info_iter)?;
 
@@ -1142,5 +1154,140 @@ mod tests {
         let accounts = create_is_signer_account_infos(&mut accts);
         let result = Processor::process_purchase_listing(&accounts, &program_id);
         assert_eq!(Err(StrangemoodError::TokenMintNotSupported.into()), result);
+    }
+
+    #[test]
+    fn test_purchase_contribution_accounts_owned_by_governance() {
+        let program_id = Pubkey::new_unique();
+        let mut signer = create_account_for_test(&Rent::default());
+        let signer_key = Pubkey::new_unique();
+        let mut listing = create_account_for_test(&Rent::default());
+        listing.owner = program_id;
+        let mut purchase_token_account = create_account_for_test(&Rent::default());
+        purchase_token_account.owner = spl_token::id();
+        let mut purchaser_listing_account = create_account_for_test(&Rent::default());
+        purchaser_listing_account.owner = spl_token::id();
+        let mut sol_deposit_account = create_account_for_test(&Rent::default());
+        sol_deposit_account.owner = spl_token::id();
+        let mut vote_deposit_account = create_account_for_test(&Rent::default());
+        let mut sol_contribution_account = create_account_for_test(&Rent::default());
+        let mut vote_contribution_account = create_account_for_test(&Rent::default());
+        let mut realm_mint = create_account_for_test(&Rent::default());
+        let mut listing_mint = create_account_for_test(&Rent::default());
+        let mut realm_mint_authority = create_account_for_test(&Rent::default());
+        let mut listing_mint_authority = create_account_for_test(&Rent::default());
+        let mut governance_program = create_account_for_test(&Rent::default());
+        let mut realm_account = create_account_for_test(&Rent::default());
+
+        // Setup Listing
+        let listing_mint_key = Pubkey::new_unique();
+        let listing_sol_account = Pubkey::new_unique();
+        let listing_vote_account = Pubkey::new_unique();
+        set_listing(
+            &mut listing,
+            &Listing {
+                is_initialized: true,
+                is_available: true,
+                charter_governance: Pubkey::new_unique(),
+                authority: Pubkey::new_unique(),
+                sol_token_account: listing_sol_account,
+                vote_token_account: listing_vote_account,
+                price: 10,
+                mint: listing_mint_key,
+                reserved: [0; 64],
+            },
+        );
+
+        // Setup purchase token account
+        set_token_account(
+            &mut purchase_token_account,
+            &spl_token::state::Account {
+                mint: spl_token::native_mint::id(),
+                owner: signer_key,
+                amount: 10,
+                delegate: COption::None,
+                state: spl_token::state::AccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 0,
+                close_authority: COption::None,
+            },
+        );
+
+         // Setup purchaser token account
+         set_token_account(
+            &mut purchaser_listing_account,
+            &spl_token::state::Account {
+                mint: listing_mint_key,
+                owner: signer_key,
+                amount: 10,
+                delegate: COption::None,
+                state: spl_token::state::AccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 0,
+                close_authority: COption::None,
+            },
+        );
+
+        // Setup listing mint account
+        set_token_account(
+            &mut listing_mint,
+            &spl_token::state::Account {
+                mint: listing_mint_key,
+                owner: signer_key,
+                amount: 10,
+                delegate: COption::None,
+                state: spl_token::state::AccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 0,
+                close_authority: COption::None,
+            },
+        );
+
+        // Sol contribution should fail because it is not owned by real
+        let mut accts = [
+            (&signer_key, true, &mut signer),
+            (&Pubkey::new_unique(), false, &mut listing),
+            (&Pubkey::new_unique(), false, &mut purchase_token_account),
+            (&Pubkey::new_unique(), false, &mut purchaser_listing_account),
+            (&listing_sol_account, false, &mut sol_deposit_account),
+            (&listing_vote_account, false, &mut vote_deposit_account),
+            (&Pubkey::new_unique(), false, &mut sol_contribution_account),
+            (&Pubkey::new_unique(), false, &mut vote_contribution_account),
+            (&Pubkey::new_unique(), false, &mut realm_mint),
+            (&listing_mint_key, false, &mut listing_mint),
+            (&Pubkey::new_unique(), false, &mut realm_mint_authority),
+            (&Pubkey::new_unique(), false, &mut listing_mint_authority),
+            (&Pubkey::new_unique(), false, &mut governance_program),
+            (&Pubkey::new_unique(), false, &mut realm_account)
+        ];
+
+        let accounts = create_is_signer_account_infos(&mut accts);
+        let result = Processor::process_purchase_listing(&accounts, &program_id);
+        assert_eq!(Err(ProgramError::IllegalOwner), result);
+
+        let gov_account_key = Pubkey::new_unique();
+        sol_contribution_account.owner = gov_account_key;
+
+        // Vote contribution should fail because it is not owned by real
+        let mut accts = [
+            (&signer_key, true, &mut signer),
+            (&Pubkey::new_unique(), false, &mut listing),
+            (&Pubkey::new_unique(), false, &mut purchase_token_account),
+            (&Pubkey::new_unique(), false, &mut purchaser_listing_account),
+            (&listing_sol_account, false, &mut sol_deposit_account),
+            (&listing_vote_account, false, &mut vote_deposit_account),
+            (&Pubkey::new_unique(), false, &mut sol_contribution_account),
+            (&Pubkey::new_unique(), false, &mut vote_contribution_account),
+            (&Pubkey::new_unique(), false, &mut realm_mint),
+            (&listing_mint_key, false, &mut listing_mint),
+            (&Pubkey::new_unique(), false, &mut realm_mint_authority),
+            (&Pubkey::new_unique(), false, &mut listing_mint_authority),
+            (&gov_account_key, false, &mut governance_program),
+            (&Pubkey::new_unique(), false, &mut realm_account)
+        ];
+
+        let accounts = create_is_signer_account_infos(&mut accts);
+        let result = Processor::process_purchase_listing(&accounts, &program_id);
+        assert_eq!(Err(ProgramError::IllegalOwner), result);
     }
 }
