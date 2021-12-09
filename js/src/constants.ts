@@ -16,6 +16,12 @@ export const MAINNET = {
   STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT: new solana.PublicKey(
     '3tHFaRiaiSoJsBkx5HbSm6Ep8J43Xuev2Sm1TwSnraUZ'
   ),
+  STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE: new solana.PublicKey(
+    '6cS5HRJ9eapyy33LozbmoTRYwsMCnFLfTGQzAEBej1r6'
+  ),
+  STRANGEMOOD_FOUNDATION_CHARTER: new solana.PublicKey(
+    '2xg9nw4KjxA9mAvNnLmnNzqZ7MFUayFPLrwQR75W4pG5'
+  ),
 };
 
 export const TESTNET = {
@@ -26,7 +32,7 @@ export const TESTNET = {
     'eyoXCKW5rkxbHc1fAXQJry5i6jYyyXk1iDGfKLYErbX'
   ),
   STRANGEMOOD_FOUNDATION_MINT: new solana.PublicKey(
-    '36RC6XAKAnjEYVySfb4k6dnyjWJGgfjRL1oMx3pe9MVL'
+    'HKJCqeLfGRCBHNzcevhGFXcau6mw7M1e481ub2TUAZkG'
   ),
 };
 

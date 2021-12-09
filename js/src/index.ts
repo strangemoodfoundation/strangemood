@@ -1,5 +1,11 @@
 import * as solana from '@solana/web3.js';
 import * as ix from './dao/instructions';
+import * as Strangemood from './strangemood';
+
+export default {
+  ix,
+  Strangemood,
+};
 
 // const test_governance = {
 //   governanceProgramId: new solana.PublicKey(
@@ -104,81 +110,81 @@ import * as ix from './dao/instructions';
 //   .catch(console.error)
 //   .then(() => console.log('done'));
 
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
-import { Charter } from './dao/types';
-import { CharterLayout } from './dao/state';
-import { MAINNET } from './constants';
+// import fs from 'fs/promises';
+// import path from 'path';
+// import os from 'os';
+// import { Charter } from './dao/types';
+// import { CharterLayout } from './dao/state';
+// import { MAINNET } from './constants';
 
-async function main() {
-  const args = process.argv.slice(2);
+// async function main() {
+//   const args = process.argv.slice(2);
 
-  if (args.length != 2) {
-    throw new Error('Need two args');
-  }
+//   if (args.length != 2) {
+//     throw new Error('Need two args');
+//   }
 
-  let realm_sol_token_account = new solana.PublicKey(args[0]);
-  let realm_vote_token_account = new solana.PublicKey(args[1]);
+//   let realm_sol_token_account = new solana.PublicKey(args[0]);
+//   let realm_vote_token_account = new solana.PublicKey(args[1]);
 
-  console.log('Creating a connection to testnet');
-  const conn = new solana.Connection(
-    solana.clusterApiUrl('mainnet-beta'),
-    'confirmed'
-  );
+//   console.log('Creating a connection to testnet');
+//   const conn = new solana.Connection(
+//     solana.clusterApiUrl('mainnet-beta'),
+//     'confirmed'
+//   );
 
-  const defaultKeypairArray = JSON.parse(
-    await fs.readFile(
-      path.join(os.homedir(), '/.config/solana/id.json'),
-      'utf8'
-    )
-  );
-  const secretKey = Uint8Array.from(defaultKeypairArray);
-  let signer = solana.Keypair.fromSecretKey(secretKey);
+//   const defaultKeypairArray = JSON.parse(
+//     await fs.readFile(
+//       path.join(os.homedir(), '/.config/solana/id.json'),
+//       'utf8'
+//     )
+//   );
+//   const secretKey = Uint8Array.from(defaultKeypairArray);
+//   let signer = solana.Keypair.fromSecretKey(secretKey);
 
-  const charterKeypair = solana.Keypair.generate();
-  let balance = await conn.getMinimumBalanceForRentExemption(
-    CharterLayout.span
-  );
-  let charter: Charter = {
-    expansion_rate_amount: 30,
-    expansion_rate_decimals: 0,
-    sol_contribution_rate_amount: 5,
-    sol_contribution_rate_decimals: 2,
-    vote_contribution_rate_amount: 20,
-    vote_contribution_rate_decimals: 2,
-    authority: signer.publicKey,
-    realm_sol_token_account,
-    realm_vote_token_account,
-    uri: 'https://strangemood.org',
-  };
+//   const charterKeypair = solana.Keypair.generate();
+//   let balance = await conn.getMinimumBalanceForRentExemption(
+//     CharterLayout.span
+//   );
+//   let charter: Charter = {
+//     expansion_rate_amount: 30,
+//     expansion_rate_decimals: 0,
+//     sol_contribution_rate_amount: 5,
+//     sol_contribution_rate_decimals: 2,
+//     vote_contribution_rate_amount: 20,
+//     vote_contribution_rate_decimals: 2,
+//     authority: signer.publicKey,
+//     realm_sol_token_account,
+//     realm_vote_token_account,
+//     uri: 'https://strangemood.org',
+//   };
 
-  console.log('Creating empty charter account');
-  const create_empty_charter_tx = ix.createEmptyCharterAccount({
-    lamportsForRent: balance,
-    payerPubkey: signer.publicKey,
-    newAccountPubkey: charterKeypair.publicKey,
-    owner: MAINNET.STRANGEMOOD_PROGRAM_ID,
-  });
+//   console.log('Creating empty charter account');
+//   const create_empty_charter_tx = ix.createEmptyCharterAccount({
+//     lamportsForRent: balance,
+//     payerPubkey: signer.publicKey,
+//     newAccountPubkey: charterKeypair.publicKey,
+//     owner: MAINNET.STRANGEMOOD_PROGRAM_ID,
+//   });
 
-  // Update the charter details
-  const set_charter_tx = ix.setCharterAccount({
-    charterData: charter,
-    charterPubkey: charterKeypair.publicKey,
-    strangemoodProgramId: MAINNET.STRANGEMOOD_PROGRAM_ID,
-    signer: signer.publicKey,
-  });
+//   // Update the charter details
+//   const set_charter_tx = ix.setCharterAccount({
+//     charterData: charter,
+//     charterPubkey: charterKeypair.publicKey,
+//     strangemoodProgramId: MAINNET.STRANGEMOOD_PROGRAM_ID,
+//     signer: signer.publicKey,
+//   });
 
-  console.log('creating solana transaction');
-  const tx = new solana.Transaction();
-  tx.add(create_empty_charter_tx);
-  tx.add(set_charter_tx);
+//   console.log('creating solana transaction');
+//   const tx = new solana.Transaction();
+//   tx.add(create_empty_charter_tx);
+//   tx.add(set_charter_tx);
 
-  console.log('sending and confirming transaction');
-  await solana.sendAndConfirmTransaction(conn, tx, [signer, charterKeypair]);
+//   console.log('sending and confirming transaction');
+//   await solana.sendAndConfirmTransaction(conn, tx, [signer, charterKeypair]);
 
-  console.log('Charter is', charterKeypair.publicKey.toString());
-}
+//   console.log('Charter is', charterKeypair.publicKey.toString());
+// }
 
-console.log('Starting charter creation');
-main().catch(console.error);
+// console.log('Starting charter creation');
+// main().catch(console.error);
