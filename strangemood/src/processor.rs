@@ -291,7 +291,7 @@ impl Processor {
             return Err(ProgramError::IllegalOwner);
         }
 
-        // Ensure vote contribution account is owned by realm
+        // Ensure vote contribution account is owned by governance
         if vote_contribution_account.owner != governance_program.key {
             msg!("Account #7 is not owned by the governance");
             return Err(ProgramError::IllegalOwner);
