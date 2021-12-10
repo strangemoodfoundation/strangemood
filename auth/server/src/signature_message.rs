@@ -1,7 +1,7 @@
 macro_rules! SIGNATURE_MESSAGE_TEMPLATE {
     () => {
         r#"
-{domain} wants you to sign in with your Ethereum account:
+{domain} wants you to sign in with your Solana account:
 {user_public_address}
 
 I accept the Strangemood Terms of Service.

@@ -12,7 +12,7 @@ Since the user will see the message as plain text, its important that it is not 
 This is the strangemood message format:
 
 ```
-${domain} wants you to sign in with your Ethereum account:
+${domain} wants you to sign in with your Solana account:
 ${user_public_address}
 
 ${statement}
