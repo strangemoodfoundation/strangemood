@@ -22,6 +22,9 @@ export const MAINNET = {
   STRANGEMOOD_FOUNDATION_CHARTER: new solana.PublicKey(
     '2xg9nw4KjxA9mAvNnLmnNzqZ7MFUayFPLrwQR75W4pG5'
   ),
+  STRANGEMOOD_FOUNDATION_REALM: new solana.PublicKey(
+    'FvzZFjf3NPTZbKAmQA4Gf1v7uTW7HFcP5Pcr2oVm49t3'
+  ),
 };
 
 export const TESTNET = {

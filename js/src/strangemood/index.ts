@@ -62,10 +62,10 @@ export async function createListing(
   // keypair.
   keys: {
     // Who pays the rent?
-    payer: solana.Keypair;
+    payer: solana.PublicKey;
 
     // Who's making the transaction?
-    signer: solana.Keypair;
+    signer: solana.PublicKey;
   },
   params: {
     solDeposit: solana.PublicKey;
@@ -76,7 +76,11 @@ export async function createListing(
     priceInLamports: number;
     governanceProgramId: solana.PublicKey;
   }
-) {
+): Promise<{
+  tx: solana.Transaction;
+  listing: solana.Keypair;
+  listingMint: solana.Keypair;
+}> {
   let acctKeypair = solana.Keypair.generate();
   let listingBalance = await conn.getMinimumBalanceForRentExemption(
     ListingLayout.span
@@ -87,7 +91,7 @@ export async function createListing(
 
   let mintKeypair = solana.Keypair.generate();
   const create_mint_account_ix = solana.SystemProgram.createAccount({
-    fromPubkey: keys.payer.publicKey,
+    fromPubkey: keys.payer,
     newAccountPubkey: mintKeypair.publicKey,
     lamports: mintBalance,
     space: splToken.MintLayout.span,
@@ -95,18 +99,18 @@ export async function createListing(
   });
 
   let tx = new solana.Transaction({
-    feePayer: keys.payer.publicKey,
+    feePayer: keys.payer,
   });
   tx.add(
     create_mint_account_ix,
     ix.createListingAccount({
       lamportsForRent: listingBalance,
-      payerPubkey: keys.payer.publicKey,
+      payerPubkey: keys.payer,
       newAccountPubkey: acctKeypair.publicKey,
       strangemoodProgramId,
     }),
     ix.initListing({
-      signerPubkey: keys.signer.publicKey,
+      signerPubkey: keys.signer,
       listingPubkey: acctKeypair.publicKey,
       mintPubkey: mintKeypair.publicKey,
       solDepositPubkey: params.solDeposit,
@@ -120,13 +124,8 @@ export async function createListing(
     })
   );
 
-  await solana.sendAndConfirmTransaction(conn, tx, [
-    keys.signer,
-    acctKeypair,
-    mintKeypair,
-  ]);
-
   return {
+    tx,
     listing: acctKeypair,
     listingMint: mintKeypair,
   };
