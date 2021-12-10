@@ -16,5 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Setup environment
+      run: |
+        sudo apt update \
+        sudo apt install libudev-dev 
     - name: Run tests
       run: cargo test --verbose
