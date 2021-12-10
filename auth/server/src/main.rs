@@ -8,6 +8,8 @@ mod utils;
 async fn get_signature_message(web::Path(public_key): web::Path<String>) -> impl Responder {
     let nonce = utils::generate_nonce();
     let issued_at = utils::get_current_time();
+
+    // TODO: save public_key/nonce in redis
     let signature_message =
         signature_message::get_strangemood_signature_message(nonce, issued_at, public_key);
     HttpResponse::Ok().body(signature_message)
