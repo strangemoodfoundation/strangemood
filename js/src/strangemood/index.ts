@@ -3,6 +3,7 @@ import * as ix from '../instructions';
 import { ListingLayout } from '../state';
 import * as splToken from '@solana/spl-token';
 import { getCharterAccount } from '../dao';
+import base58 from 'base58-encode';
 
 // Listings start with a 1 byte in order to be filterable
 const LISTING_TAG = '1';
@@ -22,7 +23,7 @@ export async function getAllListings(
       {
         memcmp: {
           offset: 0,
-          bytes: LISTING_TAG,
+          bytes: base58(LISTING_TAG),
         },
       },
     ],
