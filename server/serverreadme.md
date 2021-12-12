@@ -1,1 +1,0 @@
-run `cargo run` from `/home/brev/workspace/strangemood/server`

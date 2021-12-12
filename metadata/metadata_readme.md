@@ -1,0 +1,1 @@
+run `cargo run` from `/strangemood/server`
