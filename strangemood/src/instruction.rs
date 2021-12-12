@@ -76,7 +76,7 @@ pub enum StrangemoodInstruction {
     /// 5. `[]` VoteDeposit - The listing's deposit account for votes
     /// 6. `[]` SolContribution - The realm's sol account
     /// 7. `[]` VoteContribution - The realm's vote account
-    /// 8. `[]` communityMint - The mint account for the community mint
+    /// 8. `[]` CommunityMint - The mint account for the community mint
     /// 9. `[]` ListingMint - The mint account for this listing
     /// 10. `[]` CommunityMintAuthority - A PDA of [realm_mint_authority]
     /// 11. `[]` ListingMintAuthority - A PDA of [listing_mint_pubkey]
