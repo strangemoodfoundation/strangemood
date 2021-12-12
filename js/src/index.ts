@@ -1,12 +1,15 @@
-import * as ix from './dao/instructions';
+import * as daoIx from './dao/instructions';
+import * as strangemoodIx from './instructions';
 import * as client from './strangemood';
 import { MAINNET, TESTNET } from './constants';
+import * as state from './state';
 
 export default {
   MAINNET,
   TESTNET,
-  ix,
+  ix: Object.assign(daoIx, strangemoodIx),
   client,
+  state,
 };
 
 // const test_governance = {

@@ -3,7 +3,6 @@ use solana_program::pubkey::Pubkey;
 use std::convert::TryInto;
 use std::mem::size_of;
 
-use crate::fill_from_str;
 use crate::state::Charter;
 
 // inside instruction.rs

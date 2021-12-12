@@ -59,6 +59,7 @@ impl Processor {
         amount: u64,
         program_id: &Pubkey,
     ) -> ProgramResult {
+        msg!("set_listing_price");
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
@@ -89,6 +90,7 @@ impl Processor {
         accounts: &[AccountInfo],
         program_id: &Pubkey,
     ) -> ProgramResult {
+        msg!("set_listing_authority");
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
@@ -118,6 +120,7 @@ impl Processor {
     }
 
     fn process_set_listing_deposit(accounts: &[AccountInfo], program_id: &Pubkey) -> ProgramResult {
+        msg!("set_listing_deposit");
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
@@ -163,6 +166,7 @@ impl Processor {
         is_available: bool,
         program_id: &Pubkey,
     ) -> ProgramResult {
+        msg!("set_listing_availability");
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
@@ -190,6 +194,7 @@ impl Processor {
     }
 
     fn process_purchase_listing(accounts: &[AccountInfo], program_id: &Pubkey) -> ProgramResult {
+        msg!("purchase_listing");
         let account_info_iter = &mut accounts.iter();
 
         // 0. [signer]
@@ -348,7 +353,6 @@ impl Processor {
         let contribution_amount = listing.price as f64 - deposit_amount;
 
         // Transfer payment funds from the user to the lister
-        msg!("Transfer funds from user to lister");
         let transfer_payment_ix = spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
@@ -368,7 +372,6 @@ impl Processor {
         )?;
 
         // Transfer contribution amount to the realm's sol account
-        msg!("Transfer funds from user to realm contribution amount");
         let transfer_contribution_ix = spl_token::instruction::transfer(
             token_program_account.key,
             purchase_token_account.key,
@@ -401,7 +404,6 @@ impl Processor {
         let authority_signature_seeds = [&mint_bytes[..32], &[bump_seed]];
         let signers = &[&authority_signature_seeds[..]];
 
-        msg!("Mint votes to lister");
         let mint_votes_to_lister_ix = spl_token::instruction::mint_to(
             token_program_account.key,
             &realm.community_mint,
@@ -421,7 +423,6 @@ impl Processor {
             signers,
         )?;
 
-        msg!("Mint votes to realm");
         let mint_votes_to_realm_ix = spl_token::instruction::mint_to(
             token_program_account.key,
             &realm.community_mint,
@@ -442,7 +443,6 @@ impl Processor {
         )?;
 
         // Mint an lister token that proves the user bought the app
-        msg!("Mint an lister token to user");
         let mint_bytes = listing.mint.to_bytes();
         let (listing_mint_authority_pda, bump_seed) =
             StrangemoodPDA::mint_authority(&program_id, &listing.mint);
@@ -598,7 +598,6 @@ impl Processor {
         // Initialize the app mint
         let (pda, _bump_seed) =
             StrangemoodPDA::mint_authority(program_id, listing_mint_account.key);
-        msg!("invoking init mint");
         let init_mint_ix = spl_token::instruction::initialize_mint(
             &spl_token::id(),
             listing_mint_account.key,
@@ -614,7 +613,6 @@ impl Processor {
                 token_program_account.clone(),
             ],
         )?;
-        msg!("invoked init mint");
 
         // Initialize the listing
         listing.is_initialized = true;
@@ -845,7 +843,7 @@ mod tests {
         set_listing(
             &mut listing,
             &Listing {
-                is_initialized: true, 
+                is_initialized: true,
                 is_available: true,
                 charter_governance: Pubkey::new_unique(),
                 authority: Pubkey::new_unique(),
@@ -859,7 +857,7 @@ mod tests {
 
         let mut accts = [
             (&Pubkey::new_unique(), true, &mut signer),
-            (&Pubkey::new_unique(), false, &mut listing)
+            (&Pubkey::new_unique(), false, &mut listing),
         ];
         let accounts = create_is_signer_account_infos(&mut accts);
 
@@ -872,8 +870,7 @@ mod tests {
         let result = Processor::process_set_listing_authority(&accounts, &program_id);
         assert_eq!(Err(ProgramError::IllegalOwner), result);
 
-        let result =
-            Processor::process_set_listing_availability(&accounts, true, &program_id);
+        let result = Processor::process_set_listing_availability(&accounts, true, &program_id);
         assert_eq!(Err(ProgramError::IllegalOwner), result);
 
         let result = Processor::process_set_listing_deposit(&accounts, &program_id);
@@ -904,7 +901,7 @@ mod tests {
 
         let mut accts = [
             (&Pubkey::new_unique(), true, &mut signer),
-            (&Pubkey::new_unique(), false, &mut listing)
+            (&Pubkey::new_unique(), false, &mut listing),
         ];
         let accounts = create_is_signer_account_infos(&mut accts);
 
@@ -917,8 +914,7 @@ mod tests {
         let result = Processor::process_set_listing_authority(&accounts, &program_id);
         assert_eq!(Err(ProgramError::UninitializedAccount), result);
 
-        let result =
-            Processor::process_set_listing_availability(&accounts, true, &program_id);
+        let result = Processor::process_set_listing_availability(&accounts, true, &program_id);
         assert_eq!(Err(ProgramError::UninitializedAccount), result);
 
         let result = Processor::process_set_listing_deposit(&accounts, &program_id);
@@ -930,12 +926,12 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let mut signer = create_account_for_test(&Rent::default());
         let mut listing = create_account_for_test(&Rent::default());
-        listing.owner = program_id; 
+        listing.owner = program_id;
 
         set_listing(
             &mut listing,
             &Listing {
-                is_initialized: true, 
+                is_initialized: true,
                 is_available: true,
                 charter_governance: Pubkey::new_unique(),
                 authority: Pubkey::new_unique(), // this is what we're testing
@@ -949,22 +945,33 @@ mod tests {
 
         let mut accts = [
             (&Pubkey::new_unique(), true, &mut signer),
-            (&Pubkey::new_unique(), false, &mut listing)
+            (&Pubkey::new_unique(), false, &mut listing),
         ];
         let accounts = create_is_signer_account_infos(&mut accts);
 
         let result = Processor::process_set_listing_price(&accounts, 10, &program_id);
-        assert_eq!(Err(StrangemoodError::UnauthorizedListingAuthority.into()), result);
+        assert_eq!(
+            Err(StrangemoodError::UnauthorizedListingAuthority.into()),
+            result
+        );
 
         let result = Processor::process_set_listing_authority(&accounts, &program_id);
-        assert_eq!(Err(StrangemoodError::UnauthorizedListingAuthority.into()), result);
+        assert_eq!(
+            Err(StrangemoodError::UnauthorizedListingAuthority.into()),
+            result
+        );
 
-        let result =
-            Processor::process_set_listing_availability(&accounts, true, &program_id);
-        assert_eq!(Err(StrangemoodError::UnauthorizedListingAuthority.into()), result);
+        let result = Processor::process_set_listing_availability(&accounts, true, &program_id);
+        assert_eq!(
+            Err(StrangemoodError::UnauthorizedListingAuthority.into()),
+            result
+        );
 
         let result = Processor::process_set_listing_deposit(&accounts, &program_id);
-        assert_eq!(Err(StrangemoodError::UnauthorizedListingAuthority.into()), result);
+        assert_eq!(
+            Err(StrangemoodError::UnauthorizedListingAuthority.into()),
+            result
+        );
     }
 
     #[test]
@@ -1030,7 +1037,7 @@ mod tests {
 
         let mut accts = [
             (&Pubkey::new_unique(), true, &mut signer),
-            (&Pubkey::new_unique(), false, &mut listing)
+            (&Pubkey::new_unique(), false, &mut listing),
         ];
 
         let accounts = create_is_signer_account_infos(&mut accts);
@@ -1082,7 +1089,7 @@ mod tests {
         let mut accts = [
             (&signer_key, true, &mut signer),
             (&Pubkey::new_unique(), false, &mut listing),
-            (&Pubkey::new_unique(), false, &mut purchase_token_account)
+            (&Pubkey::new_unique(), false, &mut purchase_token_account),
         ];
 
         let accounts = create_is_signer_account_infos(&mut accts);
@@ -1136,7 +1143,7 @@ mod tests {
         let mut accts = [
             (&signer_key, true, &mut signer),
             (&Pubkey::new_unique(), false, &mut listing),
-            (&Pubkey::new_unique(), false, &mut purchase_token_account)
+            (&Pubkey::new_unique(), false, &mut purchase_token_account),
         ];
 
         let accounts = create_is_signer_account_infos(&mut accts);
