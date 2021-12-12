@@ -207,9 +207,9 @@ export function purchaseListing(
     asReadonly(params.solContributionPubkey),
     asReadonly(params.voteContributionPubkey),
 
-    asReadonly(params.realmMintPubkey),
+    asReadonly(params.communityMintPubkey),
     asReadonly(params.listingMintPubkey),
-    asReadonly(params.realmMintAuthority),
+    asReadonly(params.communityMintAuthority),
     asReadonly(params.listingMintAuthority),
 
     asReadonly(params.governanceProgramId),
