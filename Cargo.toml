@@ -1,4 +1,5 @@
 [workspace]
+exclude = ["storage/server"]
 
 members = [
     "strangemood"
