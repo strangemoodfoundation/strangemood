@@ -517,7 +517,7 @@ impl Processor {
             return Err(ProgramError::AccountAlreadyInitialized);
         }
 
-        // 2. [] - The uninitialized mint of the app token
+        // 2. [] - The uninitialized mint of the listing token
         let listing_mint_account = next_account_info(account_info_iter)?;
 
         // 3. [] - The place to deposit SOL into
@@ -595,7 +595,7 @@ impl Processor {
         // 10. [] The token program
         let token_program_account = next_account_info(account_info_iter)?;
 
-        // Initialize the app mint
+        // Initialize the listing mint
         let (pda, _bump_seed) =
             StrangemoodPDA::mint_authority(program_id, listing_mint_account.key);
         let init_mint_ix = spl_token::instruction::initialize_mint(
@@ -718,8 +718,8 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let mut signer = create_account_for_test(&Rent::default());
         let mut listing = create_account_for_test(&Rent::default());
-        let mut app_mint = create_account_for_test(&Rent::default());
-        app_mint.owner = spl_token::id();
+        let mut listing_mint = create_account_for_test(&Rent::default());
+        listing_mint.owner = spl_token::id();
         let mut sol_deposit = create_account_for_test(&Rent::default());
         sol_deposit.owner = spl_token::id();
         let mut votes_deposit = create_account_for_test(&Rent::default());
@@ -765,7 +765,7 @@ mod tests {
         let mut accts = [
             (&Pubkey::new_unique(), true, &mut signer),
             (&Pubkey::new_unique(), false, &mut listing),
-            (&Pubkey::new_unique(), false, &mut app_mint),
+            (&Pubkey::new_unique(), false, &mut listing_mint),
             (&Pubkey::new_unique(), false, &mut sol_deposit),
             (&Pubkey::new_unique(), false, &mut votes_deposit),
             (&Pubkey::new_unique(), false, &mut realm),
