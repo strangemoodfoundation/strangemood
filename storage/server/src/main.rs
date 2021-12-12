@@ -20,8 +20,9 @@ async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
     let inp_info: InpAdd = serde_json::from_slice(&pl.0).unwrap();
     println!("converter_struct={:#?}", inp_info);
     println!("tmpfiles={:#?}", pl.1);
+    // Auth TODO
     //make key
-    let s3_upload_key = format!("projects/{}/", "posts_id");
+    let s3_upload_key = format!("objects/{}/{}", "public_key", "private_key"); // TODO parameterize
     //create tmp file and upload s3 and remove tmp file
     let upload_files: Vec<UploadFile> =
         upload_save_file(pl.1, s3_upload_key).await.unwrap();
@@ -88,7 +89,6 @@ async fn main() -> std::io::Result<()> {
         env::var("AWS_S3_BUCKET_NAME").expect("AWS_S3_BUCKET_NAME must be set");
 
     println!("{}", aws_access_key_id);
-    println!("{}", aws_secret_access_key);
     println!("{}", aws_s3_bucket_name);
 
     std::env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
