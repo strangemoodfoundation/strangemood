@@ -2604,6 +2604,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "metadata"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+]
+
+[[package]]
 name = "mime"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3957,13 +3964,6 @@ dependencies = [
  "indexmap",
  "serde",
  "yaml-rust",
-]
-
-[[package]]
-name = "server"
-version = "0.1.0"
-dependencies = [
- "actix-web",
 ]
 
 [[package]]

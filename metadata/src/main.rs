@@ -4,25 +4,26 @@ use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
-            .service(hello)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
+            .service(getlisting)
+            .service(postlogin)
+            .service(postlisting)
     })
     .bind("127.0.0.1:8080")?
     .run()
     .await
 }
 
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
+#[get("/listing/{pubkey}")]
+async fn getlisting(path: web::Path<String>) -> impl Responder {
+    HttpResponse::Ok().body(format!("Get Listing. your pubkey: {}!", &path))
 }
 
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
+#[post("/login/{pubkey}")]
+async fn postlogin(path: web::Path<String>) -> impl Responder {
+    HttpResponse::Ok().body(format!("Post Login. your pubkey: {}!", &path))
 }
 
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
+#[post("/listing/{pubkey}")]
+async fn postlisting(path: web::Path<String>) -> impl Responder {
+    HttpResponse::Ok().body(format!("Post Listing. your pubkey: {}!", &path))
 }
