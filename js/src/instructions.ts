@@ -166,26 +166,26 @@ export function setListingAvailability(params: SetListingAvailabilityParams) {
 }
 
 export type PurchaseListingParams = {
-  strangemoodProgramId: solana.PublicKey;
+  strangemoodProgramId: solana.PublicKey; // program ID of strangemood program
   signerPubkey: solana.PublicKey;
   listingPubkey: solana.PublicKey;
-  solTokenAccountPubkey: solana.PublicKey;
-  purchasersListingTokenAccountPubkey: solana.PublicKey;
+  solTokenAccountPubkey: solana.PublicKey; // temp wallet acct to move moneys
+  purchasersListingTokenAccountPubkey: solana.PublicKey; // deterministic token acct, where token will land
 
-  solDepositPubkey: solana.PublicKey;
-  voteDepositPubkey: solana.PublicKey;
-  solContributionPubkey: solana.PublicKey;
-  voteContributionPubkey: solana.PublicKey;
+  solDepositPubkey: solana.PublicKey; // where sol will end up -- ie the owner of the listing
+  voteDepositPubkey: solana.PublicKey; // where governance tokesn (ex moodz) will end up -- program mints the listing owner with stake in protocol
+  solContributionPubkey: solana.PublicKey; // pubkey of realm. ex: where 5% commission SOL goes.
+  voteContributionPubkey: solana.PublicKey; // pubkey of realm's governance (ex moodz) acct. program also takes commission.
 
-  realmMintPubkey: solana.PublicKey;
-  listingMintPubkey: solana.PublicKey;
-  realmMintAuthority: solana.PublicKey;
-  listingMintAuthority: solana.PublicKey;
+  communityMintPubkey: solana.PublicKey; // associated with a governance, constant per governance
+  listingMintPubkey: solana.PublicKey; // unique per listing within a governance; need to check that the listing mint owned by (1) authority / strangemood program and (2) owner / solana token program
+  communityMintAuthority: solana.PublicKey; // the program that can make new tokens; whoever controls private key of this can sign things and mint more. In this case it is the (governance?) progrsm
+  listingMintAuthority: solana.PublicKey; // kinda like a scoped private key, a program derived address, // TODO
 
-  governanceProgramId: solana.PublicKey;
-  realmPubkey: solana.PublicKey;
-  charterGovernancePubkey: solana.PublicKey;
-  charterPubkey: solana.PublicKey;
+  governanceProgramId: solana.PublicKey; // program ID of strangemood governance
+  realmPubkey: solana.PublicKey; // the realm itself
+  charterGovernancePubkey: solana.PublicKey; // an account that binds governance to the realm. A realm has one governance.
+  charterPubkey: solana.PublicKey; // charter is config file! decides how much is given to listing vs commission
 };
 
 export function purchaseListing(
