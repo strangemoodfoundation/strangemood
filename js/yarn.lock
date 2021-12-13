@@ -2310,6 +2310,11 @@ base-x@^3.0.2:
   dependencies:
     safe-buffer "^5.0.1"
 
+base58-encode@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/base58-encode/-/base58-encode-0.2.0.tgz#99cf5bffdfa5fa49ea8d8fd031989d2eacef9dd4"
+  integrity sha512-POFCTkUBsOIpeNKv26L1HY6goMGFQssUQe0O6XZu04J+D3a/UHRSvdx4DXU/2RE1FG6FWStWyQyljZBsFjMHLQ==
+
 base64-js@^1.3.1:
   version "1.5.1"
   resolved "https://registry.yarnpkg.com/base64-js/-/base64-js-1.5.1.tgz#1b1b440160a5bf7ad40b650f095963481903930a"

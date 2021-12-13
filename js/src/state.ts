@@ -1,7 +1,8 @@
-import { struct, u8 } from '@solana/buffer-layout';
+import { seq, struct, u8 } from '@solana/buffer-layout';
 import { publicKey, uint64 } from './utils';
 
 export const ListingLayout = struct([
+  u8('tag'),
   u8('is_initialized'),
   u8('is_available'),
   publicKey('charter_governance'),
@@ -10,4 +11,5 @@ export const ListingLayout = struct([
   publicKey('community_token_account'),
   uint64('price'),
   publicKey('mint'),
+  seq(u8(), 64),
 ]);

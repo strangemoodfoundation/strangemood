@@ -240,15 +240,6 @@ impl StrangemoodInstruction {
 
                 let mut s: [u8; 128] = [0; 128];
                 s.copy_from_slice(&data.uri);
-                // let bs = data.uri.as_bytes();
-
-                // for (i, b) in bs.iter().enumerate() {
-                //     if i >= 128 {
-                //         msg!("Charter URI too long");
-                //         continue;
-                //     }
-                //     s[i] = *b;
-                // }
                 buf.extend_from_slice(&s);
 
                 buf.extend_from_slice(&[0; 64]); // reserved
