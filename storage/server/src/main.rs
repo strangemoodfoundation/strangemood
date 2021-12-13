@@ -4,14 +4,14 @@ use dotenv::dotenv;
 use serde::{Deserialize, Serialize};
 use std::borrow::BorrowMut;
 use std::env;
+use uuid::Uuid;
 use utils::upload::{save_file as upload_save_file, split_payload, UploadFile};
 
 mod utils;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct InpAdd {
-    pub text: String,
-    pub number: i32,
+    pub listing_pubkey: String,
 }
 
 async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
@@ -22,16 +22,27 @@ async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
     println!("tmpfiles={:#?}", pl.1);
     // Auth TODO
     //make key
-    let s3_upload_key = format!("objects/{}/{}", "public_key", "private_key"); // TODO parameterize
+    let object_id = Uuid::new_v4();
+    let remote_file_key = format!("objects/{}/{}", inp_info.listing_pubkey, object_id.to_hyphenated().to_string()); // TODO parameterize
     //create tmp file and upload s3 and remove tmp file
     let upload_files: Vec<UploadFile> =
-        upload_save_file(pl.1, s3_upload_key).await.unwrap();
+        upload_save_file(pl.1, remote_file_key).await.unwrap();
     println!("upload_files={:#?}", upload_files);
     Ok(HttpResponse::Ok().into())
 }
 
-fn is_auth(nonce: String, listing_pub_key: String) -> bool {
-    return true
+fn is_auth(nonce: String, listing_pubkey: String) -> bool {
+    let authority_pubkey = get_authority_pubkey_from_listing(listing_pubkey);
+    return is_signed_by_pubkey(nonce, authority_pubkey)
+}
+
+
+fn is_signed_by_pubkey(check: String, pubkey: String) -> bool {
+    return false
+}
+
+fn get_authority_pubkey_from_listing(listing_pubkey: String) -> String {
+    return "".to_owned()
 }
 
 fn index() -> HttpResponse {
@@ -39,9 +50,7 @@ fn index() -> HttpResponse {
         <head><title>Upload Test</title></head>
         <body>
             <form target="/" method="post" enctype="multipart/form-data" id="myForm" >
-                <input type="text"  id="text" name="text" value="test_text"/>    
-                <input type="number"  id="number" name="number" value="123123"/>    
-                
+                <input type="text"  id="listing_pubkey" name="listing_pubkey" value="test_pub_key"/>    
                 <input type="button" value="Submit" onclick="myFunction()"></button>
             </form>
             <input type="file" multiple name="file" id="myFile"/>
