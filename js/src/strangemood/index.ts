@@ -4,6 +4,7 @@ import { ListingLayout } from '../state';
 import * as splToken from '@solana/spl-token';
 import { getCharterAccount } from '../dao';
 import base58 from 'base58-encode';
+import { ListingAccount } from './types';
 
 // Listings start with a 1 byte in order to be filterable
 const LISTING_TAG = '1';
@@ -33,8 +34,11 @@ export async function getAllListings(
 export async function getListingAccount(
   conn: solana.Connection,
   pubkey: solana.PublicKey
-) {
+): Promise<ListingAccount> {
   const listing = await conn.getAccountInfo(pubkey);
+
+  if (!listing || !listing.data) throw new Error('Listing does not exist');
+
   let object = ListingLayout.decode(listing.data);
 
   return {
@@ -57,10 +61,9 @@ export async function getListingAccount(
   };
 }
 
-export async function createListing(
+export async function createListingInstruction(
   conn: solana.Connection, // Note that these keys can all be the same
   strangemoodProgramId: solana.PublicKey,
-  // keypair.
   keys: {
     // Who pays the rent?
     payer: solana.PublicKey;
@@ -69,7 +72,7 @@ export async function createListing(
     signer: solana.PublicKey;
   },
   params: {
-    solDeposit: solana.PublicKey;
+    solDeposit: solana.PublicKey; // wrapped account that has sol to pay for these things
     voteDeposit: solana.PublicKey;
     realm: solana.PublicKey;
     charter: solana.PublicKey;
@@ -132,6 +135,81 @@ export async function createListing(
   };
 }
 
+type PurchaseListingParams = {
+  conn: solana.Connection; // Note that these keys can all be the same
+  strangemoodProgramId: solana.PublicKey;
+  // keypair.
+  publicKeys: {
+    // Who pays the rent? This is a wrapped account to which SOL has been transfered
+    solTokenAccountToPayWith: solana.PublicKey;
+
+    // Who's making the transaction?
+    signerPubkey: solana.PublicKey;
+
+    // the resource being purchased
+    listingTokenAccountAddress: solana.PublicKey;
+  };
+  params: {
+    listing: solana.PublicKey;
+    realm: solana.PublicKey;
+    communityMint: solana.PublicKey;
+    charterGovernance: solana.PublicKey;
+    charter: solana.PublicKey;
+    governanceProgramId: solana.PublicKey;
+  };
+  listingAccount: ListingAccount;
+};
+
+export async function purchaseListingInstruction({
+  publicKeys,
+  params,
+  conn,
+  strangemoodProgramId,
+  listingAccount,
+}: PurchaseListingParams) {
+  const charterAccount = await getCharterAccount(conn, params.charter);
+
+  let [communityMintAuthority, __] = await solana.PublicKey.findProgramAddress(
+    [params.communityMint.toBuffer()],
+    strangemoodProgramId
+  );
+  let [listingMintAuthority, ___] = await solana.PublicKey.findProgramAddress(
+    [listingAccount.data.mint.toBuffer()],
+    strangemoodProgramId
+  );
+
+  let tx = new solana.Transaction({
+    feePayer: publicKeys.solTokenAccountToPayWith,
+  });
+  tx.add(
+    ix.purchaseListing({
+      signerPubkey: publicKeys.signerPubkey,
+      listingPubkey: params.listing,
+      solTokenAccountPubkey: publicKeys.solTokenAccountToPayWith,
+      purchasersListingTokenAccountPubkey:
+        publicKeys.listingTokenAccountAddress,
+
+      solDepositPubkey: listingAccount.data.solTokenAccount,
+      voteDepositPubkey: listingAccount.data.communityTokenAccount,
+      solContributionPubkey: charterAccount.data.realm_sol_token_account,
+      voteContributionPubkey: charterAccount.data.realm_vote_token_account,
+
+      communityMintPubkey: params.communityMint,
+      listingMintPubkey: listingAccount.data.mint,
+      communityMintAuthority: communityMintAuthority,
+      listingMintAuthority: listingMintAuthority,
+
+      governanceProgramId: params.governanceProgramId,
+      realmPubkey: params.realm,
+      charterGovernancePubkey: params.charterGovernance,
+      charterPubkey: params.charter,
+      strangemoodProgramId,
+    })
+  );
+
+  return tx;
+}
+
 export async function purchaseListing(
   conn: solana.Connection, // Note that these keys can all be the same
   strangemoodProgramId: solana.PublicKey,
@@ -152,20 +230,19 @@ export async function purchaseListing(
     governanceProgramId: solana.PublicKey;
   }
 ) {
-  const listing = await getListingAccount(conn, params.listing);
-  const charter = await getCharterAccount(conn, params.charter);
+  const listingAccount = await getListingAccount(conn, params.listing);
 
   let solTokenAccountToPayWith = await splToken.Token.createWrappedNativeAccount(
     conn,
     splToken.TOKEN_PROGRAM_ID,
     keys.signer.publicKey,
     keys.payer,
-    listing.data.price.toNumber()
+    listingAccount.data.price.toNumber()
   );
 
   let listingToken = new splToken.Token(
     conn,
-    listing.data.mint,
+    listingAccount.data.mint,
     splToken.TOKEN_PROGRAM_ID,
     keys.payer
   );
@@ -174,44 +251,19 @@ export async function purchaseListing(
     keys.signer.publicKey
   );
 
-  let [realmMintAuthority, __] = await solana.PublicKey.findProgramAddress(
-    [params.communityMint.toBuffer()],
-    strangemoodProgramId
-  );
-  let [listingMintAuthority, ___] = await solana.PublicKey.findProgramAddress(
-    [listing.data.mint.toBuffer()],
-    strangemoodProgramId
-  );
-
-  let tx = new solana.Transaction({
-    feePayer: keys.payer.publicKey,
-  });
-  tx.add(
-    ix.purchaseListing({
+  const transaction = await purchaseListingInstruction({
+    conn,
+    strangemoodProgramId,
+    publicKeys: {
       signerPubkey: keys.signer.publicKey,
-      listingPubkey: params.listing,
-      solTokenAccountPubkey: solTokenAccountToPayWith,
-      purchasersListingTokenAccountPubkey: listingTokenAccount.address,
+      solTokenAccountToPayWith,
+      listingTokenAccountAddress: listingTokenAccount.address,
+    },
+    params,
+    listingAccount,
+  });
 
-      solDepositPubkey: listing.data.solTokenAccount,
-      voteDepositPubkey: listing.data.communityTokenAccount,
-      solContributionPubkey: charter.data.realm_sol_token_account,
-      voteContributionPubkey: charter.data.realm_vote_token_account,
-
-      realmMintPubkey: params.communityMint,
-      listingMintPubkey: listing.data.mint,
-      realmMintAuthority: realmMintAuthority,
-      listingMintAuthority: listingMintAuthority,
-
-      governanceProgramId: params.governanceProgramId,
-      realmPubkey: params.realm,
-      charterGovernancePubkey: params.charterGovernance,
-      charterPubkey: params.charter,
-      strangemoodProgramId,
-    })
-  );
-
-  await solana.sendAndConfirmTransaction(conn, tx, [keys.signer]);
+  await solana.sendAndConfirmTransaction(conn, transaction, [keys.signer]);
 
   return listingTokenAccount;
 }
