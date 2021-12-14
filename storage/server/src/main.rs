@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::borrow::BorrowMut;
 use std::env;
 use uuid::Uuid;
+use utils::sol_client;
+use solana_sdk::pubkey::Pubkey;
 use utils::upload::{save_file as upload_save_file, split_payload, UploadFile};
 
 mod utils;
@@ -31,18 +33,20 @@ async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::Ok().into())
 }
 
-fn is_auth(nonce: String, listing_pubkey: String) -> bool {
-    let authority_pubkey = get_authority_pubkey_from_listing(listing_pubkey);
-    return is_signed_by_pubkey(nonce, authority_pubkey)
+fn is_auth(nonce: &str, listing_pubkey: &str) -> sol_client::Result<bool> {
+    let authority_pubkey = get_authority_pubkey_from_listing(listing_pubkey)?;
+    Ok(is_signed_by_pubkey(nonce, authority_pubkey))
 }
 
 
-fn is_signed_by_pubkey(check: String, pubkey: String) -> bool {
-    return false
+fn is_signed_by_pubkey(check: &str, pubkey: Pubkey) -> bool {
+    false
 }
 
-fn get_authority_pubkey_from_listing(listing_pubkey: String) -> String {
-    return "".to_owned()
+fn get_authority_pubkey_from_listing(listing_pubkey: &str) -> sol_client::Result<Pubkey> {
+    let client_connection = sol_client::establish_connection()?;
+    let pubkey = sol_client::get_listing_authority_pubkey(listing_pubkey, &client_connection)?;
+    Ok(pubkey)
 }
 
 fn index() -> HttpResponse {
