@@ -4,6 +4,8 @@ import * as client from './strangemood';
 import { MAINNET, TESTNET } from './constants';
 import * as state from './state';
 
+export * from './strangemood/types';
+
 export default {
   MAINNET,
   TESTNET,
