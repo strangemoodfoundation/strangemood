@@ -7,7 +7,7 @@ import base58 from 'base58-encode';
 import { ListingAccount } from './types';
 
 // Listings start with a 1 byte in order to be filterable
-const LISTING_TAG = '1';
+const LISTING_TAG = 1;
 
 export async function getAllListings(
   conn: solana.Connection,
@@ -20,11 +20,13 @@ export async function getAllListings(
 
   return conn.getProgramAccounts(strangemoodProgramId, {
     commitment: commit,
+    encoding: 'base64',
     filters: [
       {
         memcmp: {
           offset: 0,
-          bytes: base58(LISTING_TAG),
+          // Note: this requires base58 string, a [1] is a "2" in base58
+          bytes: base58([LISTING_TAG as any] as any),
         },
       },
     ],
