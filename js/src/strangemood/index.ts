@@ -36,6 +36,9 @@ export async function getListingAccount(
   pubkey: solana.PublicKey
 ): Promise<ListingAccount> {
   const listing = await conn.getAccountInfo(pubkey);
+
+  if (!listing || !listing.data) throw new Error('Listing does not exist');
+
   let object = ListingLayout.decode(listing.data);
 
   return {
