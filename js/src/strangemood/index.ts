@@ -73,7 +73,7 @@ export async function createListingInstruction(
   },
   params: {
     solDeposit: solana.PublicKey; // wrapped account that has sol to pay for these things
-    voteDeposit: solana.PublicKey; // ?? evan noted this should be the main realm acct. that doenst make entire sense to me. can we check that?
+    voteDeposit: solana.PublicKey;
     realm: solana.PublicKey;
     charter: solana.PublicKey;
     charterGovernance: solana.PublicKey;
