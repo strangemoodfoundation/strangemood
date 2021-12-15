@@ -12,6 +12,7 @@ async fn get_signature_message(web::Path(public_key): web::Path<String>) -> impl
     // TODO: save public_key/nonce in redis
     let signature_message =
         signature_message::get_strangemood_signature_message(nonce, issued_at, public_key);
+
     HttpResponse::Ok().body(signature_message)
 }
 
@@ -19,6 +20,12 @@ async fn get_signature_message(web::Path(public_key): web::Path<String>) -> impl
 #[post("/echo")]
 async fn echo(req_body: String) -> impl Responder {
     HttpResponse::Ok().body(req_body)
+}
+
+// Health Check
+#[get("/")]
+async fn index(req_body: String) -> impl Responder {
+    HttpResponse::Ok().body("Strike the Earth!")
 }
 
 #[actix_web::main]
@@ -32,6 +39,8 @@ async fn main() -> std::io::Result<()> {
             .wrap(logger)
             .service(get_signature_message)
             .service(echo)
+            .service(index)
+            
     })
     .bind("127.0.0.1:8080")?
     .run()
