@@ -40,7 +40,7 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
         .get("/", |_, _| Response::ok("Strike the earth!"))
-        .get_async("/challenge/:public_key/:scope", |mut req, ctx| async move {
+        .get_async("/challenge/:public_key/:scope", |_, ctx| async move {
             let public_key = match ctx.param("public_key") {
                 Some(k) => k,
                 None => return Response::error("No :public_key given", 400),
@@ -62,7 +62,8 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
                     public_key: public_key.clone(),
                     scope: scope.clone(),
                 },
-            )?;
+            )?
+            .expiration_ttl(60 * 60 * 2); // Expires in 2 hours
 
             let signature_message = signature_message::get_strangemood_signature_message(
                 nonce,
@@ -87,7 +88,7 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
                 None => return Response::error("Metadata Not Found", 404),
             };
 
-            Response::ok(value.as_string())
+            Response::from_json(&value.as_json::<omg::OpenMetaGraph>()?)
         })
         // Post metadata to the listing
         .post_async("/listings/:public_key", |mut req, ctx| async move {
@@ -107,13 +108,15 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
                 Ok(k) => k,
                 Err(e) => return Response::error(e.to_string(), 500),
             };
+            let data_as_str = serde_json::to_string(&data)?;
             kv.put(
                 format!("{}/{}", public_key.as_str(), "metadata").as_str(),
-                data.clone(),
-            )?;
+                data_as_str.clone(),
+            )?
+            .execute()
+            .await?;
 
-            let response = serde_json::to_string(&data)?;
-            Response::ok(response)
+            Response::ok(data_as_str)
         })
         // Post files, like game files, or screenshots that are associated with the listing
         // .post_async("/listings/:public_key/upload/:key", |mut req, ctx| async move {})
