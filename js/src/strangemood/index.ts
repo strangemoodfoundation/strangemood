@@ -181,7 +181,7 @@ export async function purchaseListingInstruction({
   );
 
   let tx = new solana.Transaction({
-    feePayer: publicKeys.solTokenAccountToPayWith,
+    feePayer: publicKeys.signerPubkey,
   });
   tx.add(
     ix.purchaseListing({

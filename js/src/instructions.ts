@@ -221,7 +221,7 @@ export function purchaseListing(
   ];
   return new solana.TransactionInstruction({
     keys,
-    programId: params.governanceProgramId,
+    programId: params.strangemoodProgramId,
     data,
   });
 }
