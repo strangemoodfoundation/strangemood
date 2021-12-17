@@ -1,5 +1,5 @@
 use cfg_if::cfg_if;
-use chrono::{Datelike, Timelike, Utc};
+use chrono::{DateTime, Datelike, Timelike, Utc};
 use rand::{thread_rng, Rng};
 
 cfg_if! {
@@ -29,19 +29,4 @@ pub fn generate_nonce() -> String {
         .collect();
 
     return rand_string;
-}
-
-pub fn get_current_time() -> String {
-    let now = Utc::now();
-    let (_, year) = now.year_ce();
-
-    return format!(
-        "{}-{:02}-{:02} {:02}:{:02}:{:02}",
-        year,
-        now.month(),
-        now.day(),
-        now.hour(),
-        now.minute(),
-        now.second(),
-    );
 }

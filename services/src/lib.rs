@@ -1,8 +1,9 @@
-use serde::{Deserialize, Serialize};
+use solana_sdk::{self, signature};
 use worker::*;
 
+mod auth;
+mod errors;
 mod omg;
-mod signature_message;
 mod utils;
 
 fn log_request(req: &Request) {
@@ -13,14 +14,6 @@ fn log_request(req: &Request) {
         req.cf().coordinates().unwrap_or_default(),
         req.cf().region().unwrap_or("unknown region".into())
     );
-}
-
-#[derive(Serialize, Deserialize)]
-struct SignatureMessageSession {
-    nonce: String,
-    issued_at: String,
-    scope: String,
-    public_key: String,
 }
 
 #[event(fetch)]
@@ -40,37 +33,28 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
         .get("/", |_, _| Response::ok("Strike the earth!"))
-        .get_async("/challenge/:public_key/:scope", |_, ctx| async move {
+        .post_async("/challenge/:public_key", |mut req, ctx| async move {
             let public_key = match ctx.param("public_key") {
                 Some(k) => k,
                 None => return Response::error("No :public_key given", 400),
             };
-            let scope = match ctx.param("scope") {
-                Some(k) => k,
-                None => return Response::error("No :scope given", 400),
-            };
+            let scope = req.text().await?;
 
-            let nonce = utils::generate_nonce();
-            let issued_at = utils::get_current_time();
-
-            let kv = ctx.kv("SIGNATURES")?;
-            kv.put(
-                format!("{}/{}", public_key.as_str(), scope).as_str(),
-                SignatureMessageSession {
-                    nonce: nonce.clone(),
-                    issued_at: issued_at.clone(),
-                    public_key: public_key.clone(),
-                    scope: scope.clone(),
+            match auth::create_and_store_challenge(public_key.to_string(), scope, &ctx).await {
+                Ok(challenge) => Response::ok(challenge),
+                Err(e) => match e {
+                    errors::ServicesError::Unauthorized() => {
+                        return Response::error("Unauthorized", 401)
+                    }
+                    errors::ServicesError::ExpiredSession() => {
+                        return Response::error("ExpiredSession", 401)
+                    }
+                    errors::ServicesError::MissingHTTPHeader(_) => {
+                        return Response::error("MissingHTTPHeader", 400)
+                    }
+                    errors::ServicesError::InvalidRequest(msg) => return Response::error(msg, 400),
                 },
-            )?
-            .expiration_ttl(60 * 60 * 2); // Expires in 2 hours
-
-            let signature_message = signature_message::get_strangemood_signature_message(
-                nonce,
-                issued_at,
-                public_key.to_string(),
-            );
-            Response::ok(signature_message)
+            }
         })
         // Get the metadata for a listing
         .get_async("/listings/:public_key", |_, ctx| async move {
@@ -94,14 +78,28 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
         .post_async("/listings/:public_key", |mut req, ctx| async move {
             let public_key = match ctx.param("public_key") {
                 Some(k) => k,
-                None => return Response::error("No :public_key given", 400),
+                None => return Response::error("No 'public_key' given", 400),
             };
             let data = match req.json::<omg::OpenMetaGraph>().await {
                 Ok(j) => j,
                 Err(e) => return Response::error(e.to_string(), 400),
             };
 
-            // TODO Check to see if we're allow to modify this
+            match auth::assert_challenge(public_key.to_string(), req, &ctx).await {
+                Ok(a) => a,
+                Err(e) => match e {
+                    errors::ServicesError::Unauthorized() => {
+                        return Response::error("Unauthorized", 401)
+                    }
+                    errors::ServicesError::ExpiredSession() => {
+                        return Response::error("ExpiredSession", 401)
+                    }
+                    errors::ServicesError::MissingHTTPHeader(_) => {
+                        return Response::error("MissingHTTPHeader", 400)
+                    }
+                    errors::ServicesError::InvalidRequest(msg) => return Response::error(msg, 400),
+                },
+            }
 
             // Store the data (for the moment in the KV)
             let kv = match ctx.kv("LISTINGS") {
