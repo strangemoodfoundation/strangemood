@@ -17,7 +17,6 @@ fn main() {
         None => shellexpand::tilde("~/.config/solana/id.json").to_string(),
     };
 
-    println!("{}", keypair_file);
     let mut file = File::open(keypair_file).unwrap();
     let mut data = String::new();
     file.read_to_string(&mut data).unwrap();

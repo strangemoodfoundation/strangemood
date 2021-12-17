@@ -1,19 +1,15 @@
-use std::str::FromStr;
-
-use chrono::DateTime;
+use crate::{errors::ServicesError, utils};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     self,
     signature::{self, Signature},
 };
-use worker::{Request, RouteContext};
-
-use crate::{errors::ServicesError, utils};
+use std::str::FromStr;
+use worker::{console_log, Request, RouteContext};
 
 macro_rules! SIGNATURE_MESSAGE_TEMPLATE {
     () => {
-        r#"
-{domain} wants you to sign in with your wallet:
+        r#"{domain} wants you to sign in with your wallet:
 {user_public_address}
 
 I accept the Strangemood Terms of Service.
@@ -21,9 +17,7 @@ I accept the Strangemood Terms of Service.
 URI: {uri}
 Version: {version}
 Nonce: {nonce}
-Issued At: {issued_at}
-
-"#
+Issued At: {issued_at}"#
     };
 }
 
@@ -75,10 +69,7 @@ struct SignatureMessageSession {
     public_key: String,
 }
 
-// How long a challenge session
-const SESION_LENGTH_IN_SECONDS: i64 = 60 * 60 * 8; // 8 hours
-
-pub async fn create_and_store_challenge(
+pub async fn create_and_store_permission(
     public_key: String,
     scope: String,
     ctx: &RouteContext<()>,
@@ -89,15 +80,19 @@ pub async fn create_and_store_challenge(
     let kv = ctx.kv("SIGNATURES").unwrap();
     kv.put(
         format!("{}/{}", public_key.as_str(), scope).as_str(),
-        SignatureMessageSession {
+        serde_json::to_string(&SignatureMessageSession {
             nonce: nonce.clone(),
             issued_at: issued_at.clone(),
             public_key: public_key.clone(),
             scope: scope.clone(),
-        },
+        })
+        .unwrap(),
     )
     .unwrap()
-    .expiration_ttl(60 * 60 * 2); // Expires in 2 hours
+    .expiration_ttl(60 * 60 * 2) // Expires in 2 hours
+    .execute()
+    .await
+    .unwrap();
 
     let signature_message =
         get_strangemood_signature_message(nonce, issued_at, scope, public_key.to_string());
@@ -105,8 +100,9 @@ pub async fn create_and_store_challenge(
     return Ok(signature_message);
 }
 
-pub async fn assert_challenge(
+pub async fn assert_permission(
     public_key: String,
+    scope: String,
     req: Request,
     ctx: &RouteContext<()>,
 ) -> Result<(), ServicesError> {
@@ -120,20 +116,19 @@ pub async fn assert_challenge(
     };
     let signatures = ctx.kv("SIGNATURES").unwrap();
     let session = match signatures
-        .get(format!("{}/{}", public_key.as_str(), req.url().unwrap().as_str()).as_str())
+        .get(format!("{}/{}", public_key.as_str(), scope.as_str()).as_str())
         .await
         .unwrap()
     {
         Some(session) => session.as_json::<SignatureMessageSession>().unwrap(),
-        None => return Err(ServicesError::Unauthorized()),
+        None => {
+            console_log!(
+                "No session found {:?}",
+                format!("{}/{}", public_key.as_str(), scope.as_str()).as_str()
+            );
+            return Err(ServicesError::Unauthorized());
+        }
     };
-
-    // Fail if this session is expired
-    let parsed_time = DateTime::parse_from_rfc2822(&session.issued_at).unwrap();
-    let time_since = chrono::Utc::now().signed_duration_since(parsed_time);
-    if time_since.num_seconds() > SESION_LENGTH_IN_SECONDS {
-        return Err(ServicesError::ExpiredSession());
-    }
 
     let message = get_strangemood_signature_message(
         session.nonce,

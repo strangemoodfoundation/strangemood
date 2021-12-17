@@ -40,11 +40,12 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
             };
             let scope = req.text().await?;
 
-            match auth::create_and_store_challenge(public_key.to_string(), scope, &ctx).await {
+            match auth::create_and_store_permission(public_key.to_string(), scope, &ctx).await {
                 Ok(challenge) => Response::ok(challenge),
                 Err(e) => match e {
                     errors::ServicesError::Unauthorized() => {
-                        return Response::error("Unauthorized", 401)
+                        console_log!("{:?}", e);
+                        return Response::error("Unauthorized", 401);
                     }
                     errors::ServicesError::ExpiredSession() => {
                         return Response::error("ExpiredSession", 401)
@@ -85,11 +86,18 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
                 Err(e) => return Response::error(e.to_string(), 400),
             };
 
-            match auth::assert_challenge(public_key.to_string(), req, &ctx).await {
+            match auth::assert_permission(
+                public_key.to_string(),
+                format!("POST /listings/{}", public_key),
+                req,
+                &ctx,
+            )
+            .await
+            {
                 Ok(a) => a,
                 Err(e) => match e {
                     errors::ServicesError::Unauthorized() => {
-                        return Response::error("Unauthorized", 401)
+                        return Response::error("Unauthorized", 401);
                     }
                     errors::ServicesError::ExpiredSession() => {
                         return Response::error("ExpiredSession", 401)
