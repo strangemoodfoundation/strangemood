@@ -25,7 +25,7 @@ uuid = { version = "0.8.2", features = ["serde", "v4"] }
 strangemood="0.1.1"
 anyhow = "1.0"
 bs58="0.4.0"
-
+anchor-lang = "0.18.2"
 
 
 # The `console_error_panic_hook` crate provides better debugging of panics by

@@ -1499,6 +1499,7 @@ dependencies = [
 name = "services"
 version = "0.1.0"
 dependencies = [
+ "anchor-lang",
  "anyhow",
  "bs58 0.4.0",
  "cfg-if 0.1.10",
