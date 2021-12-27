@@ -1,3 +1,6 @@
+use std::str::FromStr;
+
+use anchor_lang::prelude::Pubkey;
 // use solana_client;
 use solana_sdk::{self, signature};
 use strangemood;
@@ -80,7 +83,7 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
         })
         // Post metadata to the listing
         .post_async("/listings/:public_key", |mut req, ctx| async move {
-            let public_key = match ctx.param("public_key") {
+            let listing_public_key = match ctx.param("public_key") {
                 Some(k) => k,
                 None => return Response::error("No 'public_key' given", 400),
             };
@@ -89,16 +92,20 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
                 Err(e) => return Response::error(e.to_string(), 400),
             };
 
-            // TODO: look up listing in Strangemood
-            // let client =
-            //     solana_client::rpc_client::RpcClient::new("https://api.mainnet-beta.solana.com");
-
-            // let data = client.get_account_data(pubkey)?;
-            // let listing = strangemood::Listing::try_deserialize(data)?;
+            let l_pubkey = match Pubkey::from_str(listing_public_key.as_str()) {
+                Ok(p) => p,
+                Err(e) => return Response::error(":public_key must be a base58 Public Key", 400),
+            };
+            let listing_account =
+                match rpc::get_listing_info("https://api.mainnet-beta.solana.com", l_pubkey) {
+                    Ok(a) => a,
+                    Err(e) => return Response::error(e.to_string(), 500),
+                };
+            let authority = listing_account.data.authority;
 
             match auth::assert_permission(
-                public_key.to_string(),
-                format!("POST /listings/{}", public_key),
+                authority.to_string(),
+                format!("POST /listings/{}", listing_public_key.to_string()),
                 req,
                 &ctx,
             )
@@ -126,7 +133,7 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
             };
             let data_as_str = serde_json::to_string(&data)?;
             kv.put(
-                format!("{}/{}", public_key.as_str(), "metadata").as_str(),
+                format!("{}/{}", listing_public_key.as_str(), "metadata").as_str(),
                 data_as_str.clone(),
             )?
             .execute()

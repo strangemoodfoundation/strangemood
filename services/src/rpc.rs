@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use anchor_lang::AccountDeserialize;
 use anyhow::Result;
 use bs58;
@@ -7,8 +5,8 @@ use jsonrpc::{self, Error};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Number};
 use solana_sdk::pubkey::Pubkey;
+use std::str::FromStr;
 use strangemood;
-use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct EncodingParams {
@@ -37,15 +35,15 @@ struct AccountInfoResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct AccountInfo<T> {
-    data: T,
-    executable: bool,
-    lamports: i64,
-    owner: Pubkey,
-    rentEpoch: i64,
+pub struct AccountInfo<T> {
+    pub data: T,
+    pub executable: bool,
+    pub lamports: i64,
+    pub owner: Pubkey,
+    pub rent_epoch: i64,
 }
 
-fn get_listing_info(url: &str, pubkey: Pubkey) -> Result<Listing> {
+pub fn get_listing_info(url: &str, pubkey: Pubkey) -> Result<AccountInfo<strangemood::Listing>> {
     let client = jsonrpc::client::Client::simple_http(url, None, None)?;
 
     let response = client.send_request(jsonrpc::Request {
@@ -71,8 +69,13 @@ fn get_listing_info(url: &str, pubkey: Pubkey) -> Result<Listing> {
     let ownerPubkey = Pubkey::from_str(info.clone().value.owner.as_str())?;
 
     let mut data: &[u8] = &bs58::decode(info.value.data[0].clone()).into_vec()?;
-    // let mut u8s = &mut data.iter().map(|c| *c as u8).collect::<Vec<_>>();
 
     let listing = strangemood::Listing::try_deserialize(&mut data)?;
-    Ok(listing)
+    Ok(AccountInfo {
+        data: listing,
+        executable: info.value.executable,
+        lamports: info.value.lamports,
+        owner: ownerPubkey,
+        rent_epoch: info.value.rentEpoch,
+    })
 }
