@@ -1,9 +1,12 @@
+// use solana_client;
 use solana_sdk::{self, signature};
+use strangemood;
 use worker::*;
 
 mod auth;
 mod errors;
 mod omg;
+mod rpc;
 mod utils;
 
 fn log_request(req: &Request) {
@@ -85,6 +88,13 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
                 Ok(j) => j,
                 Err(e) => return Response::error(e.to_string(), 400),
             };
+
+            // TODO: look up listing in Strangemood
+            // let client =
+            //     solana_client::rpc_client::RpcClient::new("https://api.mainnet-beta.solana.com");
+
+            // let data = client.get_account_data(pubkey)?;
+            // let listing = strangemood::Listing::try_deserialize(data)?;
 
             match auth::assert_permission(
                 public_key.to_string(),

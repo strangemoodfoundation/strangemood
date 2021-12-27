@@ -1,8 +1,9 @@
 [package]
 name = "strangemood"
-version = "0.1.0"
-description = "Created with Anchor"
+version = "0.1.1"
+description = "A decentralized marketplace for software licenses, on Solana"
 edition = "2018"
+license = "Apache-2.0"
 
 [lib]
 crate-type = ["cdylib", "lib"]
