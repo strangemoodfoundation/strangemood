@@ -36,7 +36,7 @@ To "login", you must request a "challenge" message that should be signed by the 
 key of the user. To request a challenge, use `POST /v1/challenge/:public_key`. 
 
 You must include the method and the path in `<METHOD> <PATH>` format as plain 
-text in the body of your request. 
+text in the body of your request.
 
 ```
 # <METHOD> <PATH>
@@ -69,7 +69,7 @@ Nonce: 32891756
 Issued At: 2021-09-30T16:25:24Z
 ```
 
-Have the user's wallet (private key) sign this message, and you will get a signature like the 
+Have the user's wallet (private key) sign this message, and you will get a base58 signature like the 
 following:
 
 ```
@@ -154,18 +154,6 @@ Returns the OpenMetaGraph document:
 Strike the Earth! 
 "#;
 
-fn cors(origin: &str) -> Result<Headers> {
-    let mut headers = Headers::new();
-    headers.set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE");
-    headers.set(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization",
-    );
-    headers.set("Access-Control-Allow-Origin", origin);
-
-    Ok(headers)
-}
-
 #[event(fetch)]
 pub async fn main(req: Request, env: Env) -> Result<Response> {
     log_request(&req);
@@ -173,13 +161,18 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
     // Optionally, get more helpful error messages written to the console in the case of a panic.
     utils::set_panic_hook();
 
-    // if req.method() == Method::Options {
-    //     let origin = req.headers().get("Origin")?.ok_or("*")?.as_str();
-    //     let mut headers = cors(origin)?;
-    //     headers.set("Access-Control-Max-Age", "86400");
+    if req.method() == Method::Options {
+        console_log!("OPTIONS called");
+        let mut headers = Headers::new();
+        headers.set("Access-Control-Max-Age", "86400")?;
+        headers.set(
+            "Access-Control-Allow-Origin",
+            req.headers().get("Origin").unwrap().ok_or("*")?.as_str(),
+        )?;
+        headers.set("Access-Control-Allow-Credentials", "true")?;
 
-    //     return Ok(Response::ok("ok")?.with_headers(headers));
-    // }
+        return Ok(Response::ok("ok")?.with_headers(headers));
+    }
 
     // Optionally, use the Router to handle matching endpoints, use ":name" placeholders, or "*name"
     // catch-alls to match on specific patterns. Alternatively, use `Router::with_data(D)` to
@@ -302,13 +295,9 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
             let mut headers = Headers::new();
             headers.set(
                 "Access-Control-Allow-Origin",
-                req.clone()?
-                    .headers()
-                    .get("Origin")
-                    .unwrap()
-                    .ok_or("*")?
-                    .as_str(),
+                req.headers().get("Origin").unwrap().ok_or("*")?.as_str(),
             )?;
+            headers.set("Access-Control-Allow-Credentials", "true")?;
             Ok(Response::ok(data_as_str)?.with_headers(headers))
         })
         .run(req, env)
