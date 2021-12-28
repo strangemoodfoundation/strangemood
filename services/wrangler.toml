@@ -1,4 +1,4 @@
-name = "services"
+name = "strangemood"
 type = "javascript"
 workers_dev = true
 compatibility_date = "2021-12-14"
