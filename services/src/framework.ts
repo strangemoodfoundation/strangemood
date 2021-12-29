@@ -1,12 +1,14 @@
 import { pathToRegexp, match } from 'path-to-regexp'
-import { AllParams, API, Method, StrangemoodServices } from './types'
+import { API, Method, StrangemoodServices } from './types'
 
-type Resolver<T> = (
+export type Context<Params> = {
+  params: Params
+  pattern: string
+}
+
+export type Resolver<Params> = (
   request: Request,
-  ctx: {
-    params: T
-    pattern: string
-  },
+  ctx: Context<Params>,
 ) => Promise<Response>
 
 interface Route<T> {
