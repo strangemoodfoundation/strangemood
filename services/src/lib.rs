@@ -162,7 +162,6 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
     utils::set_panic_hook();
 
     // if req.method() == Method::Options {
-    //     console_log!("Yay love it");
     //     let mut headers = Headers::new();
     //     headers.set("Access-Control-Max-Age", "86400")?;
     //     headers.set(
@@ -346,7 +345,24 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
             headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")?;
             Ok(Response::ok(data_as_str)?.with_headers(headers))
         })
-        .options_async("/v1/listings/:public_key", |mut req, ctx| async move {
+        .post_async(
+            "/v1/listings/:public_key/upload/:key",
+            |mut req, ctx| async move {
+                let form = req.form_data().await?;
+                if let Some(entry) = form.get("file") {
+                    match entry {
+                        FormEntry::File(file) => {
+                            let bytes = file.bytes().await?;
+                            console_log!("{:?}", bytes);
+                        }
+                        FormEntry::Field(_) => return Response::error("Bad Request", 400),
+                    }
+                }
+
+                Response::error("Bad Request", 400)
+            },
+        )
+        .options_async("*", |mut req, ctx| async move {
             let mut headers = Headers::new();
             headers.set("Access-Control-Max-Age", "86400")?;
             headers.set(
