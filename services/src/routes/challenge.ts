@@ -26,12 +26,9 @@ export async function postChallenge(
   const message = createChallengeMessage({
     publicKey: ctx.params.publicKey,
     domain: req.headers.get('origin') || 'https://strangemood.org',
-    statement:
-      'Do you want to allow this service to modify the metadata of your listing?',
-    version: '0.0.0',
+    scope: body.scope,
     nonce: nonce,
     issuedAt: issuedAt,
-    uri: req.url,
   })
 
   return new Response(message)
