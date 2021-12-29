@@ -126,7 +126,7 @@ pub async fn assert_permission(
                 "No session found {:?}",
                 format!("{}/{}", public_key.as_str(), scope.as_str()).as_str()
             );
-            return Err(ServicesError::Unauthorized());
+            return Err(ServicesError::Unauthorized);
         }
     };
 
@@ -149,7 +149,7 @@ pub async fn assert_permission(
         &signature::Keypair::from_base58_string(&public_key).to_bytes(),
         message.as_bytes(),
     ) {
-        return Err(ServicesError::Unauthorized());
+        return Err(ServicesError::Unauthorized);
     }
 
     return Ok(());

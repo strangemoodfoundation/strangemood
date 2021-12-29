@@ -161,18 +161,29 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
     // Optionally, get more helpful error messages written to the console in the case of a panic.
     utils::set_panic_hook();
 
-    if req.method() == Method::Options {
-        console_log!("OPTIONS called");
-        let mut headers = Headers::new();
-        headers.set("Access-Control-Max-Age", "86400")?;
-        headers.set(
-            "Access-Control-Allow-Origin",
-            req.headers().get("Origin").unwrap().ok_or("*")?.as_str(),
-        )?;
-        headers.set("Access-Control-Allow-Credentials", "true")?;
+    // if req.method() == Method::Options {
+    //     console_log!("Yay love it");
+    //     let mut headers = Headers::new();
+    //     headers.set("Access-Control-Max-Age", "86400")?;
+    //     headers.set(
+    //         "Access-Control-Allow-Origin",
+    //         req.headers()
+    //             .get("Origin")?
+    //             .unwrap_or("*".to_string())
+    //             .as_str(),
+    //     )?;
+    //     headers.set("Access-Control-Allow-Credentials", "true")?;
+    //     headers.set(
+    //         "Access-Control-Allow-Headers",
+    //         req.headers()
+    //             .get("Access-Control-Request-Headers")?
+    //             .unwrap_or("".to_string())
+    //             .as_str(),
+    //     )?;
+    //     headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")?;
 
-        return Ok(Response::ok("ok")?.with_headers(headers));
-    }
+    //     return Ok(Response::ok("ok")?.with_headers(headers));
+    // }
 
     // Optionally, use the Router to handle matching endpoints, use ":name" placeholders, or "*name"
     // catch-alls to match on specific patterns. Alternatively, use `Router::with_data(D)` to
@@ -196,17 +207,20 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
                     let mut headers = Headers::new();
                     headers.set(
                         "Access-Control-Allow-Origin",
-                        req.headers().get("Origin").unwrap().ok_or("*")?.as_str(),
+                        req.headers()
+                            .get("Origin")?
+                            .unwrap_or("*".to_string())
+                            .as_str(),
                     )?;
 
                     Ok(Response::ok(challenge.as_str())?.with_headers(headers))
                 }
                 Err(e) => match e {
-                    errors::ServicesError::Unauthorized() => {
+                    errors::ServicesError::Unauthorized => {
                         console_log!("{:?}", e);
                         return Response::error("Unauthorized", 401);
                     }
-                    errors::ServicesError::ExpiredSession() => {
+                    errors::ServicesError::ExpiredSession => {
                         return Response::error("ExpiredSession", 401)
                     }
                     errors::ServicesError::MissingHTTPHeader(_) => {
@@ -236,24 +250,47 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
         })
         // Post metadata to the listing
         .post_async("/v1/listings/:public_key", |mut req, ctx| async move {
+            console_log!("What the fuck");
             let listing_public_key = match ctx.param("public_key") {
                 Some(k) => k,
                 None => return Response::error("No 'public_key' given", 400),
             };
             let data = match req.json::<omg::OpenMetaGraph>().await {
                 Ok(j) => j,
-                Err(e) => return Response::error(e.to_string(), 400),
+                Err(e) => {
+                    return Response::error(
+                        format!("Open Metagraph Error: {:}", e.to_string()),
+                        400,
+                    )
+                }
             };
+
+            console_log!("got data");
 
             let l_pubkey = match Pubkey::from_str(listing_public_key.as_str()) {
                 Ok(p) => p,
                 Err(e) => return Response::error(":public_key must be a base58 Public Key", 400),
             };
-            let listing_account =
-                match rpc::get_listing_info("https://api.mainnet-beta.solana.com", l_pubkey) {
-                    Ok(a) => a,
-                    Err(e) => return Response::error(e.to_string(), 500),
-                };
+            let listing_account = match rpc::get_listing_info(
+                "https://api.mainnet-beta.solana.com",
+                l_pubkey,
+            )
+            .await
+            {
+                Ok(a) => a,
+                Err(e) => match e {
+                    errors::RpcError::ListingPublicKeyDoesNotExist => {
+                        console_log!("Listing public key does not exist");
+                        return Response::error(e.to_string(), 404);
+                    }
+                    errors::RpcError::RPCRequestFailed(_, _) => {
+                        return Response::error(e.to_string(), 500);
+                    }
+                    errors::RpcError::FailedToCreateRPCRequest(_) => {
+                        return Response::error(e.to_string(), 500)
+                    }
+                },
+            };
             let authority = listing_account.data.authority;
 
             match auth::assert_permission(
@@ -266,10 +303,10 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
             {
                 Ok(a) => a,
                 Err(e) => match e {
-                    errors::ServicesError::Unauthorized() => {
+                    errors::ServicesError::Unauthorized => {
                         return Response::error("Unauthorized", 401);
                     }
-                    errors::ServicesError::ExpiredSession() => {
+                    errors::ServicesError::ExpiredSession => {
                         return Response::error("ExpiredSession", 401)
                     }
                     errors::ServicesError::MissingHTTPHeader(_) => {
@@ -293,12 +330,45 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
             .await?;
 
             let mut headers = Headers::new();
+            headers.set("Access-Control-Max-Age", "86400")?;
             headers.set(
                 "Access-Control-Allow-Origin",
-                req.headers().get("Origin").unwrap().ok_or("*")?.as_str(),
+                req.headers()
+                    .get("Origin")?
+                    .unwrap_or("*".to_string())
+                    .as_str(),
             )?;
             headers.set("Access-Control-Allow-Credentials", "true")?;
+            headers.set(
+                "Access-Control-Allow-Headers",
+                req.headers()
+                    .get("Access-Control-Request-Headers")?
+                    .unwrap_or("".to_string())
+                    .as_str(),
+            )?;
+            headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")?;
             Ok(Response::ok(data_as_str)?.with_headers(headers))
+        })
+        .options_async("/v1/listings/:public_key", |mut req, ctx| async move {
+            let mut headers = Headers::new();
+            headers.set("Access-Control-Max-Age", "86400")?;
+            headers.set(
+                "Access-Control-Allow-Origin",
+                req.headers()
+                    .get("Origin")?
+                    .unwrap_or("*".to_string())
+                    .as_str(),
+            )?;
+            headers.set("Access-Control-Allow-Credentials", "true")?;
+            headers.set(
+                "Access-Control-Allow-Headers",
+                req.headers()
+                    .get("Access-Control-Request-Headers")?
+                    .unwrap_or("".to_string())
+                    .as_str(),
+            )?;
+            headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")?;
+            return Ok(Response::ok("ok")?.with_headers(headers));
         })
         .run(req, env)
         .await
