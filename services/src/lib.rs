@@ -250,7 +250,6 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
         })
         // Post metadata to the listing
         .post_async("/v1/listings/:public_key", |mut req, ctx| async move {
-            console_log!("What the fuck");
             let listing_public_key = match ctx.param("public_key") {
                 Some(k) => k,
                 None => return Response::error("No 'public_key' given", 400),
@@ -264,8 +263,6 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
                     )
                 }
             };
-
-            console_log!("got data");
 
             let l_pubkey = match Pubkey::from_str(listing_public_key.as_str()) {
                 Ok(p) => p,
@@ -295,8 +292,8 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
 
             match auth::assert_permission(
                 authority.to_string(),
-                format!("POST /listings/{}", listing_public_key.to_string()),
-                req.clone()?,
+                format!("POST /v1/listings/{}", listing_public_key.to_string()),
+                &req,
                 &ctx,
             )
             .await
@@ -310,7 +307,7 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
                         return Response::error("ExpiredSession", 401)
                     }
                     errors::ServicesError::MissingHTTPHeader(_) => {
-                        return Response::error("MissingHTTPHeader", 400)
+                        return Response::error(e.to_string(), 400)
                     }
                     errors::ServicesError::InvalidRequest(msg) => return Response::error(msg, 400),
                 },

@@ -21,6 +21,7 @@ Issued At: {issued_at}"#
     };
 }
 
+#[derive(Debug, Clone)]
 struct SignatureMessage {
     domain: String,
     uri: String,
@@ -61,7 +62,7 @@ pub fn get_strangemood_signature_message(
     return signature_message.get_signature_message(nonce, issued_at, user_public_address);
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct SignatureMessageSession {
     nonce: String,
     issued_at: String,
@@ -78,6 +79,7 @@ pub async fn create_and_store_permission(
     let issued_at = chrono::Utc::now().to_rfc2822();
 
     let kv = ctx.kv("SIGNATURES").unwrap();
+    console_log!("writing {}/{}", public_key.as_str(), scope);
     kv.put(
         format!("{}/{}", public_key.as_str(), scope).as_str(),
         serde_json::to_string(&SignatureMessageSession {
@@ -103,7 +105,7 @@ pub async fn create_and_store_permission(
 pub async fn assert_permission(
     public_key: String,
     scope: String,
-    req: Request,
+    req: &Request,
     ctx: &RouteContext<()>,
 ) -> Result<(), ServicesError> {
     let auth = match req.headers().get("Authorization").unwrap() {
@@ -122,10 +124,6 @@ pub async fn assert_permission(
     {
         Some(session) => session.as_json::<SignatureMessageSession>().unwrap(),
         None => {
-            console_log!(
-                "No session found {:?}",
-                format!("{}/{}", public_key.as_str(), scope.as_str()).as_str()
-            );
             return Err(ServicesError::Unauthorized);
         }
     };
@@ -145,8 +143,11 @@ pub async fn assert_permission(
             ))
         }
     };
+
     if !sig.verify(
-        &signature::Keypair::from_base58_string(&public_key).to_bytes(),
+        &solana_sdk::pubkey::Pubkey::from_str(public_key.as_str())
+            .unwrap()
+            .to_bytes(),
         message.as_bytes(),
     ) {
         return Err(ServicesError::Unauthorized);

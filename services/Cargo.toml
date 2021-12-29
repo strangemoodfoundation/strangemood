@@ -26,6 +26,7 @@ strangemood="0.1.1"
 anyhow = "1.0"
 bs58="0.4.0"
 anchor-lang = "0.18.2"
+base64="0.13.0"
 
 
 # The `console_error_panic_hook` crate provides better debugging of panics by

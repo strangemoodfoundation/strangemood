@@ -1,5 +1,6 @@
 use anchor_lang::AccountDeserialize;
 use anyhow::Result;
+use base64;
 use bs58;
 use jsonrpc::{self, Error};
 use serde::{Deserialize, Serialize};
@@ -7,7 +8,7 @@ use serde_json::{json, Number};
 use solana_sdk::pubkey::Pubkey;
 use std::{borrow::BorrowMut, collections::HashMap, hash::Hasher, str::FromStr};
 use strangemood;
-use worker::{wasm_bindgen::JsValue, Fetch, Method, Request, RequestInit};
+use worker::{console_log, wasm_bindgen::JsValue, Fetch, Method, Request, RequestInit};
 
 use crate::errors::RpcError;
 
@@ -89,7 +90,7 @@ pub async fn get_listing_info(
         params: vec![
             AccountInfoParams::String(pubkey.to_string()),
             AccountInfoParams::EncodingParams(EncodingParams {
-                encoding: "base58".to_string(),
+                encoding: "base64".to_string(),
             }),
         ],
     };
@@ -137,12 +138,14 @@ pub async fn get_listing_info(
     let owner_pubkey =
         Pubkey::from_str(owner).map_err(|e| RpcError::FailedToCreateRPCRequest(e.to_string()))?;
 
-    let mut data: &[u8] = &bs58::decode(response_body.result.value.data[0].clone())
-        .into_vec()
+    let value = &response_body.result.value.data[0];
+    let data =
+        base64::decode(value).map_err(|e| RpcError::FailedToCreateRPCRequest(e.to_string()))?;
+    let mut data_as_slice: &[u8] = &data;
+
+    let listing = strangemood::Listing::try_deserialize(&mut data_as_slice)
         .map_err(|e| RpcError::FailedToCreateRPCRequest(e.to_string()))?;
 
-    let listing = strangemood::Listing::try_deserialize(&mut data)
-        .map_err(|e| RpcError::FailedToCreateRPCRequest(e.to_string()))?;
     Ok(AccountInfo {
         data: listing,
         executable: response_body.result.value.executable,
