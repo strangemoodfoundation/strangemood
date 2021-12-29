@@ -1,27 +1,17 @@
-name = "strangemood"
+name = "services"
 type = "javascript"
+zone_id = ""
+account_id = ""
+route = ""
 workers_dev = true
-compatibility_date = "2021-12-14"
+compatibility_date = "2021-12-29"
 
 kv_namespaces = [ 
   { binding = "LISTINGS", id = "b6d2ca1116f94644832ff2c642d1ca68", preview_id="4c982034f48341e1b0852b384283a946" },
   { binding = "SIGNATURES", id="3e05cb55c2394f92a353939a0693506a", preview_id="aef87525301d420b9a915de94193a123" }
 ]
 
-[vars]
-WORKERS_RS_VERSION = "0.0.7"
-
 [build]
-command = "cargo install -q worker-build && worker-build --release" # required
-
+command = "npm install && npm run build"
 [build.upload]
-dir    = "build/worker"
-format = "modules"
-main   = "./shim.mjs"
-
-[[build.upload.rules]]
-globs = ["**/*.wasm"]
-type  = "CompiledWasm"
-
-# read more about configuring your Worker via wrangler.toml at:
-# https://developers.cloudflare.com/workers/cli-wrangler/configuration
+format = "service-worker"

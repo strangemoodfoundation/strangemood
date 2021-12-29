@@ -1,4 +1,4 @@
-/target
-**/*.rs.bk
-wasm-pack.log
-build/
+dist
+node_modules
+transpiled
+/.idea/
