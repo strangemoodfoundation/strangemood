@@ -1,9 +1,6 @@
-import { nanoid } from 'nanoid'
-import { createChallengeMessage } from './auth'
-import { errs } from './errors'
 import Router from './framework'
 import { postChallenge } from './routes/challenge'
-import { StrangemoodServices } from './types'
+import { getListing, postListing } from './routes/listings'
 
 export async function handleRequest(request: Request): Promise<Response> {
   const router = new Router()
@@ -18,13 +15,8 @@ export async function handleRequest(request: Request): Promise<Response> {
     postChallenge,
   )
 
-  router.use('GET', '/v1/listings/:publicKey', async (req, ctx) => {
-    return new Response(JSON.stringify(ctx))
-  })
-
-  router.use('POST', '/v1/listings/:publicKey', async (req, ctx) => {
-    return new Response(JSON.stringify(ctx))
-  })
+  router.use('GET', '/v1/listings/:publicKey', getListing)
+  router.use('POST', '/v1/listings/:publicKey', postListing)
 
   router.use(
     'POST',
