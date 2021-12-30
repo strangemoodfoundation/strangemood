@@ -182,7 +182,9 @@ export async function purchaseListing(
 export async function initListing(
   program: Program<Strangemood>,
   conn: Connection,
-  user: PublicKey
+  user: PublicKey,
+  price: anchor.BN,
+  uri: string
 ): Promise<[Transaction, Keypair[]]> {
   const mintKeypair = anchor.web3.Keypair.generate();
 
@@ -240,7 +242,8 @@ export async function initListing(
   let init_instruction_ix = program.instruction.initListing(
     listingMintBump,
     listingBump,
-    new anchor.BN(10),
+    price,
+    uri,
     {
       accounts: {
         listing: listingPDA,

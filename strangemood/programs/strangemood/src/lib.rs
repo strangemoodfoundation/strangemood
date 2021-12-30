@@ -72,6 +72,7 @@ pub mod strangemood {
         _mint_bump: u8,
         _listing_bump: u8,
         price: u64,
+        uri: String,
     ) -> ProgramResult {
         // Check that the sol_deposit is wrapped sol
         let sol_deposit = ctx.accounts.sol_deposit.clone().into_inner();
@@ -129,6 +130,7 @@ pub mod strangemood {
         listing.sol_deposit = ctx.accounts.sol_deposit.key();
         listing.vote_deposit = ctx.accounts.vote_deposit.key();
         listing.charter_governance = ctx.accounts.charter_governance.key();
+        listing.uri = uri;
 
         Ok(())
     }
@@ -358,7 +360,8 @@ pub struct PurchaseListing<'info> {
 pub struct InitListing<'info> {
     // 8 for the tag
     // 235 for the size of the listing account itself
-    #[account(init, seeds=[b"listing", mint.key().as_ref()], bump=listing_bump, payer = user, space = 8 + 235)]
+    // 128 for metadata URI
+    #[account(init, seeds=[b"listing", mint.key().as_ref()], bump=listing_bump, payer = user, space = 8 + 235 + 128)]
     pub listing: Account<'info, Listing>,
 
     #[account(
@@ -384,6 +387,7 @@ pub struct InitListing<'info> {
     pub charter: Box<Account<'info, Charter>>,
     pub rent: Sysvar<'info, Rent>,
     pub token_program: Program<'info, Token>,
+
     #[account(mut)]
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -434,6 +438,10 @@ pub struct Listing {
 
     /// The mint that represents the token they're purchasing
     pub mint: Pubkey,
+
+    // The URI for where metadata can be found for this listing.
+    // Example: "ipns://examplehere", "https://example.com/metadata.json"
+    pub uri: String,
 }
 
 #[account]

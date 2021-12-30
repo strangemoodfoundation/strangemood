@@ -259,6 +259,7 @@ describe("strangemood", async () => {
       listingMintBump,
       listingBump,
       new anchor.BN(10),
+      "ipns://QmdxU5SdYWja4cSqxnLd4gmYqCybwyGaQqYJwXZL6ieq21",
       {
         accounts: {
           listing: listingPDA,
@@ -307,6 +308,10 @@ describe("strangemood", async () => {
 
     // Ensure the listing is good
     assert.ok(listing.isInitialized, "Listing is not init");
+    assert.ok(
+      listing.uri,
+      "ipns://QmdxU5SdYWja4cSqxnLd4gmYqCybwyGaQqYJwXZL6ieq21"
+    );
     assert.ok(
       listing.mint.equals(listingMint.publicKey),
       "Listing Mint is incorrect"
