@@ -43,6 +43,7 @@ export async function postListing(
   return new Response(JSON.stringify(body), {
     headers: {
       'Content-Type': 'application/json',
+      ...corsHeaders(req),
     },
   })
 }

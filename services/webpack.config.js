@@ -10,6 +10,13 @@ module.exports = {
   mode: 'development',
   resolve: {
     extensions: ['.ts', '.tsx', '.js'],
+    fallback: {
+      fs: false,
+      assert: false,
+      path: false,
+      process: false,
+      util: false,
+    },
   },
   module: {
     rules: [

@@ -31,5 +31,7 @@ export async function postChallenge(
     issuedAt: issuedAt,
   })
 
-  return new Response(message)
+  return new Response(message, {
+    headers: corsHeaders(req),
+  })
 }

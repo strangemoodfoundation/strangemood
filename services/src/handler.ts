@@ -5,6 +5,12 @@ import { getListing, postListing } from './routes/listings'
 export async function handleRequest(request: Request): Promise<Response> {
   const router = new Router()
 
+  router.use('OPTIONS', '*', async (req, ctx) => {
+    console.log('Options was hit')
+    return new Response('ok', {
+      headers: corsHeaders(req),
+    })
+  })
   router.use('GET', '/', async (req, ctx) => {
     return new Response('hi')
   })
