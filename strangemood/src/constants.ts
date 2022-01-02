@@ -35,10 +35,22 @@ export const TESTNET = {
     "i2wXatLLgvNiVkDP9VrNm7mQ3vYs43MZP8D3ooY9Rgw"
   ),
   GOVERNANCE_PROGRAM_ID: new anchor.web3.PublicKey(
-    "eyoXCKW5rkxbHc1fAXQJry5i6jYyyXk1iDGfKLYErbX"
+    "smfjietFKFJ4Sbw1cqESBTpPhF4CwbMwN8kBEC1e5ui"
   ),
   STRANGEMOOD_FOUNDATION_MINT: new anchor.web3.PublicKey(
     "HKJCqeLfGRCBHNzcevhGFXcau6mw7M1e481ub2TUAZkG"
+  ),
+  STRANGEMOOD_FOUNDATION_REALM: new anchor.web3.PublicKey(
+    "FvzZFjf3NPTZbKAmQA4Gf1v7uTW7HFcP5Pcr2oVm49t3"
+  ),
+  STRANGEMOOD_FOUNDATION_CHARTER: new anchor.web3.PublicKey(
+    "A5yVjHjp8LTjpkw7VEhRP3KPoKKqTqWtkhTR47sJbxJg"
+  ),
+  STRANGEMOOD_FOUNDATION_SOL_ACCOUNT: new anchor.web3.PublicKey(
+    "J4fwjz25fi8NVvSNS7bGCWM1WZotwnR8YZtzz7R6zxPv"
+  ),
+  STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT: new anchor.web3.PublicKey(
+    "76vkQimLFPkKr35Vd4g1GucYFC9vByp96WftU8svibc5"
   ),
 };
 

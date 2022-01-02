@@ -103,7 +103,7 @@ export async function purchaseListing(
   conn: Connection,
   user: PublicKey,
   listing: { account: Listing; publicKey: PublicKey }
-): Promise<[Transaction, Keypair[]]> {
+): Promise<{ tx: Transaction; signers: Keypair[] }> {
   let [listingMintAuthority, listingMintBump] =
     await anchor.web3.PublicKey.findProgramAddress(
       [Buffer.from("mint"), listing.account.mint.toBuffer()],
@@ -176,7 +176,10 @@ export async function purchaseListing(
     )
   );
 
-  return [tx, [bag]];
+  return {
+    tx,
+    signers: [bag],
+  };
 }
 
 export async function initListing(
@@ -185,7 +188,7 @@ export async function initListing(
   user: PublicKey,
   price: anchor.BN,
   uri: string
-): Promise<[Transaction, Keypair[]]> {
+): Promise<{ tx: Transaction; signers: Keypair[]; publicKey: PublicKey }> {
   const mintKeypair = anchor.web3.Keypair.generate();
 
   let tx = new Transaction();
@@ -265,7 +268,11 @@ export async function initListing(
   );
   tx.add(init_instruction_ix);
 
-  return [tx, [mintKeypair]];
+  return {
+    tx,
+    signers: [mintKeypair],
+    publicKey: listingPDA,
+  };
 }
 
 export { MAINNET, TESTNET };

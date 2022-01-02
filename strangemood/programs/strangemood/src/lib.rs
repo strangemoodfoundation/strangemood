@@ -117,7 +117,6 @@ pub mod strangemood {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
         if *charter_account.owner != *ctx.program_id {
-            msg!("Charter Acount is not not owned by the program");
             return Err(ProgramError::IllegalOwner);
         }
 
@@ -202,8 +201,35 @@ pub mod strangemood {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
         if *charter_account.owner != *ctx.program_id {
-            msg!("Charter Acount is not not owned by the program");
             return Err(ProgramError::IllegalOwner);
+        }
+
+        // Check that the realm sol deposit account is actually owned by the realm
+        msg!("check realm sol deposit exists");
+        let sol_deposit_governance = spl_governance::state::governance::get_governance_data(
+            governance_program.key,
+            &ctx.accounts.realm_sol_deposit_governance,
+        )?;
+        if sol_deposit_governance.realm != *realm_account.key {
+            return Err(StrangemoodError::RealmDepositNotOwnedByRealm.into());
+        }
+        let realm_sol_deposit = ctx.accounts.realm_sol_deposit.clone().into_inner();
+        if realm_sol_deposit.owner != *ctx.accounts.realm_sol_deposit_governance.key {
+            return Err(StrangemoodError::UnexpectedDeposit.into());
+        }
+
+        // Check that the realm vote deposit account is actually owned by the realm
+        msg!("check realm vote deposit exists");
+        let vote_deposit_governance = spl_governance::state::governance::get_governance_data(
+            governance_program.key,
+            &ctx.accounts.realm_vote_deposit_governance,
+        )?;
+        if vote_deposit_governance.realm != *realm_account.key {
+            return Err(StrangemoodError::RealmDepositNotOwnedByRealm.into());
+        }
+        let realm_vote_deposit = ctx.accounts.realm_vote_deposit.clone().into_inner();
+        if realm_vote_deposit.owner != *ctx.accounts.realm_vote_deposit_governance.key {
+            return Err(StrangemoodError::UnexpectedDeposit.into());
         }
 
         // Mint a listing token to the account
@@ -330,8 +356,11 @@ pub struct PurchaseListing<'info> {
 
     #[account(mut)]
     pub realm_sol_deposit: Box<Account<'info, TokenAccount>>,
+    pub realm_sol_deposit_governance: AccountInfo<'info>,
     #[account(mut)]
     pub realm_vote_deposit: Box<Account<'info, TokenAccount>>,
+    pub realm_vote_deposit_governance: AccountInfo<'info>,
+
     #[account(mut)]
     pub realm_mint: Box<Account<'info, Mint>>,
     #[account(
@@ -515,6 +544,9 @@ pub enum StrangemoodError {
 
     #[msg("Unexpected Deposit Accounts")]
     UnexpectedDeposit,
+
+    #[msg("Realm Deposit Not Owned By Realm")]
+    RealmDepositNotOwnedByRealm,
 
     #[msg("Account Did Not Deserialize")]
     AccountDidNotDeserialize,
