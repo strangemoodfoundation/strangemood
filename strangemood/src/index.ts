@@ -149,7 +149,11 @@ export async function purchaseListing(
         listingMint: listing.account.mint,
         listingMintAuthority: listingMintAuthority,
         realmSolDeposit: MAINNET.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT,
+        realmSolDepositGovernance:
+          MAINNET.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT_GOVERNANCE,
         realmVoteDeposit: MAINNET.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT,
+        realmVoteDepositGovernance:
+          MAINNET.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT_GOVERNANCE,
         realmMint: MAINNET.STRANGEMOOD_FOUNDATION_MINT,
         realmMintAuthority: realmAuthority,
         governanceProgram: MAINNET.GOVERNANCE_PROGRAM_ID,
