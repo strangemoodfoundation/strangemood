@@ -17,8 +17,12 @@ import {
 } from "./governance/accounts";
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = anchor.web3;
 
-async function doRealm() {
-  const connection = new solana.Connection("https://api.testnet.solana.com");
+async function doRealm(params: {
+  rpc: string;
+  governance_program_id: anchor.web3.PublicKey;
+  realm_mint: anchor.web3.PublicKey;
+}) {
+  const connection = new solana.Connection(params.rpc);
 
   const data = await fs.readFile("/home/ubuntu/.config/solana/id.json", "utf8");
   const signer = solana.Keypair.fromSecretKey(
@@ -29,48 +33,55 @@ async function doRealm() {
 
   const [realm_ix, realm] = await createRealm({
     authority: signer.publicKey,
-    communityMint: new solana.PublicKey(TESTNET.STRANGEMOOD_FOUNDATION_MINT),
+    communityMint: params.realm_mint,
     payer: signer.publicKey,
     name: "Strangemood",
-    governanceProgramId: new solana.PublicKey(TESTNET.GOVERNANCE_PROGRAM_ID),
+    governanceProgramId: params.governance_program_id,
   });
 
-  console.log(realm.toString());
+  console.log("realm", realm.toString());
 
   tx.add(realm_ix);
 
   let sig = await connection.sendTransaction(tx, [signer]);
-  connection.confirmTransaction(sig);
+  await connection.confirmTransaction(sig);
+
+  return {
+    realm,
+  };
 }
 
-async function doCharter() {
+async function doCharter(params: {
+  rpc: string;
+  governance_program_id: anchor.web3.PublicKey;
+  realm_mint: anchor.web3.PublicKey;
+  realm: anchor.web3.PublicKey;
+  realm_vote_deposit: anchor.web3.PublicKey;
+  realm_sol_deposit: anchor.web3.PublicKey;
+}) {
   if (!process.env.ANCHOR_WALLET) {
     throw new Error("You need to do ANCHOR_WALLET=xyz node ...");
   }
-  const provider = anchor.Provider.local("https://api.testnet.solana.com");
-  console.log("provider");
+  const provider = anchor.Provider.local(params.rpc);
   anchor.setProvider(provider);
-  console.log("Anchor");
   const program = anchor.workspace.Strangemood as anchor.Program<Strangemood>;
 
-  console.log("pda.charter");
   // Create charter
   let [charterPDA, charterBump] = await pda.charter(
     program.programId,
-    TESTNET.GOVERNANCE_PROGRAM_ID,
-    TESTNET.STRANGEMOOD_FOUNDATION_REALM
+    params.governance_program_id,
+    params.realm
   );
   console.log("charter", charterPDA.toString());
 
-  let realm_vote_deposit = new solana.PublicKey(
-    "76vkQimLFPkKr35Vd4g1GucYFC9vByp96WftU8svibc5"
-  );
+  let realm_vote_deposit = params.realm_vote_deposit;
   console.log("realm vote deposit", realm_vote_deposit.toString());
-  let realm_sol_deposit = await createAssociatedTokenAccount(
-    program,
-    provider,
-    splToken.NATIVE_MINT
-  );
+  // let realm_sol_deposit = await createAssociatedTokenAccount(
+  //   program,
+  //   provider,
+  //   splToken.NATIVE_MINT
+  // );
+  let realm_sol_deposit = params.realm_sol_deposit;
   console.log("realm sol deposit", realm_sol_deposit.toString());
 
   await program.rpc.initCharter(
@@ -88,13 +99,19 @@ async function doCharter() {
         authority: program.provider.wallet.publicKey,
         realmSolDeposit: realm_sol_deposit,
         realmVoteDeposit: realm_vote_deposit,
-        realm: TESTNET.STRANGEMOOD_FOUNDATION_REALM,
-        governanceProgram: TESTNET.GOVERNANCE_PROGRAM_ID,
+        realm: params.realm,
+        governanceProgram: params.governance_program_id,
         user: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
       },
     }
   );
+
+  return {
+    charter: charterPDA,
+    realm_sol_deposit,
+    realm_vote_deposit,
+  };
 }
 
 function getTimestampFromDays(days: number): number {
@@ -233,9 +250,7 @@ async function doGovernances(params: {
   vote_account: anchor.web3.PublicKey;
 }) {
   const provider = anchor.Provider.local(params.rpc);
-  console.log("provider");
   anchor.setProvider(provider);
-  console.log("Anchor");
   const program = anchor.workspace.Strangemood as anchor.Program<Strangemood>;
 
   let userVoteDeposit = await splToken.Token.getAssociatedTokenAddress(
@@ -285,11 +300,13 @@ async function doGovernances(params: {
     token
   );
   console.log("vote_deposit_gov", vote_deposit_gov.toString());
-}
 
-doThing()
-  .then(() => console.log("done"))
-  .catch(console.error);
+  return {
+    charter_governance,
+    vote_deposit_gov,
+    sol_deposit_gov,
+  };
+}
 
 async function main() {
   const provider = anchor.Provider.local("https://api.testnet.solana.com");
