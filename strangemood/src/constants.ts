@@ -36,6 +36,8 @@ export const MAINNET = {
   ),
 };
 
+// type NET = typeof MAINNET;
+
 export const TESTNET = {
   STRANGEMOOD_PROGRAM_ID: new anchor.web3.PublicKey(
     "i2wXatLLgvNiVkDP9VrNm7mQ3vYs43MZP8D3ooY9Rgw"
@@ -58,6 +60,16 @@ export const TESTNET = {
   STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT: new anchor.web3.PublicKey(
     "76vkQimLFPkKr35Vd4g1GucYFC9vByp96WftU8svibc5"
   ),
+  STRANGEMOOD_FOUNDATION_SOL_ACCOUNT_GOVERNANCE: new anchor.web3.PublicKey(
+    "5tvn9hgbtjL2UF5kStoYioZFUasURozN7Uis7b9jU43r"
+  ),
+  STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT_GOVERNANCE: new anchor.web3.PublicKey(
+    "GZBT7i8d8djAbyLVcDcfttdzjmydJfutj35CBDH6mamr"
+  ),
+  STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE: new anchor.web3.PublicKey(
+    "5jUJkBMX9PMZ3LYCRW3K9E1xpxGKxR6VNYvicJTQB68F"
+  ),
+  // STRANGEMOOD_FOUNDATION_MINT_AUTHORITY: new anchor.web3.PublicKey(),
 };
 
 export const LOCALNET = {
