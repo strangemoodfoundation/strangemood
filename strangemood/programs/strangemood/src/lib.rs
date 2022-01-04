@@ -64,7 +64,6 @@ pub fn transfer<'a>(
 
 #[program]
 pub mod strangemood {
-
     use super::*;
 
     pub fn init_listing(
@@ -330,6 +329,100 @@ pub mod strangemood {
 
         Ok(())
     }
+
+    // Updates
+
+    pub fn set_listing_price(ctx:Context<UpdateListing>, price: u64) -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.listing.price = price;
+        Ok(())
+    }
+
+    pub fn set_listing_uri(ctx:Context<UpdateListing>, uri: String) -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.listing.uri = uri;
+        Ok(())
+    }
+
+    pub fn set_listing_availability(ctx:Context<UpdateListing>, is_available: bool) -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.listing.is_available = is_available;
+        Ok(())
+    }
+
+    pub fn set_listing_deposits(ctx:Context<UpdateListingDeposit>) -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.listing.vote_deposit = ctx.accounts.vote_deposit.key();
+        ctx.accounts.listing.sol_deposit = ctx.accounts.sol_deposit.key();
+        Ok(())
+    }
+
+    pub fn set_listing_authority(ctx:Context<UpdateListingAuthority>) -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.listing.authority = ctx.accounts.authority.key();
+        Ok(())
+    }
+
+
+    pub fn set_charter_expansion_rate(
+        ctx: Context<UpdateCharter>,
+        expansion_rate_amount: u64,
+        expansion_rate_decimals: u8)
+    -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.charter.expansion_rate_amount = expansion_rate_amount;
+        ctx.accounts.charter.expansion_rate_decimals = expansion_rate_decimals;
+        Ok(())
+    }
+
+     pub fn set_charter_contribution_rate(
+        ctx: Context<UpdateCharter>,
+        sol_contribution_rate_amount: u64,
+        sol_contribution_rate_decimals: u8,
+        vote_contribution_rate_amount: u64,
+        vote_contribution_rate_decimals: u8,
+    ) -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.charter.sol_contribution_rate_amount = sol_contribution_rate_amount;
+        ctx.accounts.charter.sol_contribution_rate_decimals = sol_contribution_rate_decimals;
+
+        ctx.accounts.charter.vote_contribution_rate_amount = vote_contribution_rate_amount;
+        ctx.accounts.charter.vote_contribution_rate_decimals = vote_contribution_rate_decimals;
+
+        Ok(())
+    }
+
+    pub fn set_charter_authority(
+        ctx: Context<UpdateCharterAuthority>)
+    -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.charter.authority = ctx.accounts.authority.key();
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -423,6 +516,42 @@ pub struct InitListing<'info> {
 }
 
 #[derive(Accounts)]
+pub struct UpdateListing<'info> {
+    #[account(mut)]
+    pub listing: Account<'info, Listing>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateListingDeposit<'info> {
+    #[account(mut)]
+    pub listing: Account<'info, Listing>,
+
+    pub sol_deposit: Account<'info, TokenAccount>,
+    pub vote_deposit: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateListingAuthority<'info> {
+    #[account(mut)]
+    pub listing: Account<'info, Listing>,
+
+    pub authority: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
 #[instruction(charter_bump: u8)]
 pub struct InitCharter<'info> {
     // 8 for the tag
@@ -436,6 +565,28 @@ pub struct InitCharter<'info> {
     pub realm_vote_deposit: Account<'info, TokenAccount>,
     pub realm: AccountInfo<'info>,
     pub governance_program: AccountInfo<'info>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateCharter<'info> {
+    #[account(mut)]
+    pub charter: Account<'info, Charter>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateCharterAuthority<'info> {
+    #[account(mut)]
+    pub charter: Account<'info, Charter>,
+
+    pub authority: AccountInfo<'info>,
+
     #[account(mut)]
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -550,4 +701,7 @@ pub enum StrangemoodError {
 
     #[msg("Account Did Not Deserialize")]
     AccountDidNotDeserialize,
+
+    #[msg("Provided Authority Account Does Not Have Access")]
+    UnauthorizedAuthority,
 }
