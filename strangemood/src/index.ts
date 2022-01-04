@@ -104,22 +104,15 @@ export async function purchaseListing(
   user: PublicKey,
   listing: { account: Listing; publicKey: PublicKey }
 ): Promise<{ tx: Transaction; signers: Keypair[] }> {
-  let [listingMintAuthority, listingMintBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), listing.account.mint.toBuffer()],
-      program.programId
-    );
-
-  let [listingPDA, _] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("listing"), listing.account.mint.toBuffer()],
-    program.programId
+  let [listingMintAuthority, listingMintBump] = await pda.mint(
+    program.programId,
+    listing.account.mint
   );
 
-  let [realmAuthority, realmMintBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), MAINNET.STRANGEMOOD_FOUNDATION_MINT.toBuffer()],
-      program.programId
-    );
+  let [realmAuthority, realmMintBump] = await pda.mint(
+    program.programId,
+    MAINNET.STRANGEMOOD_FOUNDATION_MINT
+  );
 
   let tx = new Transaction();
 
@@ -141,7 +134,7 @@ export async function purchaseListing(
     realmMintBump,
     {
       accounts: {
-        listing: listingPDA,
+        listing: listing.publicKey,
         purchasersSolTokenAccount: bag.publicKey,
         purchasersListingTokenAccount: purchasersListingAddress,
         listingsSolDeposit: listing.account.solDeposit,
@@ -184,6 +177,112 @@ export async function purchaseListing(
     tx,
     signers: [bag],
   };
+}
+
+export async function setListingPrice(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  price: anchor.BN
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingPrice(price, {
+      accounts: {
+        user,
+        listing: listingKey,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingUri(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  uri: string
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingUri(uri, {
+      accounts: {
+        user,
+        listing: listingKey,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingAvailability(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  isAvailable: string
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingAvailability(isAvailable, {
+      accounts: {
+        user,
+        listing: listingKey,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingDeposits(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  voteDeposit: PublicKey,
+  solDeposit: PublicKey
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingDeposits({
+      accounts: {
+        user,
+        listing: listingKey,
+
+        voteDeposit,
+        solDeposit,
+
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingAuthority(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  authority: PublicKey
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingAuthority({
+      accounts: {
+        user,
+        listing: listingKey,
+        authority,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
 }
 
 export async function initListing(
