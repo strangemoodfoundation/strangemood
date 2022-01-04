@@ -396,7 +396,9 @@ pub mod strangemood {
      pub fn set_charter_contribution_rate(
         ctx: Context<UpdateCharter>,
         sol_contribution_rate_amount: u64,
-        sol_contribution_rate_decimals: u8
+        sol_contribution_rate_decimals: u8,
+        vote_contribution_rate_amount: u64,
+        vote_contribution_rate_decimals: u8,
     ) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
@@ -404,6 +406,10 @@ pub mod strangemood {
 
         ctx.accounts.charter.sol_contribution_rate_amount = sol_contribution_rate_amount;
         ctx.accounts.charter.sol_contribution_rate_decimals = sol_contribution_rate_decimals;
+
+        ctx.accounts.charter.vote_contribution_rate_amount = vote_contribution_rate_amount;
+        ctx.accounts.charter.vote_contribution_rate_decimals = vote_contribution_rate_decimals;
+
         Ok(())
     }
 
