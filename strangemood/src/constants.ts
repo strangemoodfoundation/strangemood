@@ -36,11 +36,9 @@ export const MAINNET = {
   ),
 };
 
-// type NET = typeof MAINNET;
+type NET = typeof MAINNET;
 
-// spl-token authorize HKJCqeLfGRCBHNzcevhGFXcau6mw7M1e481ub2TUAZkG mint 8k1Hm8TDGjRS8eGjyomnvaGPfKdtuKyKUmY9u7XbaEkb
-
-export const TESTNET = {
+export const TESTNET: NET = {
   STRANGEMOOD_PROGRAM_ID: new anchor.web3.PublicKey(
     "i2wXatLLgvNiVkDP9VrNm7mQ3vYs43MZP8D3ooY9Rgw"
   ),
