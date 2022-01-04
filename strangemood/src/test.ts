@@ -45,8 +45,8 @@ async function doRealm(params: {
   tx.add(realm_ix);
 
   let sig = await connection.sendTransaction(tx, [signer]);
-  await sleep(1000);
-  await connection.confirmTransaction(sig);
+  await sleep(2000);
+  await connection.confirmTransaction(sig, "finalized");
 
   return {
     realm,
@@ -135,6 +135,7 @@ async function createCharterGovernance(
   communityMint: splToken.Token
 ) {
   await sleep(500);
+  console.log("Depositing governance tokens from", userVoteDeposit.toString());
   let [deposit_ix] = await depositGovernanceTokens({
     amount: new anchor.BN(1000),
     realm,
@@ -267,15 +268,16 @@ async function doGovernances(params: {
   anchor.setProvider(provider);
   const program = anchor.workspace.Strangemood as anchor.Program<Strangemood>;
 
-  await sleep(500);
+  await sleep(1000);
   let userVoteDeposit = await splToken.Token.getAssociatedTokenAddress(
     splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
     splToken.TOKEN_PROGRAM_ID,
     params.realm_mint,
     provider.wallet.publicKey
   );
+  console.log("Your vote deposit is", userVoteDeposit.toString());
 
-  await sleep(500);
+  await sleep(1000);
 
   const dummy = anchor.web3.Keypair.generate();
   const token = new splToken.Token(
@@ -285,8 +287,9 @@ async function doGovernances(params: {
     dummy
   );
 
-  await sleep(500);
+  await sleep(1000);
 
+  console.log("creating charter governance");
   const charter_governance = await createCharterGovernance(
     params.governanceProgramId,
     program,
@@ -298,8 +301,9 @@ async function doGovernances(params: {
 
   console.log("CHARTER_GOVERNANCE", charter_governance.toString());
 
-  await sleep(500);
+  await sleep(1000);
 
+  console.log("Creating token governance for sol deposit ");
   const sol_deposit_gov = await createTokenGovernanceForDepositAccounts(
     params.governanceProgramId,
     program,
@@ -311,8 +315,9 @@ async function doGovernances(params: {
   );
   console.log("sol_deposit_gov", sol_deposit_gov.toString());
 
-  await sleep(500);
+  await sleep(1000);
 
+  console.log("Creating token governance for vote deposit ");
   const vote_deposit_gov = await createTokenGovernanceForDepositAccounts(
     params.governanceProgramId,
     program,
@@ -385,10 +390,40 @@ function sleep(time) {
 }
 
 async function main() {
+  /**
+   * NOTE:
+   * Before running, you need to create a mint and update the mint you're
+   * using in NET.mint.
+   *
+   * spl-token create-token
+   * spl-token create-account <MINT>
+   * spl-token mint <MINT> 10000000
+   */
+
   let rpc = "https://api.testnet.solana.com";
   const provider = anchor.Provider.local(rpc);
   anchor.setProvider(provider);
   const program = anchor.workspace.Strangemood as anchor.Program<Strangemood>;
+
+  let userVoteDeposit = await splToken.Token.getAssociatedTokenAddress(
+    splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
+    splToken.TOKEN_PROGRAM_ID,
+    TESTNET.STRANGEMOOD_FOUNDATION_MINT,
+    provider.wallet.publicKey
+  );
+  await sleep(1000);
+  try {
+    await provider.connection.getAccountInfo(userVoteDeposit);
+  } catch (err) {
+    console.error(
+      `You don't have a token account ${userVoteDeposit.toString()} for mint ${
+        TESTNET.STRANGEMOOD_FOUNDATION_MINT
+      }`
+    );
+    console.error(err);
+  }
+
+  await sleep(5000);
 
   console.log("Creating Realm");
   const { realm } = await doRealm({
@@ -398,7 +433,7 @@ async function main() {
   });
   console.log("realm", realm.toString());
 
-  await sleep(5000);
+  await sleep(8000);
 
   console.log("Creating realm vote deposit");
   const realm_vote_deposit = await createTokenAccount(
@@ -407,7 +442,7 @@ async function main() {
   );
   console.log("realm_vote_deposit", realm_vote_deposit.publicKey.toString());
 
-  await sleep(5000);
+  await sleep(10000);
 
   console.log("Creating sol vote deposit");
   const realm_sol_deposit = await createTokenAccount(
@@ -437,7 +472,7 @@ async function main() {
       rpc,
       governanceProgramId: TESTNET.GOVERNANCE_PROGRAM_ID,
       realm_mint: TESTNET.STRANGEMOOD_FOUNDATION_MINT,
-      realm: TESTNET.STRANGEMOOD_FOUNDATION_REALM,
+      realm: realm,
       charter: charter,
       sol_account: realm_sol_deposit.publicKey,
       vote_account: realm_vote_deposit.publicKey,

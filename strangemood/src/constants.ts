@@ -46,31 +46,31 @@ export const TESTNET: NET = {
     "smfjietFKFJ4Sbw1cqESBTpPhF4CwbMwN8kBEC1e5ui"
   ),
   STRANGEMOOD_FOUNDATION_MINT: new anchor.web3.PublicKey(
-    "GFwmbvvpPC9y4jMX769GkjAXGFZJhj45QgQcn4wbe6k9"
+    "678yLhgiZbnRdUb8XZoGembuF5zfjzN1wMAdgr4JXGQx"
   ),
   STRANGEMOOD_FOUNDATION_REALM: new anchor.web3.PublicKey(
-    "GN4fpf9QxSx23CPokGTxnsSS6gK9c9Ww5QdszuP2T9Sm"
+    "ApRKmRxykkXFHjJtxWR4bk8m4AJTw5x46DyaX65VZMPe"
   ),
   STRANGEMOOD_FOUNDATION_CHARTER: new anchor.web3.PublicKey(
-    "9a84XtFUxX7xSGSLH3vV4PQXAjkSNRHr1NUWGoGjjbLL"
+    "8xkw3m8r2uo3B9w3UrLjLpAYLqXJEjEyZePsPEgeigLn"
   ),
   STRANGEMOOD_FOUNDATION_SOL_ACCOUNT: new anchor.web3.PublicKey(
-    "8Z3cywoLZK49mAYb356pgn5cJ6VA7wE5vUynzRsBhAc3"
+    "4U9UYj9KcEghQ5n6Datvq8HPAbhkqENebyn9BuMfdCB5"
   ),
   STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT: new anchor.web3.PublicKey(
-    "7KoX9LX13ATUKixj9uGsFULsP4fdaSNsS9EmysjZXYWD"
+    "3Yi8nAPyEJFbxvQHEksuukqChv9BXwfSmHnV29pkWrFH"
   ),
   STRANGEMOOD_FOUNDATION_SOL_ACCOUNT_GOVERNANCE: new anchor.web3.PublicKey(
-    "HALt41NKHMRXGeZiEyDQYC66UkyBDZVtFKDdg8tAxWC8"
+    "Ga1Y5ubkou5BgNsRDWJcn9JehgZDoE36fW7rP2SQSpCL"
   ),
   STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT_GOVERNANCE: new anchor.web3.PublicKey(
-    "BkTyQNFsoa2KFPLYMF9M6yGfEW56eJgc8dqXaFeRezuL"
+    "CK5k5UCC9DNyAXCBwzYpFAZ24ZRoe6DomvsGrNyC7HVg"
   ),
   STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE: new anchor.web3.PublicKey(
-    "CCni6HPzuXQaGcXTJNs1YRrnvWFnAM9troewV6vyfhex"
+    "Bs4nkSyZoP7pKk5RviR2eHV2WMD9dbsgRWZA5uQK1GN7"
   ),
   STRANGEMOOD_FOUNDATION_MINT_AUTHORITY: new anchor.web3.PublicKey(
-    "BfGppy4MdeNDaR7sjdYy2FtYFHrCstt9wGWVyhU3xQNH"
+    "Hi9KN3FHbJpjJxtnzyEvVFKm4x4iYkXDg4CPehUYUPAH"
   ),
 };
 
