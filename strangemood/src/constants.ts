@@ -40,7 +40,7 @@ export type NET = typeof MAINNET;
 
 export const TESTNET: NET = {
   STRANGEMOOD_PROGRAM_ID: new anchor.web3.PublicKey(
-    "i2wXatLLgvNiVkDP9VrNm7mQ3vYs43MZP8D3ooY9Rgw"
+    "smtaswNwG1JkZY2EbogfBn9JmRdsjgMrRHgLvfikoVq"
   ),
   GOVERNANCE_PROGRAM_ID: new anchor.web3.PublicKey(
     "smfjietFKFJ4Sbw1cqESBTpPhF4CwbMwN8kBEC1e5ui"
