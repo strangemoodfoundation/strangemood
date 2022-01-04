@@ -5,7 +5,7 @@ import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import * as splToken from "@solana/spl-token";
 import { Strangemood } from "../target/types/strangemood";
 import { pda as _pda } from "./pda";
-import { MAINNET, TESTNET } from "./constants";
+import { MAINNET, NET, TESTNET } from "./constants";
 const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
 
@@ -102,7 +102,8 @@ export async function purchaseListing(
   program: Program<Strangemood>,
   conn: Connection,
   user: PublicKey,
-  listing: { account: Listing; publicKey: PublicKey }
+  listing: { account: Listing; publicKey: PublicKey },
+  network_constants: NET = MAINNET
 ): Promise<{ tx: Transaction; signers: Keypair[] }> {
   let [listingMintAuthority, listingMintBump] = await pda.mint(
     program.programId,
@@ -111,7 +112,7 @@ export async function purchaseListing(
 
   let [realmAuthority, realmMintBump] = await pda.mint(
     program.programId,
-    MAINNET.STRANGEMOOD_FOUNDATION_MINT
+    network_constants.STRANGEMOOD_FOUNDATION_MINT
   );
 
   let tx = new Transaction();
@@ -141,18 +142,19 @@ export async function purchaseListing(
         listingsVoteDeposit: listing.account.voteDeposit,
         listingMint: listing.account.mint,
         listingMintAuthority: listingMintAuthority,
-        realmSolDeposit: MAINNET.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT,
+        realmSolDeposit: network_constants.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT,
         realmSolDepositGovernance:
-          MAINNET.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT_GOVERNANCE,
-        realmVoteDeposit: MAINNET.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT,
+          network_constants.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT_GOVERNANCE,
+        realmVoteDeposit: network_constants.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT,
         realmVoteDepositGovernance:
-          MAINNET.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT_GOVERNANCE,
-        realmMint: MAINNET.STRANGEMOOD_FOUNDATION_MINT,
+          network_constants.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT_GOVERNANCE,
+        realmMint: network_constants.STRANGEMOOD_FOUNDATION_MINT,
         realmMintAuthority: realmAuthority,
-        governanceProgram: MAINNET.GOVERNANCE_PROGRAM_ID,
-        realm: MAINNET.STRANGEMOOD_FOUNDATION_REALM,
-        charterGovernance: MAINNET.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
-        charter: MAINNET.STRANGEMOOD_FOUNDATION_CHARTER,
+        governanceProgram: network_constants.GOVERNANCE_PROGRAM_ID,
+        realm: network_constants.STRANGEMOOD_FOUNDATION_REALM,
+        charterGovernance:
+          network_constants.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
+        charter: network_constants.STRANGEMOOD_FOUNDATION_CHARTER,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         user: user,
         systemProgram: SystemProgram.programId,
@@ -290,7 +292,8 @@ export async function initListing(
   conn: Connection,
   user: PublicKey,
   price: anchor.BN,
-  uri: string
+  uri: string,
+  network_constants: NET = network_constants
 ): Promise<{ tx: Transaction; signers: Keypair[]; publicKey: PublicKey }> {
   const mintKeypair = anchor.web3.Keypair.generate();
 
@@ -309,7 +312,7 @@ export async function initListing(
   let associatedVoteAddress = await splToken.Token.getAssociatedTokenAddress(
     splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
     splToken.TOKEN_PROGRAM_ID,
-    MAINNET.STRANGEMOOD_FOUNDATION_MINT,
+    network_constants.STRANGEMOOD_FOUNDATION_MINT,
     user
   );
   if (!(await conn.getAccountInfo(associatedVoteAddress))) {
@@ -317,7 +320,7 @@ export async function initListing(
       splToken.Token.createAssociatedTokenAccountInstruction(
         splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
         splToken.TOKEN_PROGRAM_ID,
-        MAINNET.STRANGEMOOD_FOUNDATION_MINT,
+        network_constants.STRANGEMOOD_FOUNDATION_MINT,
         associatedVoteAddress,
         user,
         user
@@ -358,10 +361,11 @@ export async function initListing(
         rent: SYSVAR_RENT_PUBKEY,
         solDeposit: associatedSolAddress,
         voteDeposit: associatedVoteAddress,
-        realm: MAINNET.STRANGEMOOD_FOUNDATION_REALM,
-        governanceProgram: MAINNET.GOVERNANCE_PROGRAM_ID,
-        charter: MAINNET.STRANGEMOOD_FOUNDATION_CHARTER,
-        charterGovernance: MAINNET.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
+        realm: network_constants.STRANGEMOOD_FOUNDATION_REALM,
+        governanceProgram: network_constants.GOVERNANCE_PROGRAM_ID,
+        charter: network_constants.STRANGEMOOD_FOUNDATION_CHARTER,
+        charterGovernance:
+          network_constants.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         user: user,
         systemProgram: SystemProgram.programId,
