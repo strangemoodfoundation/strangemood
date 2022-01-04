@@ -293,7 +293,7 @@ export async function initListing(
   user: PublicKey,
   price: anchor.BN,
   uri: string,
-  network_constants: NET = network_constants
+  network_constants: NET = MAINNET
 ): Promise<{ tx: Transaction; signers: Keypair[]; publicKey: PublicKey }> {
   const mintKeypair = anchor.web3.Keypair.generate();
 
