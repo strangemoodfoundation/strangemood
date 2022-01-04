@@ -36,7 +36,7 @@ export const MAINNET = {
   ),
 };
 
-type NET = typeof MAINNET;
+export type NET = typeof MAINNET;
 
 export const TESTNET: NET = {
   STRANGEMOOD_PROGRAM_ID: new anchor.web3.PublicKey(

@@ -5,7 +5,7 @@ import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import * as splToken from "@solana/spl-token";
 import { Strangemood } from "../target/types/strangemood";
 import { pda as _pda } from "./pda";
-import { MAINNET, TESTNET } from "./constants";
+import { MAINNET, NET, TESTNET } from "./constants";
 const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
 
@@ -102,24 +102,18 @@ export async function purchaseListing(
   program: Program<Strangemood>,
   conn: Connection,
   user: PublicKey,
-  listing: { account: Listing; publicKey: PublicKey }
+  listing: { account: Listing; publicKey: PublicKey },
+  network_constants: NET = MAINNET
 ): Promise<{ tx: Transaction; signers: Keypair[] }> {
-  let [listingMintAuthority, listingMintBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), listing.account.mint.toBuffer()],
-      program.programId
-    );
-
-  let [listingPDA, _] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("listing"), listing.account.mint.toBuffer()],
-    program.programId
+  let [listingMintAuthority, listingMintBump] = await pda.mint(
+    program.programId,
+    listing.account.mint
   );
 
-  let [realmAuthority, realmMintBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), MAINNET.STRANGEMOOD_FOUNDATION_MINT.toBuffer()],
-      program.programId
-    );
+  let [realmAuthority, realmMintBump] = await pda.mint(
+    program.programId,
+    network_constants.STRANGEMOOD_FOUNDATION_MINT
+  );
 
   let tx = new Transaction();
 
@@ -141,25 +135,26 @@ export async function purchaseListing(
     realmMintBump,
     {
       accounts: {
-        listing: listingPDA,
+        listing: listing.publicKey,
         purchasersSolTokenAccount: bag.publicKey,
         purchasersListingTokenAccount: purchasersListingAddress,
         listingsSolDeposit: listing.account.solDeposit,
         listingsVoteDeposit: listing.account.voteDeposit,
         listingMint: listing.account.mint,
         listingMintAuthority: listingMintAuthority,
-        realmSolDeposit: MAINNET.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT,
+        realmSolDeposit: network_constants.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT,
         realmSolDepositGovernance:
-          MAINNET.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT_GOVERNANCE,
-        realmVoteDeposit: MAINNET.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT,
+          network_constants.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT_GOVERNANCE,
+        realmVoteDeposit: network_constants.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT,
         realmVoteDepositGovernance:
-          MAINNET.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT_GOVERNANCE,
-        realmMint: MAINNET.STRANGEMOOD_FOUNDATION_MINT,
+          network_constants.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT_GOVERNANCE,
+        realmMint: network_constants.STRANGEMOOD_FOUNDATION_MINT,
         realmMintAuthority: realmAuthority,
-        governanceProgram: MAINNET.GOVERNANCE_PROGRAM_ID,
-        realm: MAINNET.STRANGEMOOD_FOUNDATION_REALM,
-        charterGovernance: MAINNET.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
-        charter: MAINNET.STRANGEMOOD_FOUNDATION_CHARTER,
+        governanceProgram: network_constants.GOVERNANCE_PROGRAM_ID,
+        realm: network_constants.STRANGEMOOD_FOUNDATION_REALM,
+        charterGovernance:
+          network_constants.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
+        charter: network_constants.STRANGEMOOD_FOUNDATION_CHARTER,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         user: user,
         systemProgram: SystemProgram.programId,
@@ -186,12 +181,119 @@ export async function purchaseListing(
   };
 }
 
+export async function setListingPrice(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  price: anchor.BN
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingPrice(price, {
+      accounts: {
+        user,
+        listing: listingKey,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingUri(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  uri: string
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingUri(uri, {
+      accounts: {
+        user,
+        listing: listingKey,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingAvailability(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  isAvailable: string
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingAvailability(isAvailable, {
+      accounts: {
+        user,
+        listing: listingKey,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingDeposits(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  voteDeposit: PublicKey,
+  solDeposit: PublicKey
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingDeposits({
+      accounts: {
+        user,
+        listing: listingKey,
+
+        voteDeposit,
+        solDeposit,
+
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingAuthority(
+  program: Program<Strangemood>,
+  user: PublicKey,
+  listingKey: PublicKey,
+  authority: PublicKey
+) {
+  let tx = new Transaction();
+
+  tx.add(
+    program.instruction.setListingAuthority({
+      accounts: {
+        user,
+        listing: listingKey,
+        authority,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
 export async function initListing(
   program: Program<Strangemood>,
   conn: Connection,
   user: PublicKey,
   price: anchor.BN,
-  uri: string
+  uri: string,
+  network_constants: NET = network_constants
 ): Promise<{ tx: Transaction; signers: Keypair[]; publicKey: PublicKey }> {
   const mintKeypair = anchor.web3.Keypair.generate();
 
@@ -210,7 +312,7 @@ export async function initListing(
   let associatedVoteAddress = await splToken.Token.getAssociatedTokenAddress(
     splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
     splToken.TOKEN_PROGRAM_ID,
-    MAINNET.STRANGEMOOD_FOUNDATION_MINT,
+    network_constants.STRANGEMOOD_FOUNDATION_MINT,
     user
   );
   if (!(await conn.getAccountInfo(associatedVoteAddress))) {
@@ -218,7 +320,7 @@ export async function initListing(
       splToken.Token.createAssociatedTokenAccountInstruction(
         splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
         splToken.TOKEN_PROGRAM_ID,
-        MAINNET.STRANGEMOOD_FOUNDATION_MINT,
+        network_constants.STRANGEMOOD_FOUNDATION_MINT,
         associatedVoteAddress,
         user,
         user
@@ -259,10 +361,11 @@ export async function initListing(
         rent: SYSVAR_RENT_PUBKEY,
         solDeposit: associatedSolAddress,
         voteDeposit: associatedVoteAddress,
-        realm: MAINNET.STRANGEMOOD_FOUNDATION_REALM,
-        governanceProgram: MAINNET.GOVERNANCE_PROGRAM_ID,
-        charter: MAINNET.STRANGEMOOD_FOUNDATION_CHARTER,
-        charterGovernance: MAINNET.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
+        realm: network_constants.STRANGEMOOD_FOUNDATION_REALM,
+        governanceProgram: network_constants.GOVERNANCE_PROGRAM_ID,
+        charter: network_constants.STRANGEMOOD_FOUNDATION_CHARTER,
+        charterGovernance:
+          network_constants.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         user: user,
         systemProgram: SystemProgram.programId,
