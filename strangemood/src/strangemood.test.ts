@@ -196,6 +196,100 @@ describe("strangemood", async () => {
     );
   });
 
+  it("can start a purchase", async () => {
+    // The Account to create.
+    const mintKeypair = anchor.web3.Keypair.generate();
+
+    let [listingMintAuthority, listingMintBump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("mint"), mintKeypair.publicKey.toBuffer()],
+        program.programId
+      );
+
+    let [listingPDA, listingBump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("listing"), mintKeypair.publicKey.toBuffer()],
+        program.programId
+      );
+
+    // Create the new account and initialize it with the program.
+    await program.rpc.initListing(
+      listingMintBump,
+      listingBump,
+      new anchor.BN(10),
+      "ipns://QmdxU5SdYWja4cSqxnLd4gmYqCybwyGaQqYJwXZL6ieq21",
+      {
+        accounts: {
+          listing: listingPDA,
+          mint: mintKeypair.publicKey,
+          mintAuthorityPda: listingMintAuthority,
+          rent: SYSVAR_RENT_PUBKEY,
+          solDeposit: listing_sol_deposit,
+          voteDeposit: listing_vote_deposit,
+          realm: realm,
+          governanceProgram: LOCALNET.GOVERNANCE_PROGRAM_ID,
+          charter: charterPDA,
+          charterGovernance: charter_governance,
+          tokenProgram: splToken.TOKEN_PROGRAM_ID,
+          user: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        },
+        signers: [mintKeypair],
+      }
+    );
+
+    const listing = await program.account.listing.fetch(listingPDA);
+
+    let [receiptPDA, receiptBump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [
+          Buffer.from("receipt"),
+          listingPDA.toBuffer(),
+          provider.wallet.publicKey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    let [escrowPDA, escrowBump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("escrow"), receiptPDA.toBuffer()],
+        program.programId
+      );
+
+    await program.rpc.beginPurchase(receiptBump, escrowBump, {
+      accounts: {
+        listing: listingPDA,
+        escrow: escrowPDA,
+        receipt: receiptPDA,
+        user: provider.wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+      },
+    });
+
+    const receipt = await program.account.receipt.fetch(receiptPDA);
+
+    assert.ok(
+      receipt.purchaser.equals(provider.wallet.publicKey),
+      "No purchaser in receipt"
+    );
+    assert.ok(receipt.escrow.equals(escrowPDA), "No escrow in receipt");
+    assert.ok(receipt.listing.equals(listingPDA), "No listing in receipt");
+    assert.ok(receipt.isInitialized === true, "Receipt is not initialized");
+
+    const escrow = await provider.connection.getAccountInfo(escrowPDA);
+
+    // You'll have a little bit more than the listing because of rent
+    assert.ok(
+      escrow.lamports >= listing.price.toNumber(),
+      "Lamports are invalid"
+    );
+
+    assert.ok(
+      escrow.owner.equals(program.programId),
+      `Escrow owner is ${escrow.owner.toString()}, not ${program.programId.toString()}`
+    );
+  });
+
   it("created the charter correctly", async () => {
     let [charterPDA, _] = await pda.charter(
       program.programId,

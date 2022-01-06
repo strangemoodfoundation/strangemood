@@ -1,6 +1,7 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 mod external;
+use anchor_lang::solana_program::system_instruction;
 
 declare_id!("smtaswNwG1JkZY2EbogfBn9JmRdsjgMrRHgLvfikoVq");
 
@@ -45,7 +46,8 @@ pub fn freeze_account<'a>(
     anchor_spl::token::freeze_account(cpi_ctx)
 }
 
-pub fn transfer<'a>(
+// Transfer from one token account to another using the Token Program
+pub fn token_transfer<'a>(
     token_program: AccountInfo<'a>,
     from: AccountInfo<'a>,
     to: AccountInfo<'a>,
@@ -60,6 +62,25 @@ pub fn transfer<'a>(
     };
     let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
     anchor_spl::token::transfer(cpi_ctx, amount)
+}
+
+// Transfer native SOL from one account to another using the System Program
+pub fn system_transfer<'a>(
+    system_program: AccountInfo<'a>,
+    from: AccountInfo<'a>,
+    to: AccountInfo<'a>,
+    lamports: u64,
+) -> ProgramResult {
+    let ix = system_instruction::transfer(&from.key(), &to.key(), lamports);
+
+    solana_program::program::invoke(
+        &ix,
+        &[
+            from.clone(),
+            to.clone(),
+            system_program.clone()
+        ]
+    )
 }
 
 #[program]
@@ -132,6 +153,25 @@ pub mod strangemood {
 
         Ok(())
     }
+
+    pub fn begin_purchase(ctx: Context<BeginPurchase>, _receipt_bump: u8, _escrow_bump: u8) -> ProgramResult {
+        let listing = ctx.accounts.listing.clone().into_inner();
+
+        system_transfer(
+            ctx.accounts.system_program.to_account_info(), 
+            ctx.accounts.user.to_account_info(), 
+            ctx.accounts.escrow.to_account_info(), 
+        listing.price)?;
+
+        let receipt = &mut ctx.accounts.receipt;
+        receipt.is_initialized = true;
+        receipt.listing = ctx.accounts.listing.key();
+        receipt.purchaser = ctx.accounts.user.key();
+        receipt.escrow = ctx.accounts.escrow.key();
+
+        Ok(())
+    }
+
 
     pub fn purchase_listing(
         ctx: Context<PurchaseListing>,
@@ -259,7 +299,7 @@ pub mod strangemood {
         let contribution_amount = listing.price - deposit_amount;
 
         // Transfer SOL to lister
-        transfer(
+        token_transfer(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.purchasers_sol_token_account.to_account_info(),
             ctx.accounts.listings_sol_deposit.to_account_info(),
@@ -268,7 +308,7 @@ pub mod strangemood {
         )?;
 
         // Transfer SOL to realm
-        transfer(
+        token_transfer(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.purchasers_sol_token_account.to_account_info(),
             ctx.accounts.realm_sol_deposit.to_account_info(),
@@ -332,7 +372,7 @@ pub mod strangemood {
 
     // Updates
 
-    pub fn set_listing_price(ctx:Context<UpdateListing>, price: u64) -> ProgramResult {
+    pub fn set_listing_price(ctx: Context<UpdateListing>, price: u64) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -341,7 +381,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_uri(ctx:Context<UpdateListing>, uri: String) -> ProgramResult {
+    pub fn set_listing_uri(ctx: Context<UpdateListing>, uri: String) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -350,7 +390,10 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_availability(ctx:Context<UpdateListing>, is_available: bool) -> ProgramResult {
+    pub fn set_listing_availability(
+        ctx: Context<UpdateListing>,
+        is_available: bool,
+    ) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -359,7 +402,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_deposits(ctx:Context<UpdateListingDeposit>) -> ProgramResult {
+    pub fn set_listing_deposits(ctx: Context<UpdateListingDeposit>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -369,7 +412,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_authority(ctx:Context<UpdateListingAuthority>) -> ProgramResult {
+    pub fn set_listing_authority(ctx: Context<UpdateListingAuthority>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -378,12 +421,11 @@ pub mod strangemood {
         Ok(())
     }
 
-
     pub fn set_charter_expansion_rate(
         ctx: Context<UpdateCharter>,
         expansion_rate_amount: u64,
-        expansion_rate_decimals: u8)
-    -> ProgramResult {
+        expansion_rate_decimals: u8,
+    ) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -393,7 +435,7 @@ pub mod strangemood {
         Ok(())
     }
 
-     pub fn set_charter_contribution_rate(
+    pub fn set_charter_contribution_rate(
         ctx: Context<UpdateCharter>,
         sol_contribution_rate_amount: u64,
         sol_contribution_rate_decimals: u8,
@@ -413,9 +455,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_charter_authority(
-        ctx: Context<UpdateCharterAuthority>)
-    -> ProgramResult {
+    pub fn set_charter_authority(ctx: Context<UpdateCharterAuthority>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -423,6 +463,39 @@ pub mod strangemood {
         ctx.accounts.charter.authority = ctx.accounts.authority.key();
         Ok(())
     }
+}
+
+#[derive(Accounts)]
+#[instruction(receipt_bump: u8, escrow_bump: u8)]
+pub struct BeginPurchase<'info> {
+    // The listing to purchase 
+    pub listing: Box<Account<'info, Listing>>,
+
+    // Where the SOL is stored until FinalizePurchase is run
+    #[account(
+        init, 
+        seeds=[b"escrow", receipt.key().as_ref()],
+        bump=escrow_bump,
+        payer=user, 
+        space=1
+    )]
+    pub escrow: AccountInfo<'info>,
+
+    // A receipt that the FinalizePurchase can use to pay everyone
+    // 
+    // 8 for the tag
+    // 1 for is_initialized bool
+    // 32 for listing pubkey
+    // 32 for purchaser pubkey
+    // 32 for escrow pubkey
+    #[account(init, 
+        seeds=[b"receipt", listing.key().as_ref(), user.key().as_ref()], bump=receipt_bump, 
+        payer = user, space = 8 + 1 + 32 + 32 + 32)]
+    pub receipt: Account<'info, Receipt>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -550,7 +623,6 @@ pub struct UpdateListingAuthority<'info> {
     pub system_program: Program<'info, System>,
 }
 
-
 #[derive(Accounts)]
 #[instruction(charter_bump: u8)]
 pub struct InitCharter<'info> {
@@ -590,6 +662,26 @@ pub struct UpdateCharterAuthority<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+#[account]
+pub struct Receipt {
+    /// Set to "true" by the program when BeginPurchase is run
+    /// Contracts should not trust receipts that aren't initialized
+    pub is_initialized: bool,
+
+    // The listing that was purchased
+    pub listing: Pubkey,
+
+    // The user that purchased the listing
+    pub purchaser: Pubkey,
+
+    // An account where you can find the SOL
+    // for the listing. PDA seeds: ["receipt", listing, purchaser]
+    pub escrow: Pubkey,
+
+    // TODO: consider "rent_payer" where the left over 
+    // rent should go to when this account is closed.
 }
 
 #[account]
