@@ -91,6 +91,7 @@ pub mod strangemood {
         ctx: Context<InitListing>,
         _mint_bump: u8,
         _listing_bump: u8,
+        _decimals: u8,
         price: u64,
         uri: String,
     ) -> ProgramResult {
@@ -154,24 +155,188 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn begin_purchase(ctx: Context<BeginPurchase>, _receipt_bump: u8, _escrow_bump: u8) -> ProgramResult {
+    pub fn begin_purchase(ctx: Context<BeginPurchase>, _receipt_bump: u8, _escrow_bump: u8, amount: u64) -> ProgramResult {
         let listing = ctx.accounts.listing.clone().into_inner();
 
         system_transfer(
-            ctx.accounts.system_program.to_account_info(), 
-            ctx.accounts.user.to_account_info(), 
-            ctx.accounts.escrow.to_account_info(), 
-        listing.price)?;
+            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.user.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            amount * listing.price
+        )?;
 
         let receipt = &mut ctx.accounts.receipt;
         receipt.is_initialized = true;
         receipt.listing = ctx.accounts.listing.key();
         receipt.purchaser = ctx.accounts.user.key();
         receipt.escrow = ctx.accounts.escrow.key();
+        receipt.amount = amount;
+        receipt.listing_token_account = ctx.accounts.listing_token_account.key();
+
+        // If the listing is refundable, then you can't immediately 
+        // cash out the receipt.
+        receipt.cashable = !listing.refundable;
 
         Ok(())
     }
 
+    pub fn redeem_purchase(ctx: Context<RedeemPurchase>, _receipt_bump: u8, _escrow_bump: u8, _listing_bump: u8, listing_mint_bump: u8, realm_mint_bump: u8)  -> ProgramResult {
+        let listing = ctx.accounts.listing.clone().into_inner();
+        let charter = ctx.accounts.charter.clone().into_inner();
+        let receipt = ctx.accounts.receipt.clone().into_inner();
+        let escrow = &ctx.accounts.escrow;
+
+        if !receipt.cashable {
+            return Err(StrangemoodError::ReceiptNotCashable.into())
+        }
+        if ctx.accounts.purchasers_listing_token_account.key() != receipt.listing_token_account {
+            return Err(StrangemoodError::UnexpectedListingTokenAccount.into())
+        }
+
+        // Check that the listing deposits match the listing account
+        if listing.vote_deposit != ctx.accounts.listings_vote_deposit.key()
+           || listing.sol_deposit != ctx.accounts.listings_sol_deposit.key()
+        {
+           return Err(StrangemoodError::UnexpectedDeposit.into());
+        }
+
+        // Check that the realm is owned by the governance program
+        let governance_program = ctx.accounts.governance_program.clone().to_account_info();
+        let realm_account = ctx.accounts.realm.clone().to_account_info();
+        spl_governance::state::realm::assert_is_valid_realm(
+            governance_program.key,
+            &realm_account,
+        )?;
+
+        // Check that the realm_mint account is actually the realm mint
+        let realm =
+            spl_governance::state::realm::get_realm_data(governance_program.key, &realm_account)?;
+        let realm_mint = ctx.accounts.realm_mint.clone().to_account_info();
+        if realm.community_mint != *realm_mint.key {
+            return Err(StrangemoodError::UnauthorizedRealmMint.into());
+        }
+
+        // Check that the charter governance is owned by the realm
+        let charter_governance_account = ctx.accounts.charter_governance.clone().to_account_info();
+        let charter_governance = spl_governance::state::governance::get_governance_data(
+            governance_program.key,
+            &charter_governance_account,
+        )?;
+        if charter_governance.realm != *realm_account.key {
+            return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
+        }
+
+        // Check that the charter_governance is actually for the charter
+        let charter_account = ctx.accounts.charter.clone().to_account_info();
+        let gov_address = spl_governance::state::governance::get_account_governance_address(
+            governance_program.key,
+            &realm_account.key,
+            charter_account.key,
+        );
+        if *charter_governance_account.key != gov_address {
+            return Err(StrangemoodError::UnauthorizedCharter.into());
+        }
+        if *charter_account.owner != *ctx.program_id {
+            return Err(ProgramError::IllegalOwner);
+        }
+
+        // Check that the realm sol deposit account is actually owned by the realm
+        let sol_deposit_governance = spl_governance::state::governance::get_governance_data(
+            governance_program.key,
+            &ctx.accounts.realm_sol_deposit_governance,
+        )?;
+        if sol_deposit_governance.realm != *realm_account.key {
+            return Err(StrangemoodError::RealmDepositNotOwnedByRealm.into());
+        }
+        let realm_sol_deposit = ctx.accounts.realm_sol_deposit.clone().into_inner();
+        if realm_sol_deposit.owner != *ctx.accounts.realm_sol_deposit_governance.key {
+            return Err(StrangemoodError::UnexpectedDeposit.into());
+        }
+
+        // Check that the realm vote deposit account is actually owned by the realm
+        let vote_deposit_governance = spl_governance::state::governance::get_governance_data(
+            governance_program.key,
+            &ctx.accounts.realm_vote_deposit_governance,
+        )?;
+        if vote_deposit_governance.realm != *realm_account.key {
+            return Err(StrangemoodError::RealmDepositNotOwnedByRealm.into());
+        }
+        let realm_vote_deposit = ctx.accounts.realm_vote_deposit.clone().into_inner();
+        if realm_vote_deposit.owner != *ctx.accounts.realm_vote_deposit_governance.key {
+            return Err(StrangemoodError::UnexpectedDeposit.into());
+        }
+
+        // Mint a listing token to the account
+        mint_to(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts
+                .purchasers_listing_token_account
+                .to_account_info(),
+            ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_bump,
+            receipt.amount, // TODO: I think this is listing.price * escrow 
+        )?;
+
+        // Freeze the acount so it's no longer transferable
+        freeze_account(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts
+                .purchasers_listing_token_account
+                .to_account_info(),
+            ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_bump,
+        )?;
+
+        let lamports: u64 = escrow.lamports();
+        let deposit_rate = 1.0 - charter.sol_contribution_rate();
+        let deposit_amount = (deposit_rate * lamports as f64) as u64;
+        let contribution_amount = lamports - deposit_amount;
+
+        // Transfer SOL to lister
+        system_transfer(
+            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.listings_sol_deposit.to_account_info(),
+            deposit_amount as u64,
+        )?;
+
+        // Transfer SOL to realm
+        system_transfer(
+            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.realm_sol_deposit.to_account_info(),
+            contribution_amount as u64,
+        )?;
+
+        let votes = contribution_amount as f64 * charter.expansion_rate();
+        let deposit_rate = 1.0 - charter.vote_contribution_rate();
+        let deposit_amount = (deposit_rate * votes as f64) as u64;
+        let contribution_amount = (votes as u64) - deposit_amount;
+
+        // Mint votes to lister
+        mint_to(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.realm_mint.to_account_info(),
+            ctx.accounts.listings_vote_deposit.to_account_info(),
+            ctx.accounts.realm_mint_authority.to_account_info(),
+            realm_mint_bump,
+            deposit_amount,
+        )?;
+
+        // Mint votes to realm
+        mint_to(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.realm_mint.to_account_info(),
+            ctx.accounts.realm_vote_deposit.to_account_info(),
+            ctx.accounts.realm_mint_authority.to_account_info(),
+            realm_mint_bump,
+            contribution_amount,
+        )?;
+
+        Ok(())
+    }
 
     pub fn purchase_listing(
         ctx: Context<PurchaseListing>,
@@ -471,30 +636,101 @@ pub struct BeginPurchase<'info> {
     // The listing to purchase 
     pub listing: Box<Account<'info, Listing>>,
 
-    // Where the SOL is stored until FinalizePurchase is run
+    // The person who's allowed to cash out the listing
+    pub cashier: AccountInfo<'info>,
+
+    // Where the SOL is stored until RedeemPurchase is run
     #[account(
         init, 
+        payer=user,
+        space=1,
         seeds=[b"escrow", receipt.key().as_ref()],
-        bump=escrow_bump,
-        payer=user, 
-        space=1
+        bump=escrow_bump
     )]
     pub escrow: AccountInfo<'info>,
 
-    // A receipt that the FinalizePurchase can use to pay everyone
+    // A token account of the listing.mint where listing tokens
+    // will be deposited at
+    pub listing_token_account: AccountInfo<'info>,
+
+    // A receipt that the RedeemPurchase can use to pay everyone
     // 
     // 8 for the tag
     // 1 for is_initialized bool
     // 32 for listing pubkey
     // 32 for purchaser pubkey
     // 32 for escrow pubkey
+    // 32 for authority pubkey
+    // 8 for amount u64
+    // 1 for cashable bool
     #[account(init, 
         seeds=[b"receipt", listing.key().as_ref(), user.key().as_ref()], bump=receipt_bump, 
-        payer = user, space = 8 + 1 + 32 + 32 + 32)]
+        payer = user, space = 8 + 1 + 32 + 32 + 32 + 32 + 8 + 1)]
     pub receipt: Account<'info, Receipt>,
 
     #[account(mut)]
     pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(receipt_bump: u8, escrow_bump:u8, listing_bump: u8, listing_mint_bump: u8, realm_mint_bump: u8)]
+pub struct RedeemPurchase<'info> {
+    pub receipt: Account<'info, Receipt>,
+
+    // Where the SOL is stored until CompletePurchase is run
+    #[account(
+        seeds=[b"escrow", receipt.key().as_ref()],
+        bump=escrow_bump,
+    )]
+    pub escrow: AccountInfo<'info>,
+
+    pub purchasers_listing_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub listings_sol_deposit: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub listings_vote_deposit: Box<Account<'info, TokenAccount>>,
+
+    // The listing to purchase 
+    #[account(seeds=[b"listing", listing_mint.key().as_ref()], bump=listing_bump)]
+    pub listing: Box<Account<'info, Listing>>,
+
+    pub listing_mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        seeds = [b"mint", listing_mint.key().as_ref()],
+        bump = listing_mint_bump,
+    )]
+    pub listing_mint_authority: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub realm_sol_deposit: Box<Account<'info, TokenAccount>>,
+    pub realm_sol_deposit_governance: AccountInfo<'info>,
+    #[account(mut)]
+    pub realm_vote_deposit: Box<Account<'info, TokenAccount>>,
+    pub realm_vote_deposit_governance: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub realm_mint: Box<Account<'info, Mint>>,
+    #[account(
+        seeds = [b"mint", realm_mint.key().as_ref()],
+        bump = realm_mint_bump,
+    )]
+    pub realm_mint_authority: AccountInfo<'info>,
+    pub governance_program: AccountInfo<'info>,
+
+    pub realm: AccountInfo<'info>,
+    pub charter_governance: AccountInfo<'info>,
+    // Box'd to move the charter (which is fairly hefty)
+    // to the heap instead of the stack.
+    // Not actually sure if this is a good idea, but
+    // without the Box, we run out of space?
+    pub charter: Box<Account<'info, Charter>>,
+
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 
@@ -551,7 +787,7 @@ pub struct PurchaseListing<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(mint_bump: u8, listing_bump: u8)]
+#[instruction(mint_bump: u8, listing_bump: u8, listing_mint_decimals: u8)]
 pub struct InitListing<'info> {
     // 8 for the tag
     // 235 for the size of the listing account itself
@@ -565,7 +801,7 @@ pub struct InitListing<'info> {
     )]
     pub mint_authority_pda: AccountInfo<'info>,
 
-    #[account(init, mint::decimals = 0, mint::authority = mint_authority_pda, mint::freeze_authority = mint_authority_pda, payer = user)]
+    #[account(init, mint::decimals = listing_mint_decimals, mint::authority = mint_authority_pda, mint::freeze_authority = mint_authority_pda, payer = user)]
     pub mint: Account<'info, Mint>,
 
     pub sol_deposit: Account<'info, TokenAccount>,
@@ -674,14 +910,28 @@ pub struct Receipt {
     pub listing: Pubkey,
 
     // The user that purchased the listing
+    // This user is allowed to refund the purchase.
     pub purchaser: Pubkey,
+
+    // The token account to send the listing tokens to
+    // It's possible to purchase the game for another person, 
+    // So this is not necessarily the purchaser's token account 
+    pub listing_token_account: Pubkey,
 
     // An account where you can find the SOL
     // for the listing. PDA seeds: ["receipt", listing, purchaser]
     pub escrow: Pubkey,
 
-    // TODO: consider "rent_payer" where the left over 
-    // rent should go to when this account is closed.
+    // The entity that's allowed to finalize (cash out) this receipt.
+    // Typically the marketplace or 
+    // the client application that started the sale.
+    pub cashier: Pubkey,
+
+    // The amount of the listing token purchased by the buyer
+    pub amount: u64,
+
+    // If false, this receipt cannot be completed.
+    pub cashable: bool,
 }
 
 #[account]
@@ -696,7 +946,7 @@ pub struct Listing {
     // This binds this listing to a governance, bound by a charter.
     pub charter_governance: Pubkey,
 
-    /// The seller's system account, effectively the authority.
+    /// The entity that's allowed to modify this listing
     pub authority: Pubkey,
 
     /// The token account to deposit sol into
@@ -705,15 +955,30 @@ pub struct Listing {
     /// The token account to deposit community votes into
     pub vote_deposit: Pubkey,
 
-    /// Lamports required to purchase
+    /// Lamports required to purchase 1 listing token.
     pub price: u64,
 
     /// The mint that represents the token they're purchasing
+    /// The decimals of the listing are always 0.
     pub mint: Pubkey,
 
     // The URI for where metadata can be found for this listing.
     // Example: "ipns://examplehere", "https://example.com/metadata.json"
     pub uri: String,
+
+    // If true, this listing can be refunded.
+    //
+    // When refundable, a purchase receipt starts with cashable=false
+    // and needs the authority of the listing to run SetCashable
+    // before the purchase can complete. 
+    pub refundable: bool,
+
+    // If true, this listing can be "consumed" by the authority of 
+    // the listing arbitrarily.
+    // 
+    // Listers can use this to implement subscriptions, usage-based pricing, 
+    // in-app purchases, and so on.
+    pub consumable: bool,
 }
 
 #[account]
@@ -788,12 +1053,21 @@ pub enum StrangemoodError {
     #[msg("Unexpected Deposit Accounts")]
     UnexpectedDeposit,
 
+    #[msg("Unexpected Listing Token Account")]
+    UnexpectedListingTokenAccount,
+
     #[msg("Realm Deposit Not Owned By Realm")]
     RealmDepositNotOwnedByRealm,
+
+    #[msg("Realm Mint was not the Realm's Mint")]
+    UnauthorizedRealmMint,
 
     #[msg("Account Did Not Deserialize")]
     AccountDidNotDeserialize,
 
     #[msg("Provided Authority Account Does Not Have Access")]
     UnauthorizedAuthority,
+    
+    #[msg("Receipt is not currently cashable")]
+    ReceiptNotCashable,
 }
