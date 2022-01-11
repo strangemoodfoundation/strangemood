@@ -463,6 +463,44 @@ pub mod strangemood {
         Ok(())
     }
 
+    pub fn consume(ctx: Context<Consume>, _receipt_bump: u8, listing_mint_bump: u8, amount: u64)  -> ProgramResult {
+        let listing = ctx.accounts.listing.clone().into_inner();
+
+        if ctx.accounts.authority.key() != listing.authority {
+            return Err(StrangemoodError::UnauthorizedAuthority.into())
+        }
+
+        if !listing.is_consumable {
+            return Err(StrangemoodError::ListingIsNotConsumable.into())
+        }
+
+        burn( 
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts
+                .listing_token_account
+                .to_account_info(),
+            ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_bump,
+            amount
+        )?;
+
+        Ok(())
+    }
+
+    pub fn set_receipt_cashable(ctx: Context<SetReceiptCashable>)  -> ProgramResult {
+        let receipt = &mut ctx.accounts.receipt;
+        receipt.is_cashable = true;
+
+        
+        if ctx.accounts.authority.key() != ctx.accounts.listing.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        Ok(())
+    }
+    
+
     pub fn purchase_listing(
         ctx: Context<PurchaseListing>,
         listing_mint_bump: u8,
@@ -909,7 +947,7 @@ pub struct Cancel<'info> {
 #[derive(Accounts)]
 #[instruction(listing_bump:u8, listing_mint_bump:u8)]
 pub struct Consume<'info> {
-    #[account(seeds=[b"listing", listing_mint.key().as_ref()], bump=listing_bump)]
+    #[account(seeds=[b"listing", listing_mint.key().as_ref()], bump=listing_bump, has_one=authority)]
     pub listing: Box<Account<'info, Listing>>,
 
     pub listing_mint: Box<Account<'info, Mint>>,
@@ -920,9 +958,24 @@ pub struct Consume<'info> {
     )]
     pub listing_mint_authority: AccountInfo<'info>,
 
-    pub receipt: Account<'info, Receipt>,
-    pub purchasers_listing_token_account: Box<Account<'info, TokenAccount>>,
+    pub listing_token_account: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
+
+    // The listing authority
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction()]
+pub struct SetReceiptCashable<'info> {
+    #[account(has_one=authority)]
+    pub listing: Box<Account<'info, Listing>>,
+
+    #[account(mut, has_one=listing)]
+    pub receipt: Account<'info, Receipt>,
+
+    // The listing authority
+    pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -1273,4 +1326,7 @@ pub enum StrangemoodError {
 
     #[msg("Mint did not match Listing")]
     UnexpectedListingMint,
+
+    #[msg("Listing is not consumable")]
+    ListingIsNotConsumable,
 }
