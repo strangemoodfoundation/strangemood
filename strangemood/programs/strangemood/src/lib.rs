@@ -6,18 +6,19 @@ use solana_program::sysvar::rent::Rent;
 
 declare_id!("smtaswNwG1JkZY2EbogfBn9JmRdsjgMrRHgLvfikoVq");
 
-pub fn mint_to_and_freeze<'a>(    
+pub fn spl_mint_to_and_freeze<'a>(    
     token_program: AccountInfo<'a>,
-mint: AccountInfo<'a>,
-to: AccountInfo<'a>,
-authority: AccountInfo<'a>,
-bump: u8,
-amount: u64) -> ProgramResult {
-    mint_to(token_program.clone(), mint.clone(), to.clone(), authority.clone(), bump, amount)?;
-    freeze_account(token_program, mint, to, authority, bump)
+    mint: AccountInfo<'a>,
+    to: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    bump: u8,
+    amount: u64
+) -> ProgramResult {
+    spl_mint_to(token_program.clone(), mint.clone(), to.clone(), authority.clone(), bump, amount)?;
+    spl_freeze_account(token_program, mint, to, authority, bump)
 }
 
-pub fn mint_to<'a>(
+pub fn spl_mint_to<'a>(
     token_program: AccountInfo<'a>,
     mint: AccountInfo<'a>,
     to: AccountInfo<'a>,
@@ -38,7 +39,7 @@ pub fn mint_to<'a>(
     anchor_spl::token::mint_to(cpi_ctx, amount)
 }
 
-pub fn freeze_account<'a>(
+pub fn spl_freeze_account<'a>(
     token_program: AccountInfo<'a>,
     mint: AccountInfo<'a>,
     account: AccountInfo<'a>,
@@ -59,7 +60,7 @@ pub fn freeze_account<'a>(
 }
 
 // Transfer from one token account to another using the Token Program
-pub fn token_transfer<'a>(
+pub fn spl_transfer<'a>(
     token_program: AccountInfo<'a>,
     from: AccountInfo<'a>,
     to: AccountInfo<'a>,
@@ -76,7 +77,7 @@ pub fn token_transfer<'a>(
     anchor_spl::token::transfer(cpi_ctx, amount)
 }
 
-pub fn burn<'a>(
+pub fn spl_burn<'a>(
     token_program: AccountInfo<'a>,
     mint: AccountInfo<'a>,
     account: AccountInfo<'a>,
@@ -124,11 +125,10 @@ pub fn close_account<'a>(
     system_transfer(system_program, account, to, account.lamports())
 }
 
-
-
 #[program]
 pub mod strangemood {
     use super::*;
+
 
     pub fn init_listing(
         ctx: Context<InitListing>,
@@ -138,11 +138,6 @@ pub mod strangemood {
         price: u64,
         uri: String,
     ) -> ProgramResult {
-        // Check that the sol_deposit is wrapped sol
-        let sol_deposit = ctx.accounts.sol_deposit.clone().into_inner();
-        if sol_deposit.mint != spl_token::native_mint::ID {
-            return Err(StrangemoodError::OnlyWrappedSolIsSupported.into());
-        }
 
         // Check that the realm is owned by the governance program
         let governance_program = ctx.accounts.governance_program.clone().to_account_info();
@@ -190,7 +185,7 @@ pub mod strangemood {
         listing.mint = ctx.accounts.mint.key();
         listing.is_available = true;
         listing.authority = *ctx.accounts.user.key;
-        listing.sol_deposit = ctx.accounts.sol_deposit.key();
+        listing.payment_deposit = ctx.accounts.payment_deposit.key();
         listing.vote_deposit = ctx.accounts.vote_deposit.key();
         listing.charter_governance = ctx.accounts.charter_governance.key();
         listing.uri = uri;
@@ -226,7 +221,7 @@ pub mod strangemood {
         // if the listing is refundable, then mint the user the 
         // token immediately (it can be burned later).
         if listing.is_refundable {
-            mint_to_and_freeze(
+            spl_mint_to_and_freeze(
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.listing_mint.to_account_info(),
                 ctx.accounts
@@ -277,7 +272,7 @@ pub mod strangemood {
 
         // Check that the listing deposits match the listing account
         if listing.vote_deposit != ctx.accounts.listings_vote_deposit.key()
-           || listing.sol_deposit != ctx.accounts.listings_sol_deposit.key()
+           || listing.payment_deposit != ctx.accounts.listings_sol_deposit.key()
         {
            return Err(StrangemoodError::UnexpectedDeposit.into());
         }
@@ -351,7 +346,7 @@ pub mod strangemood {
         // If the receipt is refundable, then we've already minted 
         // the listing token. Otherwise, we have to do it now
         if !receipt.is_refundable {
-            mint_to_and_freeze(
+            spl_mint_to_and_freeze(
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.listing_mint.to_account_info(),
                 ctx.accounts
@@ -390,7 +385,7 @@ pub mod strangemood {
         let contribution_amount = (votes as u64) - deposit_amount;
 
         // Mint votes to lister
-        mint_to(
+        spl_mint_to(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.realm_mint.to_account_info(),
             ctx.accounts.listings_vote_deposit.to_account_info(),
@@ -400,7 +395,7 @@ pub mod strangemood {
         )?;
 
         // Mint votes to realm
-        mint_to(
+        spl_mint_to(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.realm_mint.to_account_info(),
             ctx.accounts.realm_vote_deposit.to_account_info(),
@@ -428,13 +423,12 @@ pub mod strangemood {
 
     pub fn cancel(ctx: Context<Cancel>, _receipt_bump: u8, _escrow_bump: u8, _listing_bump: u8, listing_mint_bump: u8)  -> ProgramResult {
 
-        let listing = ctx.accounts.listing.clone().into_inner();
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
         // If the receipt is refundable, then we've already issued tokens 
         // and so we need to burn them in order to refund.
         if receipt.is_refundable {
-            burn(
+            spl_burn(
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.listing_mint.to_account_info(),
                 ctx.accounts
@@ -474,7 +468,7 @@ pub mod strangemood {
             return Err(StrangemoodError::ListingIsNotConsumable.into())
         }
 
-        burn( 
+        spl_burn( 
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.listing_mint.to_account_info(),
             ctx.accounts
@@ -499,7 +493,44 @@ pub mod strangemood {
 
         Ok(())
     }
-    
+
+    pub fn init_mint_approval(ctx: Context<InitMintApproval>, _approval_bump: u8, expansion_rate_amount: u64, expansion_rate_decimals: u8) -> ProgramResult {
+        let approval = &mut ctx.accounts.mint_approval;
+
+        approval.mint = ctx.accounts.mint.key();
+        approval.expansion_rate_amount = expansion_rate_amount;
+        approval.expansion_rate_decimals = expansion_rate_decimals;
+
+        Ok(())
+    }
+
+    pub fn set_mint_approval(ctx: Context<InitMintApproval>, _approval_bump: u8, expansion_rate_amount: u64, expansion_rate_decimals: u8) -> ProgramResult {
+        let approval = &mut ctx.accounts.mint_approval;
+
+        approval.expansion_rate_amount = expansion_rate_amount;
+        approval.expansion_rate_decimals = expansion_rate_decimals;
+
+        Ok(())
+    }
+
+    pub fn close_mint_approval(_ctx: Context<InitMintApproval>, _approval_bump: u8) -> ProgramResult {
+        Ok(()) // The closing and checks are handled by anchor
+    }
+
+    pub fn mint_to(ctx: Context<MintTo>, listing_mint_bump: u8, amount: u64) -> ProgramResult {
+        spl_mint_to_and_freeze(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts
+                .to
+                .to_account_info(),
+            ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_bump,
+            amount
+        )?;
+
+        Ok(())
+    }
 
     pub fn purchase_listing(
         ctx: Context<PurchaseListing>,
@@ -516,7 +547,7 @@ pub mod strangemood {
 
         // Check that the listing deposits match the listing account
         if listing.vote_deposit != ctx.accounts.listings_vote_deposit.key()
-            || listing.sol_deposit != ctx.accounts.listings_sol_deposit.key()
+            || listing.payment_deposit != ctx.accounts.listings_sol_deposit.key()
         {
             return Err(StrangemoodError::UnexpectedDeposit.into());
         }
@@ -600,7 +631,7 @@ pub mod strangemood {
         }
 
         // Mint a listing token to the account
-        mint_to(
+        spl_mint_to(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.listing_mint.to_account_info(),
             ctx.accounts
@@ -612,7 +643,7 @@ pub mod strangemood {
         )?;
 
         // Freeze the acount so it's no longer transferable
-        freeze_account(
+        spl_freeze_account(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.listing_mint.to_account_info(),
             ctx.accounts
@@ -627,7 +658,7 @@ pub mod strangemood {
         let contribution_amount = listing.price - deposit_amount;
 
         // Transfer SOL to lister
-        token_transfer(
+        spl_transfer(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.purchasers_sol_token_account.to_account_info(),
             ctx.accounts.listings_sol_deposit.to_account_info(),
@@ -636,7 +667,7 @@ pub mod strangemood {
         )?;
 
         // Transfer SOL to realm
-        token_transfer(
+        spl_transfer(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.purchasers_sol_token_account.to_account_info(),
             ctx.accounts.realm_sol_deposit.to_account_info(),
@@ -650,7 +681,7 @@ pub mod strangemood {
         let contribution_amount = (votes as u64) - deposit_amount;
 
         // Mint votes to lister
-        mint_to(
+        spl_mint_to(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.realm_mint.to_account_info(),
             ctx.accounts.listings_vote_deposit.to_account_info(),
@@ -660,7 +691,7 @@ pub mod strangemood {
         )?;
 
         // Mint votes to realm
-        mint_to(
+        spl_mint_to(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.realm_mint.to_account_info(),
             ctx.accounts.realm_vote_deposit.to_account_info(),
@@ -736,7 +767,7 @@ pub mod strangemood {
         }
 
         ctx.accounts.listing.vote_deposit = ctx.accounts.vote_deposit.key();
-        ctx.accounts.listing.sol_deposit = ctx.accounts.sol_deposit.key();
+        ctx.accounts.listing.payment_deposit = ctx.accounts.sol_deposit.key();
         Ok(())
     }
 
@@ -979,6 +1010,24 @@ pub struct SetReceiptCashable<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(listing_mint_bump: u8)]
+pub struct MintTo<'info> {
+    #[account(has_one=authority, has_one=mint)]
+    pub listing: Box<Account<'info, Listing>>,
+
+    pub mint: Box<Account<'info, Mint>>,
+    pub listing_mint_authority: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub to: Account<'info, TokenAccount>,
+
+    // The listing authority
+    pub authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 #[instruction(listing_mint_bump: u8, realm_mint_bump: u8)]
 pub struct PurchaseListing<'info> {
     pub listing: Box<Account<'info, Listing>>,
@@ -1031,7 +1080,79 @@ pub struct PurchaseListing<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(mint_bump: u8, listing_bump: u8, listing_mint_decimals: u8)]
+#[instruction(approval_bump: u8)]
+pub struct InitMintApproval<'info> {
+    #[account(
+        has_one=authority
+    )]
+    pub charter: Box<Account<'info, Charter>>,
+
+    // 8 for the tag
+    // 32 for the mint pubkey
+    // 8 for the amount 
+    // 1 for the decimals
+    #[account(
+        init, 
+        seeds = [b"approval", charter.key().as_ref(), mint.key().as_ref()],
+        bump = approval_bump,
+        payer= authority,
+        space = 8 + 32 + 8 + 1,
+    )]
+    pub mint_approval: Account<'info, MintApproval>,
+
+    pub mint: Account<'info, Mint>,
+
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+#[instruction(approval_bump: u8)]
+pub struct CloseMintApproval<'info> {
+    #[account(
+        has_one=authority
+    )]
+    pub charter: Box<Account<'info, Charter>>,
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        close=authority,
+        seeds = [b"approval", charter.key().as_ref(), mint.key().as_ref()],
+        bump = approval_bump,
+        has_one=mint
+    )]
+    pub mint_approval: Account<'info, MintApproval>,
+
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(approval_bump: u8)]
+pub struct SetMintApproval<'info> {
+    #[account(
+        has_one=authority
+    )]
+    pub charter: Box<Account<'info, Charter>>,
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"approval", charter.key().as_ref(), mint.key().as_ref()],
+        bump = approval_bump,
+        has_one=mint
+    )]
+    pub mint_approval: Account<'info, MintApproval>,
+
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(mint_bump: u8, listing_bump: u8, listing_mint_decimals: u8, mint_approval_bump: u8)]
 pub struct InitListing<'info> {
     // 8 for the tag
     // 235 for the size of the listing account itself
@@ -1048,7 +1169,20 @@ pub struct InitListing<'info> {
     #[account(init, mint::decimals = listing_mint_decimals, mint::authority = mint_authority_pda, mint::freeze_authority = mint_authority_pda, payer = user)]
     pub mint: Account<'info, Mint>,
 
-    pub sol_deposit: Account<'info, TokenAccount>,
+    #[account(
+        seeds = [b"approval", charter.key().as_ref(), price_mint.key().as_ref()],
+        bump = mint_approval_bump,
+        constraint = mint_approval.mint == price_mint.key()
+    )]
+    pub mint_approval: Account<'info, MintApproval>,
+
+    // ie: wrapped SOL, USDC, wrapped ETH, 
+    pub price_mint: Account<'info, Mint>,
+
+    #[account(
+        constraint = payment_deposit.mint == price_mint.key()
+    )]
+    pub payment_deposit: Account<'info, TokenAccount>,
     pub vote_deposit: Account<'info, TokenAccount>,
 
     pub governance_program: UncheckedAccount<'info>,
@@ -1144,6 +1278,8 @@ pub struct UpdateCharterAuthority<'info> {
     pub system_program: Program<'info, System>,
 }
 
+
+
 #[account]
 pub struct Receipt {
     /// Set to "true" by the program when BeginPurchase is run
@@ -1197,8 +1333,9 @@ pub struct Listing {
     /// The entity that's allowed to modify this listing
     pub authority: Pubkey,
 
-    /// The token account to deposit sol into
-    pub sol_deposit: Pubkey,
+    /// The token account account (like wrapped SOL or USDC)
+    /// where the "payment" goes.
+    pub payment_deposit: Pubkey,
 
     /// The token account to deposit community votes into
     pub vote_deposit: Pubkey,
@@ -1229,15 +1366,20 @@ pub struct Listing {
     pub is_consumable: bool,
 }
 
+
+#[account]
+pub struct MintApproval {
+    pub mint: Pubkey,
+
+    pub expansion_rate_amount: u64,
+    pub expansion_rate_decimals: u8,
+}
+
 #[account]
 pub struct Charter {
-    // The amount of voting tokens to give to a user per
-    // 1.0 wrapped SOL contributed via community account contributions.
-    //
-    // Note that Borsh doesn't support floats, and so we carry over the pattern
-    // used in the token program of having an "amount" and a "decimals".
-    // So an "amount" of 100 and a "decimals" of 3 would be 0.1
+    // DEPRECATED
     pub expansion_rate_amount: u64,
+    // DEPRECATED
     pub expansion_rate_decimals: u8,
 
     // The % of each purchase that goes to the community account.
@@ -1287,9 +1429,6 @@ impl Charter {
 pub enum StrangemoodError {
     #[msg("Invalid Purchase Amount: the price given does not match the listing")]
     InvalidPurchaseAmount,
-
-    #[msg("Only Wrapped Sol Is Supported: Listing Deposit Accounts must be Wrapped SOL")]
-    OnlyWrappedSolIsSupported,
 
     #[msg("Unauthorized Charter")]
     UnauthorizedCharter,
