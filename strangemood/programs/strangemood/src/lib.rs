@@ -129,7 +129,6 @@ pub fn close_account<'a>(
 pub mod strangemood {
     use super::*;
 
-
     pub fn init_listing(
         ctx: Context<InitListing>,
         _mint_bump: u8,
@@ -254,7 +253,7 @@ pub mod strangemood {
         let listing = ctx.accounts.listing.clone().into_inner();
         let charter = ctx.accounts.charter.clone().into_inner();
         let receipt = ctx.accounts.receipt.clone().into_inner();
-        let escrow = &ctx.accounts.escrow;
+        let escrow = ctx.accounts.escrow.clone().into_inner();
 
         if !receipt.is_cashable {
             return Err(StrangemoodError::ReceiptNotCashable.into())
@@ -272,7 +271,7 @@ pub mod strangemood {
 
         // Check that the listing deposits match the listing account
         if listing.vote_deposit != ctx.accounts.listings_vote_deposit.key()
-           || listing.payment_deposit != ctx.accounts.listings_sol_deposit.key()
+           || listing.payment_deposit != ctx.accounts.listings_payment_deposit.key()
         {
            return Err(StrangemoodError::UnexpectedDeposit.into());
         }
@@ -358,7 +357,7 @@ pub mod strangemood {
             )?;
         }
 
-        let lamports: u64 = escrow.lamports();
+        let lamports: u64 = escrow;
         let deposit_rate = 1.0 - charter.sol_contribution_rate();
         let deposit_amount = (deposit_rate * lamports as f64) as u64;
         let contribution_amount = lamports - deposit_amount;
