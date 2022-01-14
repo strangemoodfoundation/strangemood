@@ -124,8 +124,6 @@ pub fn close_account<'a>(
     system_transfer(system_program, account, to, account.lamports())
 }
 
-
-
 #[program]
 pub mod strangemood {
     use super::*;
@@ -136,6 +134,8 @@ pub mod strangemood {
         _listing_bump: u8,
         _decimals: u8,
         price: u64,
+        refundable: bool,
+        consumable: bool,
         uri: String,
     ) -> ProgramResult {
         // Check that the sol_deposit is wrapped sol
@@ -194,6 +194,8 @@ pub mod strangemood {
         listing.vote_deposit = ctx.accounts.vote_deposit.key();
         listing.charter_governance = ctx.accounts.charter_governance.key();
         listing.uri = uri;
+        listing.is_refundable = refundable;
+        listing.is_consumable = consumable;
 
         Ok(())
     }
@@ -255,7 +257,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn cash(ctx: Context<Cash>, _receipt_bump: u8, _escrow_bump: u8, _listing_bump: u8, listing_mint_bump: u8, realm_mint_bump: u8)  -> ProgramResult {
+    pub fn cash(ctx: Context<Cash>, _escrow_bump: u8, _listing_bump: u8, listing_mint_bump: u8, realm_mint_bump: u8)  -> ProgramResult {
         let listing = ctx.accounts.listing.clone().into_inner();
         let charter = ctx.accounts.charter.clone().into_inner();
         let receipt = ctx.accounts.receipt.clone().into_inner();
@@ -476,11 +478,11 @@ pub mod strangemood {
 
         burn( 
             ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
             ctx.accounts
                 .listing_token_account
                 .to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
+            ctx.accounts.mint_authority.to_account_info(),
             listing_mint_bump,
             amount
         )?;
@@ -845,7 +847,7 @@ pub struct Purchase<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(receipt_bump: u8, escrow_bump:u8, listing_bump: u8, listing_mint_bump: u8, realm_mint_bump: u8)]
+#[instruction(escrow_bump:u8, listing_bump: u8, listing_mint_bump: u8, realm_mint_bump: u8)]
 pub struct Cash<'info> {
     pub cashier: Signer<'info>,
 
@@ -910,7 +912,7 @@ pub struct Cash<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(receipt_bump: u8, escrow_bump:u8, listing_bump: u8, listing_mint_bump: u8)]
+#[instruction(escrow_bump:u8, listing_bump: u8, listing_mint_authority_bump: u8)]
 pub struct Cancel<'info> {
     pub purchaser: Signer<'info>,
 
@@ -935,7 +937,7 @@ pub struct Cancel<'info> {
 
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
-        bump = listing_mint_bump,
+        bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
 
@@ -945,18 +947,18 @@ pub struct Cancel<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(listing_bump:u8, listing_mint_bump:u8)]
+#[instruction(listing_bump:u8, listing_mint_authority_bump:u8)]
 pub struct Consume<'info> {
-    #[account(seeds=[b"listing", listing_mint.key().as_ref()], bump=listing_bump, has_one=authority)]
+    #[account(seeds=[b"listing", mint.key().as_ref()], bump=listing_bump, has_one=authority, has_one=mint)]
     pub listing: Box<Account<'info, Listing>>,
 
-    pub listing_mint: Box<Account<'info, Mint>>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(
-        seeds = [b"mint", listing_mint.key().as_ref()],
-        bump = listing_mint_bump,
+        seeds = [b"mint", mint.key().as_ref()],
+        bump = listing_mint_authority_bump,
     )]
-    pub listing_mint_authority: AccountInfo<'info>,
+    pub mint_authority: AccountInfo<'info>,
 
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
