@@ -149,25 +149,6 @@ export class TestClient {
         this.program.programId
       );
 
-    const transaction = new anchor.web3.Transaction({
-      feePayer: accounts.purchaser.publicKey,
-    });
-    // transaction.add(
-    //   SystemProgram.createAccount({
-    //     fromPubkey: accounts.purchaser.publicKey,
-    //     newAccountPubkey: escrowPDA,
-    //     space: 0, // maybe needs to be 128 for overhead?
-    //     lamports: listing.price.toNumber(),
-    //     programId: this.program.programId,
-    //   })
-
-    //   // SystemProgram.transfer({
-    //   //   fromPubkey: accounts.purchaser.publicKey,
-    //   //   toPubkey: escrowPDA,
-    //   //   lamports: listing.price.toNumber(),
-    //   // })
-    // );
-
     let [mintAuthorityPda, mintAuthorityBump] =
       await anchor.web3.PublicKey.findProgramAddress(
         [Buffer.from("mint"), listing.mint.toBuffer()],
@@ -182,15 +163,9 @@ export class TestClient {
       listing.mint
     );
 
-    const ls = await this.provider.connection.getAccountInfo(accounts.listing);
-
-    console.log(
-      ls.data.toString("hex"),
-      ls.data.byteLength,
-      ls.data.length,
-      ls.owner.toString()
-    );
-
+    const transaction = new anchor.web3.Transaction({
+      feePayer: accounts.purchaser.publicKey,
+    });
     let purchase_ix = this.program.instruction.purchase(
       escrowPDABump,
       mintAuthorityBump,
@@ -213,10 +188,11 @@ export class TestClient {
     );
     transaction.add(purchase_ix);
 
-    await this.provider.connection.sendTransaction(transaction, [
+    const sig = await this.provider.connection.sendTransaction(transaction, [
       accounts.purchaser,
       receiptKeypair,
     ]);
+    await this.provider.connection.confirmTransaction(sig);
 
     return {
       receipt: receiptKeypair.publicKey,

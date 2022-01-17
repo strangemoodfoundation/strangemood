@@ -6,16 +6,13 @@ import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
 import { Token } from "@solana/spl-token";
 
-describe("strangemood", async () => {
-  console.log("Strangemood");
+describe("strangemood", () => {
   const provider = anchor.Provider.env();
   // Configure the client to use the local cluster.
   anchor.setProvider(provider);
 
   const program = anchor.workspace.Strangemood as Program<Strangemood>;
   const client = new TestClient(provider, program);
-
-  console.log("got to lcient?");
 
   before(async () => {
     await client.init();
@@ -77,8 +74,8 @@ describe("strangemood", async () => {
     });
 
     const r = await program.account.receipt.fetch(receipt);
-    assert.equal(r.isInitialized, true);
-    assert.equal(r.isRefundable, true);
-    assert.equal(r.isCashable, false);
+    assert.equal(r.isInitialized, true, "is initialized");
+    assert.equal(r.isRefundable, false, "is refundable");
+    assert.equal(r.isCashable, true, "is cashable");
   });
 });

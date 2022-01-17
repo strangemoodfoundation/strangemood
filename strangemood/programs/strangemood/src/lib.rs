@@ -803,6 +803,9 @@ pub struct Purchase<'info> {
 
     // Where the SOL is stored until RedeemPurchase is run
     #[account(
+        init,
+        payer=user,
+        space=0,
         seeds=[b"escrow", receipt.key().as_ref()],
         bump=escrow_bump,
     )]
@@ -818,7 +821,7 @@ pub struct Purchase<'info> {
     #[account(
         init,
         payer=user,
-        space=0,
+        space=1,
         seeds = [b"mint", listing_mint.key().as_ref()],
         bump = listing_mint_bump,
     )]
@@ -828,15 +831,17 @@ pub struct Purchase<'info> {
     // 
     // 8 for the tag
     // 1 for is_initialized bool
+    // 1 for is_refundable bool
+    // 1 for is_cashable bool
     // 32 for listing pubkey
+    // 32 for listing_token_account pubkey
     // 32 for purchaser pubkey
     // 32 for escrow pubkey
-    // 32 for authority pubkey
+    // 32 for cashier pubkey
     // 8 for amount u64
-    // 1 for cashable bool
     #[account(init, 
-        payer = user, space = 8 + 1 + 32 + 32 + 32 + 32 + 8 + 1)]
-    pub receipt: Account<'info, Receipt>,
+        payer = user, space = 8 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8)]
+    pub receipt: Box<Account<'info, Receipt>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -1039,7 +1044,7 @@ pub struct InitListing<'info> {
     // 235 for the size of the listing account itself
     // 128 for metadata URI
     #[account(init, seeds=[b"listing", mint.key().as_ref()], bump=listing_bump, payer = user, space = 8 + 235 + 128)]
-    pub listing: Account<'info, Listing>,
+    pub listing: Box<Account<'info, Listing>>,
 
     #[account(
         seeds = [b"mint", mint.key().as_ref()],
@@ -1048,10 +1053,10 @@ pub struct InitListing<'info> {
     pub mint_authority_pda: AccountInfo<'info>,
 
     #[account(init, mint::decimals = listing_mint_decimals, mint::authority = mint_authority_pda, mint::freeze_authority = mint_authority_pda, payer = user)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
-    pub sol_deposit: Account<'info, TokenAccount>,
-    pub vote_deposit: Account<'info, TokenAccount>,
+    pub sol_deposit: Box<Account<'info, TokenAccount>>,
+    pub vote_deposit: Box<Account<'info, TokenAccount>>,
 
     pub governance_program: UncheckedAccount<'info>,
     pub realm: UncheckedAccount<'info>,

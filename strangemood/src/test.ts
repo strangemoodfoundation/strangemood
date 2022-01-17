@@ -1,7 +1,7 @@
 import * as solana from "@solana/web3.js";
 import * as splToken from "@solana/spl-token";
 import fs from "fs/promises";
-import { Strangemood, TESTNET } from ".";
+import { Strangemood } from ".";
 import {
   createAccountGovernance,
   createRealm,
@@ -16,6 +16,7 @@ import {
   VoteWeightSource,
 } from "./governance/accounts";
 import { bindConstructorLayout } from "@solana/buffer-layout";
+import { TESTNET } from "./constants";
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = anchor.web3;
 
 async function doRealm(params: {
