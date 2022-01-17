@@ -19,7 +19,6 @@ describe("strangemood", () => {
   });
 
   it("can make a listing", async () => {
-    console.log("It can make a listing");
     const { listing } = await client.initListing(
       {},
       {
@@ -63,19 +62,68 @@ describe("strangemood", () => {
       }
     );
 
-    console.log("listing", listing.toString());
-
     const purchaser = anchor.web3.Keypair.generate();
     const cashier = anchor.web3.Keypair.generate();
-    const { receipt } = await client.purchase({
-      listing,
-      cashier: cashier.publicKey,
-      purchaser: purchaser,
-    });
+    const { receipt, listingTokenAccount, escrow } = await client.purchase(
+      {
+        listing,
+        cashier: cashier.publicKey,
+        purchaser: purchaser,
+      },
+      10
+    );
 
     const r = await program.account.receipt.fetch(receipt);
     assert.equal(r.isInitialized, true, "is initialized");
     assert.equal(r.isRefundable, false, "is refundable");
     assert.equal(r.isCashable, true, "is cashable");
+    assert.equal(r.amount.toNumber(), 10);
+    assert.equal(r.listing.toString(), listing.toString());
+    assert.equal(
+      r.listingTokenAccount.toString(),
+      listingTokenAccount.toString()
+    );
+    assert.equal(r.escrow.toString(), escrow.toString());
+    assert.equal(r.cashier.toString(), cashier.publicKey.toString());
+    assert.equal(r.purchaser.toString(), purchaser.publicKey.toString());
+
+    const l = await program.account.listing.fetch(listing);
+    const escrowBalance = await program.provider.connection.getBalance(
+      r.escrow
+    );
+
+    const MIN_RENT = 890880; // 0.00089088 SOL for an empty rent-exempt account
+    assert.equal(
+      l.price.toNumber() * 10 + MIN_RENT,
+      escrowBalance,
+      "not enough funds in the escrow"
+    );
+  });
+
+  it("can close a receipt", async () => {
+    // Create a new listing
+    const { listing } = await client.initListing(
+      {},
+      {
+        price: new anchor.BN(10),
+        decimals: 3,
+        uri: "ipfs://somecid",
+        is_consumable: true,
+        is_refundable: false,
+        is_available: true,
+      }
+    );
+
+    // Create the receipt for the listing
+    const purchaser = anchor.web3.Keypair.generate();
+    const cashier = anchor.web3.Keypair.generate();
+    const { receipt } = await client.purchase(
+      {
+        listing,
+        cashier: cashier.publicKey,
+        purchaser: purchaser,
+      },
+      1
+    );
   });
 });

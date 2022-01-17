@@ -134,11 +134,14 @@ export class TestClient {
     return { mint: mintKeypair.publicKey, listing: listingPDA };
   }
 
-  async purchase(accounts: {
-    listing: anchor.web3.PublicKey;
-    cashier: anchor.web3.PublicKey;
-    purchaser: anchor.web3.Keypair;
-  }) {
+  async purchase(
+    accounts: {
+      listing: anchor.web3.PublicKey;
+      cashier: anchor.web3.PublicKey;
+      purchaser: anchor.web3.Keypair;
+    },
+    amount: number
+  ) {
     let receiptKeypair = anchor.web3.Keypair.generate();
 
     const listing = await this.program.account.listing.fetch(accounts.listing);
@@ -169,7 +172,7 @@ export class TestClient {
     let purchase_ix = this.program.instruction.purchase(
       escrowPDABump,
       mintAuthorityBump,
-      new anchor.BN(1),
+      new anchor.BN(amount),
       {
         accounts: {
           listing: accounts.listing,
@@ -196,6 +199,8 @@ export class TestClient {
 
     return {
       receipt: receiptKeypair.publicKey,
+      escrow: escrowPDA,
+      listingTokenAccount: listingTokenAccount,
     };
   }
 
