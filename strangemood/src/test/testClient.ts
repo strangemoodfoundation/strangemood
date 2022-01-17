@@ -76,14 +76,14 @@ export class TestClient {
   }
 
   async initListing(
-    accounts: {
-      user: anchor.web3.PublicKey;
-    },
+    accounts: {},
     args: {
       price: anchor.BN;
+      decimals: number;
       uri: string;
       is_consumable: boolean;
       is_refundable: boolean;
+      is_available: boolean;
     }
   ) {
     // The Account to create.
@@ -105,9 +105,11 @@ export class TestClient {
     await this.program.rpc.initListing(
       listingMintBump,
       listingBump,
+      new anchor.BN(args.decimals),
       args.price,
-      args.is_consumable,
       args.is_refundable,
+      args.is_consumable,
+      args.is_available,
       args.uri,
       {
         accounts: {
@@ -122,7 +124,7 @@ export class TestClient {
           charter: this.charter_pda,
           charterGovernance: this.charter_governance,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-          user: accounts.user,
+          user: this.provider.wallet.publicKey,
           systemProgram: SystemProgram.programId,
         },
         signers: [mintKeypair],
@@ -147,14 +149,24 @@ export class TestClient {
         this.program.programId
       );
 
-    const transaction = new anchor.web3.Transaction();
-    transaction.add(
-      SystemProgram.transfer({
-        fromPubkey: accounts.purchaser.publicKey,
-        toPubkey: escrowPDA,
-        lamports: listing.price.toNumber(),
-      })
-    );
+    const transaction = new anchor.web3.Transaction({
+      feePayer: accounts.purchaser.publicKey,
+    });
+    // transaction.add(
+    //   SystemProgram.createAccount({
+    //     fromPubkey: accounts.purchaser.publicKey,
+    //     newAccountPubkey: escrowPDA,
+    //     space: 0, // maybe needs to be 128 for overhead?
+    //     lamports: listing.price.toNumber(),
+    //     programId: this.program.programId,
+    //   })
+
+    //   // SystemProgram.transfer({
+    //   //   fromPubkey: accounts.purchaser.publicKey,
+    //   //   toPubkey: escrowPDA,
+    //   //   lamports: listing.price.toNumber(),
+    //   // })
+    // );
 
     let [mintAuthorityPda, mintAuthorityBump] =
       await anchor.web3.PublicKey.findProgramAddress(
@@ -170,9 +182,19 @@ export class TestClient {
       listing.mint
     );
 
+    const ls = await this.provider.connection.getAccountInfo(accounts.listing);
+
+    console.log(
+      ls.data.toString("hex"),
+      ls.data.byteLength,
+      ls.data.length,
+      ls.owner.toString()
+    );
+
     let purchase_ix = this.program.instruction.purchase(
       escrowPDABump,
       mintAuthorityBump,
+      new anchor.BN(1),
       {
         accounts: {
           listing: accounts.listing,
@@ -182,7 +204,7 @@ export class TestClient {
           listingMint: listing.mint,
           listingMintAuthority: mintAuthorityPda,
           receipt: receiptKeypair.publicKey,
-          user: accounts.purchaser,
+          user: accounts.purchaser.publicKey,
           systemProgram: SystemProgram.programId,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           rent: SYSVAR_RENT_PUBKEY,
@@ -193,6 +215,7 @@ export class TestClient {
 
     await this.provider.connection.sendTransaction(transaction, [
       accounts.purchaser,
+      receiptKeypair,
     ]);
 
     return {
@@ -273,7 +296,18 @@ export class TestClient {
     );
   }
 
-  async setReceiptCashable() {}
+  async setReceiptCashable(accounts: { receipt: anchor.web3.PublicKey }) {
+    const receipt = await this.program.account.receipt.fetch(accounts.receipt);
+    const listing = await this.program.account.listing.fetch(receipt.listing);
+
+    await this.program.rpc.setReceiptCashable({
+      accounts: {
+        listing: receipt.listing,
+        receipt: accounts.receipt,
+        authority: listing.authority,
+      },
+    });
+  }
 
   async cash(accounts: {
     cashier: anchor.web3.PublicKey;

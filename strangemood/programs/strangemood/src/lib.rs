@@ -136,6 +136,7 @@ pub mod strangemood {
         price: u64,
         refundable: bool,
         consumable: bool,
+        available: bool,
         uri: String,
     ) -> ProgramResult {
         // Check that the sol_deposit is wrapped sol
@@ -188,7 +189,6 @@ pub mod strangemood {
         listing.is_initialized = true;
         listing.price = price;
         listing.mint = ctx.accounts.mint.key();
-        listing.is_available = true;
         listing.authority = *ctx.accounts.user.key;
         listing.sol_deposit = ctx.accounts.sol_deposit.key();
         listing.vote_deposit = ctx.accounts.vote_deposit.key();
@@ -196,6 +196,7 @@ pub mod strangemood {
         listing.uri = uri;
         listing.is_refundable = refundable;
         listing.is_consumable = consumable;
+        listing.is_available = available;
 
         Ok(())
     }
@@ -490,18 +491,16 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_receipt_cashable(ctx: Context<SetReceiptCashable>)  -> ProgramResult {
-        let receipt = &mut ctx.accounts.receipt;
-        receipt.is_cashable = true;
-
-        
+    pub fn set_receipt_cashable(ctx: Context<SetReceiptCashable>)  -> ProgramResult {        
         if ctx.accounts.authority.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
+        let receipt = &mut ctx.accounts.receipt;
+        receipt.is_cashable = true;
+
         Ok(())
     }
-    
 
     pub fn purchase_listing(
         ctx: Context<PurchaseListing>,
@@ -700,8 +699,6 @@ pub mod strangemood {
         Ok(())
     }
 
-    // Updates
-
     pub fn set_listing_price(ctx: Context<UpdateListing>, price: u64) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
@@ -819,6 +816,9 @@ pub struct Purchase<'info> {
     pub listing_mint: Box<Account<'info, Mint>>,
 
     #[account(
+        init,
+        payer=user,
+        space=0,
         seeds = [b"mint", listing_mint.key().as_ref()],
         bump = listing_mint_bump,
     )]

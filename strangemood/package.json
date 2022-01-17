@@ -4,7 +4,7 @@
   "main": "dist/src/index.js",
   "typings": "dist/src/index.d.ts",
   "dependencies": {
-    "@project-serum/anchor": "^0.18.2",
+    "@project-serum/anchor": "^0.20.1",
     "@solana/buffer-layout": "^4.0.0",
     "@solana/spl-token": "^0.1.8",
     "borsh": "^0.7.0"
