@@ -4,6 +4,7 @@ import { Strangemood } from "../../target/types/strangemood";
 import * as splToken from "@solana/spl-token";
 import {
   createAssociatedTokenAccountForKeypair,
+  createTokenAccount,
   requestAirdrop,
   setupGovernance,
 } from "./utils";
@@ -101,6 +102,15 @@ export class TestClient {
         this.program.programId
       );
 
+    const listing_sol_deposit = await createTokenAccount(
+      this.program,
+      splToken.NATIVE_MINT
+    );
+    const listing_vote_deposit = await createTokenAccount(
+      this.program,
+      this.realm_mint.publicKey
+    );
+
     // Create the new account and initialize it with the program.
     await this.program.rpc.initListing(
       listingMintBump,
@@ -117,8 +127,8 @@ export class TestClient {
           mint: mintKeypair.publicKey,
           mintAuthorityPda: listingMintAuthority,
           rent: SYSVAR_RENT_PUBKEY,
-          solDeposit: this.listing_sol_deposit,
-          voteDeposit: this.listing_vote_deposit,
+          solDeposit: listing_sol_deposit.publicKey,
+          voteDeposit: listing_vote_deposit.publicKey,
           realm: this.realm,
           governanceProgram: LOCALNET.GOVERNANCE_PROGRAM_ID,
           charter: this.charter_pda,
@@ -131,7 +141,12 @@ export class TestClient {
       }
     );
 
-    return { mint: mintKeypair.publicKey, listing: listingPDA };
+    return {
+      mint: mintKeypair.publicKey,
+      listing: listingPDA,
+      listing_sol_deposit,
+      listing_vote_deposit,
+    };
   }
 
   async purchase(
@@ -291,7 +306,7 @@ export class TestClient {
   }
 
   async cash(accounts: {
-    cashier: anchor.web3.PublicKey;
+    cashier: anchor.web3.Keypair;
     receipt: anchor.web3.PublicKey;
   }) {
     const receipt = await this.program.account.receipt.fetch(accounts.receipt);
@@ -314,36 +329,61 @@ export class TestClient {
         this.program.programId
       );
 
-    await this.program.rpc.cash(
-      escrowPDABump,
-      listingBump,
-      listingMintAuthorityBump,
-      this.realm_mint_bump,
-      {
-        accounts: {
-          cashier: accounts.cashier,
-          receipt: accounts.receipt,
-          listing: receipt.listing,
-          escrow: escrowPDA,
-          listingTokenAccount: receipt.listingTokenAccount,
-          listingsSolDeposit: listing.solDeposit,
-          listingsVoteDeposit: listing.voteDeposit,
-          realmSolDeposit: this.realm_sol_deposit,
-          realmVoteDeposit: this.realm_vote_deposit,
-          realmSolDepositGovernance: this.realm_sol_deposit_governance,
-          realmVoteDepositGovernance: this.realm_vote_deposit_governance,
-          realm: this.realm,
-          realmMint: this.realm_mint,
-          realmMintAuthority: this.realm_mint_authority,
-          governanceProgram: LOCALNET.GOVERNANCE_PROGRAM_ID,
-          charter: this.charter,
-          charterGovernance: this.charter_governance,
-          tokenProgram: splToken.TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-          listingMint: listing.mint,
-          listingMintAuthority: listingMintAuthority,
-        },
-      }
+    const tx = new anchor.web3.Transaction({
+      feePayer: accounts.cashier.publicKey,
+    });
+    tx.add(
+      this.program.instruction.cash(
+        escrowPDABump,
+        listingBump,
+        listingMintAuthorityBump,
+        this.realm_mint_bump,
+        {
+          accounts: {
+            cashier: accounts.cashier.publicKey,
+            receipt: accounts.receipt,
+            listing: receipt.listing,
+            escrow: escrowPDA,
+            listingTokenAccount: receipt.listingTokenAccount,
+            listingsSolDeposit: listing.solDeposit,
+            listingsVoteDeposit: listing.voteDeposit,
+            realmSolDeposit: this.realm_sol_deposit,
+            realmVoteDeposit: this.realm_vote_deposit,
+            realmSolDepositGovernance: this.realm_sol_deposit_governance,
+            realmVoteDepositGovernance: this.realm_vote_deposit_governance,
+            realm: this.realm,
+            realmMint: this.realm_mint.publicKey,
+            realmMintAuthority: this.realm_mint_authority,
+            governanceProgram: LOCALNET.GOVERNANCE_PROGRAM_ID,
+            charter: this.charter_pda,
+            charterGovernance: this.charter_governance,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            listingMint: listing.mint,
+            listingMintAuthority: listingMintAuthority,
+          },
+        }
+      )
     );
+
+    // to pay for fees
+    await requestAirdrop(this.program, accounts.cashier.publicKey);
+
+    console.log(
+      "cashier",
+      await this.program.provider.connection.getBalance(
+        accounts.cashier.publicKey
+      )
+    );
+
+    console.log(
+      "escrow",
+      await this.program.provider.connection.getBalance(escrowPDA)
+    );
+
+    const sig = await this.provider.connection.sendTransaction(tx, [
+      accounts.cashier,
+    ]);
+    await this.provider.connection.confirmTransaction(sig);
   }
 }

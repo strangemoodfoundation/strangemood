@@ -6,14 +6,22 @@ use solana_program::sysvar::rent::Rent;
 
 declare_id!("smtaswNwG1JkZY2EbogfBn9JmRdsjgMrRHgLvfikoVq");
 
-pub fn mint_to_and_freeze<'a>(    
+pub fn mint_to_and_freeze<'a>(
     token_program: AccountInfo<'a>,
-mint: AccountInfo<'a>,
-to: AccountInfo<'a>,
-authority: AccountInfo<'a>,
-bump: u8,
-amount: u64) -> ProgramResult {
-    mint_to(token_program.clone(), mint.clone(), to.clone(), authority.clone(), bump, amount)?;
+    mint: AccountInfo<'a>,
+    to: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    bump: u8,
+    amount: u64,
+) -> ProgramResult {
+    mint_to(
+        token_program.clone(),
+        mint.clone(),
+        to.clone(),
+        authority.clone(),
+        bump,
+        amount,
+    )?;
     freeze_account(token_program, mint, to, authority, bump)
 }
 
@@ -97,7 +105,41 @@ pub fn burn<'a>(
     anchor_spl::token::burn(cpi_ctx, amount)
 }
 
+pub fn sync_native<'a>(token_program: &AccountInfo<'a>, account: AccountInfo<'a>) -> ProgramResult {
+    msg!(
+        "token program is {:?} {:?}",
+        &token_program.key(),
+        &spl_token::id()
+    );
+    let ix = spl_token::instruction::sync_native(&token_program.key(), &account.key())?;
+
+    msg!(
+        "Got passed this instruction {:?} {:?}",
+        &token_program.key(),
+        ix.program_id
+    );
+
+    solana_program::program::invoke(&ix, &[account.clone()])
+}
+
 // Transfer native SOL from one account to another using the System Program
+pub fn system_transfer_with_seeds<'a>(
+    system_program: &AccountInfo<'a>,
+    from: &AccountInfo<'a>,
+    to: &AccountInfo<'a>,
+    lamports: u64,
+    seeds: &[&[u8]],
+) -> ProgramResult {
+    let ix = system_instruction::transfer(&from.key(), &to.key(), lamports);
+
+    let signers = &[&seeds[..]];
+    solana_program::program::invoke_signed(
+        &ix,
+        &[from.clone(), to.clone(), system_program.clone()],
+        signers,
+    )
+}
+
 pub fn system_transfer<'a>(
     system_program: &AccountInfo<'a>,
     from: &AccountInfo<'a>,
@@ -106,14 +148,7 @@ pub fn system_transfer<'a>(
 ) -> ProgramResult {
     let ix = system_instruction::transfer(&from.key(), &to.key(), lamports);
 
-    solana_program::program::invoke(
-        &ix,
-        &[
-            from.clone(),
-            to.clone(),
-            system_program.clone()
-        ]
-    )
+    solana_program::program::invoke(&ix, &[from.clone(), to.clone(), system_program.clone()])
 }
 
 pub fn close_account<'a>(
@@ -201,43 +236,46 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn purchase(ctx: Context<Purchase>, _escrow_bump: u8, listing_mint_bump: u8, amount: u64) -> ProgramResult {
+    pub fn purchase(
+        ctx: Context<Purchase>,
+        _escrow_bump: u8,
+        listing_mint_bump: u8,
+        amount: u64,
+    ) -> ProgramResult {
         let listing = ctx.accounts.listing.clone().into_inner();
         let escrow = &ctx.accounts.escrow;
         let rent = &ctx.accounts.rent;
 
         if !listing.is_available {
-            return Err(StrangemoodError::ListingUnavailable.into())
+            return Err(StrangemoodError::ListingUnavailable.into());
         }
         if escrow.owner != ctx.program_id {
-            return Err(ProgramError::IllegalOwner)
+            return Err(ProgramError::IllegalOwner);
         }
         if !rent.is_exempt(escrow.lamports(), 0) {
-            return Err(StrangemoodError::NotRentExempt.into())
+            return Err(StrangemoodError::NotRentExempt.into());
         }
         if listing.mint != ctx.accounts.listing_mint.key() {
-            return Err(StrangemoodError::UnexpectedListingMint.into())
+            return Err(StrangemoodError::UnexpectedListingMint.into());
         }
 
         system_transfer(
             &ctx.accounts.system_program.to_account_info(),
             &ctx.accounts.user.to_account_info(),
             &escrow.clone(),
-            amount * listing.price
+            amount * listing.price,
         )?;
 
-        // if the listing is refundable, then mint the user the 
+        // if the listing is refundable, then mint the user the
         // token immediately (it can be burned later).
         if listing.is_refundable {
             mint_to_and_freeze(
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.listing_mint.to_account_info(),
-                ctx.accounts
-                    .listing_token_account
-                    .to_account_info(),
+                ctx.accounts.listing_token_account.to_account_info(),
                 ctx.accounts.listing_mint_authority.to_account_info(),
                 listing_mint_bump,
-                amount
+                amount,
             )?;
         }
 
@@ -247,42 +285,47 @@ pub mod strangemood {
         receipt.listing = ctx.accounts.listing.key();
         receipt.purchaser = ctx.accounts.user.key();
         receipt.escrow = ctx.accounts.escrow.key();
-        receipt.amount = amount;
+        receipt.quantity = amount;
         receipt.listing_token_account = ctx.accounts.listing_token_account.key();
         receipt.cashier = ctx.accounts.cashier.key();
 
-        // If the listing is refundable, then you can't immediately 
+        // If the listing is refundable, then you can't immediately
         // cash out the receipt.
         receipt.is_cashable = !listing.is_refundable;
 
         Ok(())
     }
 
-    pub fn cash(ctx: Context<Cash>, _escrow_bump: u8, _listing_bump: u8, listing_mint_bump: u8, realm_mint_bump: u8)  -> ProgramResult {
+    pub fn cash(
+        ctx: Context<Cash>,
+        escrow_bump: u8,
+        _listing_bump: u8,
+        listing_mint_bump: u8,
+        realm_mint_bump: u8,
+    ) -> ProgramResult {
         let listing = ctx.accounts.listing.clone().into_inner();
         let charter = ctx.accounts.charter.clone().into_inner();
         let receipt = ctx.accounts.receipt.clone().into_inner();
-        let escrow = &ctx.accounts.escrow;
 
         if !receipt.is_cashable {
-            return Err(StrangemoodError::ReceiptNotCashable.into())
+            return Err(StrangemoodError::ReceiptNotCashable.into());
         }
 
         if receipt.cashier != ctx.accounts.cashier.key() {
-            return Err(StrangemoodError::OnlyCashableByTheCashier.into())
+            return Err(StrangemoodError::OnlyCashableByTheCashier.into());
         }
         if listing.mint != ctx.accounts.listing_mint.key() {
-            return Err(StrangemoodError::UnexpectedListingMint.into())
+            return Err(StrangemoodError::UnexpectedListingMint.into());
         }
         if ctx.accounts.listing_token_account.key() != receipt.listing_token_account {
-            return Err(StrangemoodError::UnexpectedListingTokenAccount.into())
+            return Err(StrangemoodError::UnexpectedListingTokenAccount.into());
         }
 
         // Check that the listing deposits match the listing account
         if listing.vote_deposit != ctx.accounts.listings_vote_deposit.key()
-           || listing.sol_deposit != ctx.accounts.listings_sol_deposit.key()
+            || listing.sol_deposit != ctx.accounts.listings_sol_deposit.key()
         {
-           return Err(StrangemoodError::UnexpectedDeposit.into());
+            return Err(StrangemoodError::UnexpectedDeposit.into());
         }
 
         // Check that the realm is owned by the governance program
@@ -351,40 +394,61 @@ pub mod strangemood {
             return Err(StrangemoodError::UnexpectedDeposit.into());
         }
 
-        // If the receipt is refundable, then we've already minted 
+        // If the receipt is refundable, then we've already minted
         // the listing token. Otherwise, we have to do it now
         if !receipt.is_refundable {
             mint_to_and_freeze(
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.listing_mint.to_account_info(),
-                ctx.accounts
-                    .listing_token_account
-                    .to_account_info(),
+                ctx.accounts.listing_token_account.to_account_info(),
                 ctx.accounts.listing_mint_authority.to_account_info(),
                 listing_mint_bump,
-                receipt.amount, // TODO: I think this is listing.price * escrow 
+                receipt.quantity, // TODO: I think this is listing.price * escrow
             )?;
         }
 
-        let lamports: u64 = escrow.lamports();
+        let lamports: u64 = receipt.price;
         let deposit_rate = 1.0 - charter.sol_contribution_rate();
         let deposit_amount = (deposit_rate * lamports as f64) as u64;
         let contribution_amount = lamports - deposit_amount;
 
+        let receipt_key = ctx.accounts.receipt.key();
+        let escrow_seeds = &[b"escrow", receipt_key.as_ref(), &[escrow_bump]];
+
         // Transfer SOL to lister
-        system_transfer(
+        msg!(
+            "Transfering {} to lister: {:?}",
+            deposit_amount,
+            ctx.accounts.listings_sol_deposit.key()
+        );
+        system_transfer_with_seeds(
             &ctx.accounts.system_program.to_account_info(),
             &ctx.accounts.escrow.to_account_info(),
             &ctx.accounts.listings_sol_deposit.to_account_info(),
             deposit_amount as u64,
+            escrow_seeds,
+        )?;
+        sync_native(
+            &ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.listings_sol_deposit.to_account_info(),
         )?;
 
         // Transfer SOL to realm
-        system_transfer(
+        msg!(
+            "Transfering {} to realm: {:?}",
+            contribution_amount,
+            ctx.accounts.listings_sol_deposit.key()
+        );
+        system_transfer_with_seeds(
             &ctx.accounts.system_program.to_account_info(),
             &ctx.accounts.escrow.to_account_info(),
             &ctx.accounts.realm_sol_deposit.to_account_info(),
             contribution_amount as u64,
+            escrow_seeds,
+        )?;
+        sync_native(
+            &ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.realm_sol_deposit.to_account_info(),
         )?;
 
         let votes = contribution_amount as f64 * charter.expansion_rate();
@@ -413,15 +477,22 @@ pub mod strangemood {
         )?;
 
         // Close the receipt account
+        let receipt_seeds = &[
+            b"escrow",
+            ctx.accounts.receipt.key().as_ref(),
+            &[escrow_bump],
+        ];
+        msg!("Close receipt");
         close_account(
-            &ctx.accounts.system_program, 
+            &ctx.accounts.system_program,
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.cashier.to_account_info(),
         )?;
 
         // Close the escrow account
+        msg!("Close escrow");
         close_account(
-            &ctx.accounts.system_program, 
+            &ctx.accounts.system_program,
             &ctx.accounts.escrow.to_account_info(),
             &ctx.accounts.cashier.to_account_info(),
         )?;
@@ -429,36 +500,39 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn cancel(ctx: Context<Cancel>, _receipt_bump: u8, _escrow_bump: u8, _listing_bump: u8, listing_mint_bump: u8)  -> ProgramResult {
-
+    pub fn cancel(
+        ctx: Context<Cancel>,
+        _receipt_bump: u8,
+        _escrow_bump: u8,
+        _listing_bump: u8,
+        listing_mint_bump: u8,
+    ) -> ProgramResult {
         let listing = ctx.accounts.listing.clone().into_inner();
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
-        // If the receipt is refundable, then we've already issued tokens 
+        // If the receipt is refundable, then we've already issued tokens
         // and so we need to burn them in order to refund.
         if receipt.is_refundable {
             burn(
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.listing_mint.to_account_info(),
-                ctx.accounts
-                    .listing_token_account
-                    .to_account_info(),
+                ctx.accounts.listing_token_account.to_account_info(),
                 ctx.accounts.listing_mint_authority.to_account_info(),
                 listing_mint_bump,
-                receipt.amount,
+                receipt.quantity,
             )?;
         }
 
         // Close the receipt account
         close_account(
-            &ctx.accounts.system_program, 
+            &ctx.accounts.system_program,
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.purchaser.to_account_info(),
         )?;
 
         // Close the escrow account
         close_account(
-            &ctx.accounts.system_program, 
+            &ctx.accounts.system_program,
             &ctx.accounts.escrow.to_account_info(),
             &ctx.accounts.purchaser.to_account_info(),
         )?;
@@ -466,32 +540,35 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn consume(ctx: Context<Consume>, _receipt_bump: u8, listing_mint_bump: u8, amount: u64)  -> ProgramResult {
+    pub fn consume(
+        ctx: Context<Consume>,
+        _receipt_bump: u8,
+        listing_mint_bump: u8,
+        amount: u64,
+    ) -> ProgramResult {
         let listing = ctx.accounts.listing.clone().into_inner();
 
         if ctx.accounts.authority.key() != listing.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into())
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
         if !listing.is_consumable {
-            return Err(StrangemoodError::ListingIsNotConsumable.into())
+            return Err(StrangemoodError::ListingIsNotConsumable.into());
         }
 
-        burn( 
+        burn(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.mint.to_account_info(),
-            ctx.accounts
-                .listing_token_account
-                .to_account_info(),
+            ctx.accounts.listing_token_account.to_account_info(),
             ctx.accounts.mint_authority.to_account_info(),
             listing_mint_bump,
-            amount
+            amount,
         )?;
 
         Ok(())
     }
 
-    pub fn set_receipt_cashable(ctx: Context<SetReceiptCashable>)  -> ProgramResult {        
+    pub fn set_receipt_cashable(ctx: Context<SetReceiptCashable>) -> ProgramResult {
         if ctx.accounts.authority.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -793,23 +870,23 @@ pub mod strangemood {
 }
 
 #[derive(Accounts)]
-#[instruction(escrow_bump: u8, listing_mint_bump: u8)]
+#[instruction(escrow_bump: u8, listing_mint_bump: u8, receipt_nonce: Pubkey, receipt_bump:u8)]
 pub struct Purchase<'info> {
-    // The listing to purchase 
+    // The listing to purchase
     pub listing: Box<Account<'info, Listing>>,
 
     // The person who's allowed to cash out the listing
     pub cashier: AccountInfo<'info>,
 
-    // Where the SOL is stored until RedeemPurchase is run
-    #[account(
-        init,
-        payer=user,
-        space=0,
-        seeds=[b"escrow", receipt.key().as_ref()],
-        bump=escrow_bump,
-    )]
-    pub escrow: AccountInfo<'info>,
+    // // Where the SOL is stored until RedeemPurchase is run
+    // #[account(
+    //     init,
+    //     payer=user,
+    //     space=0,
+    //     seeds=[b"escrow", receipt.key().as_ref()],
+    //     bump=escrow_bump,
+    // )]
+    // pub escrow: AccountInfo<'info>,
 
     // A token account of the listing.mint where listing tokens
     // will be deposited at
@@ -828,7 +905,7 @@ pub struct Purchase<'info> {
     pub listing_mint_authority: AccountInfo<'info>,
 
     // A receipt that the RedeemPurchase can use to pay everyone
-    // 
+    //
     // 8 for the tag
     // 1 for is_initialized bool
     // 1 for is_refundable bool
@@ -838,9 +915,12 @@ pub struct Purchase<'info> {
     // 32 for purchaser pubkey
     // 32 for escrow pubkey
     // 32 for cashier pubkey
-    // 8 for amount u64
-    #[account(init, 
-        payer = user, space = 8 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8)]
+    // 8 for quantity u64
+    // 8 for price u64
+    #[account(init,
+        seeds = [b"receipt", receipt_nonce.as_ref()],
+        bump= receipt_bump,
+        payer = user, space = 8 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8)]
     pub receipt: Box<Account<'info, Receipt>>,
 
     #[account(mut)]
@@ -849,7 +929,6 @@ pub struct Purchase<'info> {
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
 }
-
 
 #[derive(Accounts)]
 #[instruction(escrow_bump:u8, listing_bump: u8, listing_mint_bump: u8, realm_mint_bump: u8)]
@@ -867,6 +946,7 @@ pub struct Cash<'info> {
     )]
     pub escrow: AccountInfo<'info>,
 
+    #[account(mut)]
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
@@ -875,10 +955,11 @@ pub struct Cash<'info> {
     #[account(mut)]
     pub listings_vote_deposit: Box<Account<'info, TokenAccount>>,
 
-    // The listing to purchase 
+    // The listing to purchase
     #[account(seeds=[b"listing", listing_mint.key().as_ref()], bump=listing_bump)]
     pub listing: Box<Account<'info, Listing>>,
 
+    #[account(mut)]
     pub listing_mint: Box<Account<'info, Mint>>,
 
     #[account(
@@ -915,7 +996,6 @@ pub struct Cash<'info> {
     pub system_program: Program<'info, System>,
 }
 
-
 #[derive(Accounts)]
 #[instruction(escrow_bump:u8, listing_bump: u8, listing_mint_authority_bump: u8)]
 pub struct Cancel<'info> {
@@ -934,7 +1014,7 @@ pub struct Cancel<'info> {
 
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
 
-    // The listing to purchase 
+    // The listing to purchase
     #[account(seeds=[b"listing", listing_mint.key().as_ref()], bump=listing_bump)]
     pub listing: Box<Account<'info, Listing>>,
 
@@ -949,7 +1029,6 @@ pub struct Cancel<'info> {
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
-
 
 #[derive(Accounts)]
 #[instruction(listing_bump:u8, listing_mint_authority_bump:u8)]
@@ -1157,7 +1236,7 @@ pub struct Receipt {
     /// Contracts should not trust receipts that aren't initialized
     pub is_initialized: bool,
 
-    // If true, then the listing was refundable at the time it was 
+    // If true, then the listing was refundable at the time it was
     // purchased, and so this receipt is still refundable.
     pub is_refundable: bool,
 
@@ -1168,8 +1247,8 @@ pub struct Receipt {
     pub listing: Pubkey,
 
     // The token account to send the listing tokens to
-    // It's possible to purchase the game for another person, 
-    // So this is not necessarily the purchaser's token account 
+    // It's possible to purchase the game for another person,
+    // So this is not necessarily the purchaser's token account
     pub listing_token_account: Pubkey,
 
     // The user that purchased the listing
@@ -1181,12 +1260,16 @@ pub struct Receipt {
     pub escrow: Pubkey,
 
     // The entity that's allowed to finalize (cash out) this receipt.
-    // Typically the marketplace or 
+    // Typically the marketplace or
     // the client application that started the sale.
     pub cashier: Pubkey,
 
     // The amount of the listing token to be distributed upon redeem
-    pub amount: u64,
+    pub quantity: u64,
+
+    // The price when they bought the listing. We store this here
+    // because the price could be updated in between purchase and cash.
+    pub price: u64,
 }
 
 #[account]
@@ -1225,13 +1308,13 @@ pub struct Listing {
     //
     // When refundable, a purchase receipt starts with cashable=false
     // and needs the authority of the listing to run SetCashable
-    // before the purchase can complete. 
+    // before the purchase can complete.
     pub is_refundable: bool,
 
-    // If true, this listing can be "consumed" by the authority of 
+    // If true, this listing can be "consumed" by the authority of
     // the listing arbitrarily.
-    // 
-    // Listers can use this to implement subscriptions, usage-based pricing, 
+    //
+    // Listers can use this to implement subscriptions, usage-based pricing,
     // in-app purchases, and so on.
     pub is_consumable: bool,
 }
@@ -1318,7 +1401,7 @@ pub enum StrangemoodError {
 
     #[msg("Provided Authority Account Does Not Have Access")]
     UnauthorizedAuthority,
-    
+
     #[msg("Receipt is not currently cashable")]
     ReceiptNotCashable,
 

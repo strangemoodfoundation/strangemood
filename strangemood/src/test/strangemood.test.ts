@@ -6,6 +6,8 @@ import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
 import { Token } from "@solana/spl-token";
 
+const MIN_RENT = 890880; // 0.00089088 SOL for an empty rent-exempt account
+
 describe("strangemood", () => {
   const provider = anchor.Provider.env();
   // Configure the client to use the local cluster.
@@ -77,7 +79,7 @@ describe("strangemood", () => {
     assert.equal(r.isInitialized, true, "is initialized");
     assert.equal(r.isRefundable, false, "is refundable");
     assert.equal(r.isCashable, true, "is cashable");
-    assert.equal(r.amount.toNumber(), 10);
+    assert.equal(r.price.toNumber(), 10);
     assert.equal(r.listing.toString(), listing.toString());
     assert.equal(
       r.listingTokenAccount.toString(),
@@ -92,7 +94,6 @@ describe("strangemood", () => {
       r.escrow
     );
 
-    const MIN_RENT = 890880; // 0.00089088 SOL for an empty rent-exempt account
     assert.equal(
       l.price.toNumber() * 10 + MIN_RENT,
       escrowBalance,
@@ -117,7 +118,7 @@ describe("strangemood", () => {
     // Create the receipt for the listing
     const purchaser = anchor.web3.Keypair.generate();
     const cashier = anchor.web3.Keypair.generate();
-    const { receipt } = await client.purchase(
+    const { receipt, escrow } = await client.purchase(
       {
         listing,
         cashier: cashier.publicKey,
@@ -125,5 +126,44 @@ describe("strangemood", () => {
       },
       1
     );
+  });
+
+  it("can cash a receipt", async () => {
+    // Create a new listing
+    const { listing } = await client.initListing(
+      {},
+      {
+        price: new anchor.BN(10),
+        decimals: 3,
+        uri: "ipfs://somecid",
+        is_consumable: true,
+        is_refundable: false,
+        is_available: true,
+      }
+    );
+
+    // Create the receipt for the listing
+    const purchaser = anchor.web3.Keypair.generate();
+    const cashier = anchor.web3.Keypair.generate();
+    const { receipt, escrow } = await client.purchase(
+      {
+        listing,
+        cashier: cashier.publicKey,
+        purchaser: purchaser,
+      },
+      1
+    );
+
+    assert.equal(
+      await program.provider.connection.getBalance(escrow),
+      10 + MIN_RENT
+    );
+
+    await client.cash({
+      cashier: cashier,
+      receipt: receipt,
+    });
+
+    assert.equal(await program.provider.connection.getBalance(escrow), 0);
   });
 });

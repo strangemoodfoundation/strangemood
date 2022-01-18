@@ -153,7 +153,7 @@ export async function setupGovernance(
   );
   charter = (await program.account.charter.fetch(charterPDA)) as any;
 
-  realm_sol_deposit_governance =await createTokenGovernanceForDepositAccounts(
+  realm_sol_deposit_governance = await createTokenGovernanceForDepositAccounts(
     program,
     provider.wallet.publicKey,
     listing_vote_deposit,
@@ -416,16 +416,14 @@ export async function requestAirdrop(
   to: anchor.web3.PublicKey
 ) {
   let lamports = anchor.web3.LAMPORTS_PER_SOL;
-  await program.provider.connection.requestAirdrop(
-    program.provider.wallet.publicKey,
-    lamports
-  );
+  await program.provider.connection.requestAirdrop(to, lamports);
 
   let tx = new anchor.web3.Transaction({
     feePayer: program.provider.wallet.publicKey,
   });
 
-  await program.provider.send(tx, []);
+  const sig = await program.provider.send(tx, []);
+  await program.provider.connection.confirmTransaction(sig);
 }
 
 export async function createTokenAccount(
