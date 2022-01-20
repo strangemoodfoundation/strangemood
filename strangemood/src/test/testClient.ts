@@ -244,16 +244,21 @@ export class TestClient {
         this.program.programId
       );
 
-    await this.program.rpc.consume(listingBump, listingMintAuthorityBump, {
-      accounts: {
-        listing: accounts.listing,
-        mint: listing.mint,
-        mintAuthority: listingMintAuthority,
-        listingTokenAccount: accounts.listingTokenAccount,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
-        authority: listing.authority,
-      },
-    });
+    await this.program.rpc.consume(
+      listingBump,
+      listingMintAuthorityBump,
+      new anchor.BN(1),
+      {
+        accounts: {
+          listing: accounts.listing,
+          mint: listing.mint,
+          mintAuthority: listingMintAuthority,
+          listingTokenAccount: accounts.listingTokenAccount,
+          tokenProgram: splToken.TOKEN_PROGRAM_ID,
+          authority: listing.authority,
+        },
+      }
+    );
   }
 
   async cancel(accounts: {

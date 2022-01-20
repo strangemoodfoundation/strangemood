@@ -182,6 +182,53 @@ export async function cancel(args: {
   };
 }
 
+export async function consume(args: {
+  program: Program<Strangemood>;
+  conn: Connection;
+  purchaser: anchor.web3.PublicKey;
+  listing: {
+    account: Receipt;
+    publicKey: PublicKey;
+  };
+  listingTokenAccount: PublicKey;
+  quantity: anchor.BN;
+  government?: Government;
+}) {
+  let [_, listingBump] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("listing"), args.listing.account.mint.toBuffer()],
+    args.program.programId
+  );
+
+  let [listingMintAuthority, listingMintAuthorityBump] =
+    await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("mint"), args.listing.account.mint.toBuffer()],
+      args.program.programId
+    );
+
+  const ix = args.program.instruction.consume(
+    listingBump,
+    listingMintAuthorityBump,
+    args.quantity,
+    {
+      accounts: {
+        listing: args.listing.publicKey,
+        mint: args.listing.account.mint,
+        mintAuthority: listingMintAuthority,
+        listingTokenAccount: args.listingTokenAccount,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        authority: args.listing.account.authority,
+      },
+    }
+  );
+
+  let tx = new Transaction();
+  tx.add(ix);
+
+  return {
+    tx,
+  };
+}
+
 export async function initListing(args: {
   program: Program<Strangemood>;
   conn: Connection;
