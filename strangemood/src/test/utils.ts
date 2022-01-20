@@ -9,7 +9,6 @@ import {
   createTokenGovernance,
   depositGovernanceTokens,
 } from "../instructions";
-import { LOCALNET } from "../constants";
 import {
   GovernanceConfig,
   VoteThresholdPercentage,
@@ -17,6 +16,10 @@ import {
 } from "../governance/accounts";
 import { pda } from "../pda";
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = anchor.web3;
+
+export const GOVERNANCE_PROGRAM_ID = new anchor.web3.PublicKey(
+  "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
+);
 
 export async function setupGovernance(
   provider: anchor.Provider,
@@ -48,7 +51,7 @@ export async function setupGovernance(
   let realm_sol_deposit_governance: anchor.web3.PublicKey;
 
   let governance_program = await provider.connection.getAccountInfo(
-    LOCALNET.GOVERNANCE_PROGRAM_ID
+    GOVERNANCE_PROGRAM_ID
   );
   assert.ok(
     governance_program && governance_program.executable,
@@ -129,7 +132,7 @@ export async function setupGovernance(
   // Create charter
   let [myCharterPDA, charterBump] = await pda.charter(
     program.programId,
-    LOCALNET.GOVERNANCE_PROGRAM_ID,
+    GOVERNANCE_PROGRAM_ID,
     realm
   );
   charterPDA = myCharterPDA;
@@ -149,7 +152,7 @@ export async function setupGovernance(
         realmSolDeposit: realm_sol_deposit,
         realmVoteDeposit: realm_vote_deposit,
         realm,
-        governanceProgram: LOCALNET.GOVERNANCE_PROGRAM_ID,
+        governanceProgram: GOVERNANCE_PROGRAM_ID,
         user: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
       },
@@ -219,7 +222,7 @@ export async function createGovernanceRealm(
     communityMint: mint,
     payer: realmAuthority.publicKey,
     name: "test",
-    governanceProgramId: LOCALNET.GOVERNANCE_PROGRAM_ID,
+    governanceProgramId: GOVERNANCE_PROGRAM_ID,
   });
 
   let tx = new anchor.web3.Transaction({
@@ -244,7 +247,7 @@ export async function createCharterGovernance(
   let [deposit_ix] = await depositGovernanceTokens({
     amount: new anchor.BN(1000),
     realm,
-    governanceProgramId: LOCALNET.GOVERNANCE_PROGRAM_ID,
+    governanceProgramId: GOVERNANCE_PROGRAM_ID,
     governingTokenSource: userVoteDeposit,
     governingTokenMint: communityMint,
     governingTokenOwner: program.provider.wallet.publicKey,
@@ -254,7 +257,7 @@ export async function createCharterGovernance(
 
   let [ix, charter_governance] = await createAccountGovernance({
     authority: program.provider.wallet.publicKey,
-    governanceProgramId: LOCALNET.GOVERNANCE_PROGRAM_ID,
+    governanceProgramId: GOVERNANCE_PROGRAM_ID,
     realm: realm,
     governedAccount: charter,
     config: new GovernanceConfig({
@@ -288,7 +291,7 @@ async function createTokenGovernanceForDepositAccounts(
   let [deposit_ix] = await depositGovernanceTokens({
     amount: new anchor.BN(1000),
     realm,
-    governanceProgramId: LOCALNET.GOVERNANCE_PROGRAM_ID,
+    governanceProgramId: GOVERNANCE_PROGRAM_ID,
     governingTokenSource: userVoteDeposit,
     governingTokenMint: communityMint,
     governingTokenOwner: program.provider.wallet.publicKey,
@@ -298,7 +301,7 @@ async function createTokenGovernanceForDepositAccounts(
 
   let [ix, charter_governance] = await createTokenGovernance({
     authority: program.provider.wallet.publicKey,
-    governanceProgramId: LOCALNET.GOVERNANCE_PROGRAM_ID,
+    governanceProgramId: GOVERNANCE_PROGRAM_ID,
     realm: realm,
     tokenAccountToBeGoverned: tokenAccountToBeGoverned,
     tokenOwner: user,

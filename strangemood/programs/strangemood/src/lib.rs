@@ -513,177 +513,6 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn purchase_listing(
-        ctx: Context<PurchaseListing>,
-        listing_mint_bump: u8,
-        realm_mint_bump: u8,
-    ) -> ProgramResult {
-        let listing = ctx.accounts.listing.clone().into_inner();
-        let charter = ctx.accounts.charter.clone().into_inner();
-        let purchasers_sol_account = ctx
-            .accounts
-            .purchasers_sol_token_account
-            .clone()
-            .into_inner();
-
-        // Check that the listing deposits match the listing account
-        if listing.vote_deposit != ctx.accounts.listings_vote_deposit.key()
-            || listing.sol_deposit != ctx.accounts.listings_sol_deposit.key()
-        {
-            return Err(StrangemoodError::UnexpectedDeposit.into());
-        }
-
-        // Check that we're paying the right price
-        if purchasers_sol_account.amount != listing.price {
-            return Err(StrangemoodError::InvalidPurchaseAmount.into());
-        }
-
-        // Check that the realm is owned by the governance program
-        let governance_program = ctx.accounts.governance_program.clone().to_account_info();
-        let realm_account = ctx.accounts.realm.clone().to_account_info();
-        spl_governance::state::realm::assert_is_valid_realm(
-            governance_program.key,
-            &realm_account,
-        )?;
-
-        // Check that the vote_deposit is the realm's mint
-        spl_governance::state::realm::assert_is_valid_realm(
-            governance_program.key,
-            &realm_account,
-        )?;
-        let realm =
-            spl_governance::state::realm::get_realm_data(governance_program.key, &realm_account)?;
-
-        let realm_mint = ctx.accounts.realm_mint.clone().to_account_info();
-        if realm.community_mint != *realm_mint.key {
-            return Err(ProgramError::InvalidArgument);
-        }
-
-        // Check the charter governance
-        let charter_governance_account = ctx.accounts.charter_governance.clone().to_account_info();
-        let charter_governance = spl_governance::state::governance::get_governance_data(
-            governance_program.key,
-            &charter_governance_account,
-        )?;
-        if charter_governance.realm != *realm_account.key {
-            return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
-        }
-
-        // Check the charter
-        let charter_account = ctx.accounts.charter.clone().to_account_info();
-        let gov_address = spl_governance::state::governance::get_account_governance_address(
-            governance_program.key,
-            &realm_account.key,
-            charter_account.key,
-        );
-        if *charter_governance_account.key != gov_address {
-            return Err(StrangemoodError::UnauthorizedCharter.into());
-        }
-        if *charter_account.owner != *ctx.program_id {
-            return Err(ProgramError::IllegalOwner);
-        }
-
-        // Check that the realm sol deposit account is actually owned by the realm
-        msg!("check realm sol deposit exists");
-        let sol_deposit_governance = spl_governance::state::governance::get_governance_data(
-            governance_program.key,
-            &ctx.accounts.realm_sol_deposit_governance,
-        )?;
-        if sol_deposit_governance.realm != *realm_account.key {
-            return Err(StrangemoodError::RealmDepositNotOwnedByRealm.into());
-        }
-        let realm_sol_deposit = ctx.accounts.realm_sol_deposit.clone().into_inner();
-        if realm_sol_deposit.owner != *ctx.accounts.realm_sol_deposit_governance.key {
-            return Err(StrangemoodError::UnexpectedDeposit.into());
-        }
-
-        // Check that the realm vote deposit account is actually owned by the realm
-        msg!("check realm vote deposit exists");
-        let vote_deposit_governance = spl_governance::state::governance::get_governance_data(
-            governance_program.key,
-            &ctx.accounts.realm_vote_deposit_governance,
-        )?;
-        if vote_deposit_governance.realm != *realm_account.key {
-            return Err(StrangemoodError::RealmDepositNotOwnedByRealm.into());
-        }
-        let realm_vote_deposit = ctx.accounts.realm_vote_deposit.clone().into_inner();
-        if realm_vote_deposit.owner != *ctx.accounts.realm_vote_deposit_governance.key {
-            return Err(StrangemoodError::UnexpectedDeposit.into());
-        }
-
-        // Mint a listing token to the account
-        mint_to(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts
-                .purchasers_listing_token_account
-                .to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
-            listing_mint_bump,
-            1,
-        )?;
-
-        // Freeze the acount so it's no longer transferable
-        freeze_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts
-                .purchasers_listing_token_account
-                .to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
-            listing_mint_bump,
-        )?;
-
-        let deposit_rate = 1.0 - charter.sol_contribution_rate();
-        let deposit_amount = (deposit_rate * listing.price as f64) as u64;
-        let contribution_amount = listing.price - deposit_amount;
-
-        // Transfer SOL to lister
-        token_transfer(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.purchasers_sol_token_account.to_account_info(),
-            ctx.accounts.listings_sol_deposit.to_account_info(),
-            ctx.accounts.user.to_account_info(),
-            deposit_amount as u64,
-        )?;
-
-        // Transfer SOL to realm
-        token_transfer(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.purchasers_sol_token_account.to_account_info(),
-            ctx.accounts.realm_sol_deposit.to_account_info(),
-            ctx.accounts.user.to_account_info(),
-            contribution_amount as u64,
-        )?;
-
-        let votes = contribution_amount as f64 * charter.expansion_rate();
-        let deposit_rate = 1.0 - charter.vote_contribution_rate();
-        let deposit_amount = (deposit_rate * votes as f64) as u64;
-        let contribution_amount = (votes as u64) - deposit_amount;
-
-        // Mint votes to lister
-        mint_to(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.realm_mint.to_account_info(),
-            ctx.accounts.listings_vote_deposit.to_account_info(),
-            ctx.accounts.realm_mint_authority.to_account_info(),
-            realm_mint_bump,
-            deposit_amount,
-        )?;
-
-        // Mint votes to realm
-        mint_to(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.realm_mint.to_account_info(),
-            ctx.accounts.realm_vote_deposit.to_account_info(),
-            ctx.accounts.realm_mint_authority.to_account_info(),
-            realm_mint_bump,
-            contribution_amount,
-        )?;
-
-        Ok(())
-    }
-
     pub fn init_charter(
         ctx: Context<InitCharter>,
         _charter_bump: u8,
@@ -862,7 +691,7 @@ pub struct Cash<'info> {
     pub cashier: Signer<'info>,
 
     #[account(mut,
-        has_one=listing,  has_one=listing_token_account, has_one=cashier)]
+        has_one=listing, has_one=listing_token_account, has_one=cashier)]
     pub receipt: Account<'info, Receipt>,
 
     #[account(mut)]
@@ -875,6 +704,9 @@ pub struct Cash<'info> {
     pub listings_vote_deposit: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
+    // TODO: add a constraint that the listing.mint matches listing_mint
+    // TODO: add a constraint that the listing.sol_deposit matches listings_sol_deposit
+    // TODO: add a constraint that the listing.vote_deposit matches listings_vote_deposit
     pub listing: Box<Account<'info, Listing>>,
 
     #[account(mut)]
@@ -979,58 +811,6 @@ pub struct SetReceiptCashable<'info> {
 
     // The listing authority
     pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-#[instruction(listing_mint_bump: u8, realm_mint_bump: u8)]
-pub struct PurchaseListing<'info> {
-    pub listing: Box<Account<'info, Listing>>,
-
-    #[account(mut)]
-    pub purchasers_sol_token_account: Box<Account<'info, TokenAccount>>,
-    #[account(mut)]
-    pub purchasers_listing_token_account: Box<Account<'info, TokenAccount>>,
-
-    #[account(mut)]
-    pub listings_sol_deposit: Box<Account<'info, TokenAccount>>,
-    #[account(mut)]
-    pub listings_vote_deposit: Box<Account<'info, TokenAccount>>,
-    #[account(mut)]
-    pub listing_mint: Box<Account<'info, Mint>>,
-    #[account(
-        seeds = [b"mint", listing_mint.key().as_ref()],
-        bump = listing_mint_bump,
-    )]
-    pub listing_mint_authority: AccountInfo<'info>,
-
-    #[account(mut)]
-    pub realm_sol_deposit: Box<Account<'info, TokenAccount>>,
-    pub realm_sol_deposit_governance: AccountInfo<'info>,
-    #[account(mut)]
-    pub realm_vote_deposit: Box<Account<'info, TokenAccount>>,
-    pub realm_vote_deposit_governance: AccountInfo<'info>,
-
-    #[account(mut)]
-    pub realm_mint: Box<Account<'info, Mint>>,
-    #[account(
-        seeds = [b"mint", realm_mint.key().as_ref()],
-        bump = realm_mint_bump,
-    )]
-    pub realm_mint_authority: AccountInfo<'info>,
-    pub governance_program: AccountInfo<'info>,
-
-    pub realm: AccountInfo<'info>,
-    pub charter_governance: AccountInfo<'info>,
-    // Box'd to move the charter (which is fairly hefty)
-    // to the heap instead of the stack.
-    // Not actually sure if this is a good idea, but
-    // without the Box, we run out of space?
-    pub charter: Box<Account<'info, Charter>>,
-
-    pub token_program: Program<'info, Token>,
-    #[account(mut)]
-    pub user: Signer<'info>,
-    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]

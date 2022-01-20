@@ -5,10 +5,10 @@ import * as splToken from "@solana/spl-token";
 import {
   createAssociatedTokenAccountForKeypair,
   createTokenAccount,
+  GOVERNANCE_PROGRAM_ID,
   requestAirdrop,
   setupGovernance,
 } from "./utils";
-import { LOCALNET } from "../constants";
 import { v4 } from "uuid";
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = anchor.web3;
 
@@ -139,7 +139,7 @@ export class TestClient {
           solDeposit: listing_sol_deposit.publicKey,
           voteDeposit: listing_vote_deposit.publicKey,
           realm: this.realm,
-          governanceProgram: LOCALNET.GOVERNANCE_PROGRAM_ID,
+          governanceProgram: GOVERNANCE_PROGRAM_ID,
           charter: this.charter_pda,
           charterGovernance: this.charter_governance,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
@@ -249,7 +249,7 @@ export class TestClient {
         listing: accounts.listing,
         mint: listing.mint,
         mintAuthority: listingMintAuthority,
-        listingTokenAccount: listing.listingTokenAccount,
+        listingTokenAccount: accounts.listingTokenAccount,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         authority: listing.authority,
       },
@@ -336,7 +336,7 @@ export class TestClient {
             realm: this.realm,
             realmMint: this.realm_mint,
             realmMintAuthority: this.realm_mint_authority,
-            governanceProgram: LOCALNET.GOVERNANCE_PROGRAM_ID,
+            governanceProgram: GOVERNANCE_PROGRAM_ID,
             charter: this.charter_pda,
             charterGovernance: this.charter_governance,
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
