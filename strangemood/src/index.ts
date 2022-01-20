@@ -78,7 +78,6 @@ export async function cancel(args: {
     account: Receipt;
     publicKey: PublicKey;
   };
-  government?: Government;
 }) {
   let [_, listingBump] = await anchor.web3.PublicKey.findProgramAddress(
     [Buffer.from("listing"), args.listing.account.mint.toBuffer()],
@@ -434,7 +433,6 @@ export async function setListingPrice(args: {
     account: Listing;
     publicKey: PublicKey;
   };
-  government?: Government;
 }) {
   let tx = new Transaction();
 
@@ -444,6 +442,105 @@ export async function setListingPrice(args: {
         user: args.signer,
         listing: args.listing,
         systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingUri(args: {
+  program: Program<Strangemood>;
+  conn: Connection;
+  signer: anchor.web3.PublicKey;
+  uri: string;
+  listing: {
+    account: Listing;
+    publicKey: PublicKey;
+  };
+}) {
+  let tx = new Transaction();
+
+  tx.add(
+    args.program.instruction.setListingUri(args.uri, {
+      accounts: {
+        user: args.signer,
+        listing: args.listing,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingDeposits(args: {
+  program: Program<Strangemood>;
+  conn: Connection;
+  signer: anchor.web3.PublicKey;
+  listing: {
+    account: Listing;
+    publicKey: PublicKey;
+  };
+  solDeposit: PublicKey;
+  voteDeposit: PublicKey;
+}) {
+  let tx = new Transaction();
+
+  tx.add(
+    args.program.instruction.setListingDeposits({
+      accounts: {
+        user: args.signer,
+        listing: args.listing,
+        solDeposit: args.solDeposit,
+        voteDeposit: args.voteDeposit,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingAvailability(args: {
+  program: Program<Strangemood>;
+  conn: Connection;
+  signer: anchor.web3.PublicKey;
+  listing: {
+    account: Listing;
+    publicKey: PublicKey;
+  };
+}) {
+  let tx = new Transaction();
+
+  tx.add(
+    args.program.instruction.setListingAvailability(true, {
+      accounts: {
+        user: args.signer,
+        listing: args.listing,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
+
+export async function setListingAuthority(args: {
+  program: Program<Strangemood>;
+  conn: Connection;
+  signer: anchor.web3.PublicKey;
+  listing: {
+    account: Listing;
+    publicKey: PublicKey;
+  };
+  newAuthority: anchor.web3.PublicKey;
+}) {
+  let tx = new Transaction();
+
+  tx.add(
+    args.program.instruction.setListingAuthority({
+      accounts: {
+        user: args.signer,
+        listing: args.listing,
+        systemProgram: SystemProgram.programId,
+        authority: args.newAuthority,
       },
     })
   );
