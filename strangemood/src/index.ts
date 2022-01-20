@@ -1,13 +1,12 @@
 import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 export { Strangemood } from "../target/types/strangemood";
-import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import * as splToken from "@solana/spl-token";
 import { Strangemood } from "../target/types/strangemood";
 import { pda as _pda } from "./pda";
-import { Environment, Government, MAINNET, NET } from "./constants";
+import { Government, MAINNET } from "./constants";
 import { v4 } from "uuid";
-import { Governance } from "./governance/accounts";
 const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
 
@@ -41,75 +40,10 @@ export type Receipt = Awaited<
   ReturnType<Program<Strangemood>["account"]["receipt"]["fetch"]>
 >;
 
-async function createWrappedSolTokenAccountForPurchase(
-  conn: Connection,
-  user: PublicKey,
-  lamports: number
-): Promise<[anchor.web3.TransactionInstruction[], Keypair]> {
-  // Allocate memory for the account
-  const balanceNeeded = await splToken.getMinimumBalanceForRentExemptAccount(
-    conn
-  );
-
-  // Create a new account
-  const newAccount = anchor.web3.Keypair.generate();
-  let instructions = [];
-  instructions.push(
-    SystemProgram.createAccount({
-      fromPubkey: user,
-      newAccountPubkey: newAccount.publicKey,
-      lamports: balanceNeeded,
-      space: splToken.AccountLayout.span,
-      programId: splToken.TOKEN_PROGRAM_ID,
-    })
-  );
-
-  // Send lamports to it (these will be wrapped into native tokens by the token program)
-  instructions.push(
-    SystemProgram.transfer({
-      fromPubkey: user,
-      toPubkey: newAccount.publicKey,
-      lamports: lamports,
-    })
-  );
-
-  // Assign the new account to the native token mint.
-  // the account will be initialized with a balance equal to the native token balance.
-  // (i.e. amount)
-  instructions.push(
-    splToken.createInitializeAccountInstruction(
-      newAccount.publicKey,
-      splToken.NATIVE_MINT,
-      user
-    )
-  );
-
-  return [instructions, newAccount];
-}
-
-async function createAssociatedTokenAccount(
-  mint: PublicKey,
-  user: PublicKey
-): Promise<[anchor.web3.TransactionInstruction, PublicKey]> {
-  let associatedTokenAccountAddress = await splToken.getAssociatedTokenAddress(
-    mint,
-    user
-  );
-
-  let ix = splToken.createAssociatedTokenAccountInstruction(
-    user,
-    associatedTokenAccountAddress,
-    user,
-    mint
-  );
-
-  return [ix, associatedTokenAccountAddress];
-}
-
 export async function setReceiptCashable(args: {
   program: Program<Strangemood>;
   conn: Connection;
-  cashier: anchor.web3.PublicKey;
+  signer: anchor.web3.PublicKey;
   receipt: {
     account: Receipt;
     publicKey: PublicKey;
@@ -120,7 +54,7 @@ export async function setReceiptCashable(args: {
     accounts: {
       listing: args.receipt.account.listing,
       receipt: args.receipt.publicKey,
-      authority: args.receipt.account.authority,
+      authority: args.signer,
     },
   });
 
@@ -135,7 +69,7 @@ export async function setReceiptCashable(args: {
 export async function cancel(args: {
   program: Program<Strangemood>;
   conn: Connection;
-  purchaser: anchor.web3.PublicKey;
+  signer: anchor.web3.PublicKey;
   receipt: {
     account: Receipt;
     publicKey: PublicKey;
@@ -162,7 +96,7 @@ export async function cancel(args: {
     listingMintAuthorityBump,
     {
       accounts: {
-        purchaser: args.purchaser,
+        purchaser: args.signer,
         receipt: args.receipt.publicKey,
         listingTokenAccount: args.receipt.account.listingTokenAccount,
         listing: args.receipt.account.listing,
@@ -185,7 +119,7 @@ export async function cancel(args: {
 export async function consume(args: {
   program: Program<Strangemood>;
   conn: Connection;
-  purchaser: anchor.web3.PublicKey;
+  signer: PublicKey;
   listing: {
     account: Receipt;
     publicKey: PublicKey;
@@ -216,7 +150,7 @@ export async function consume(args: {
         mintAuthority: listingMintAuthority,
         listingTokenAccount: args.listingTokenAccount,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
-        authority: args.listing.account.authority,
+        authority: args.signer,
       },
     }
   );
@@ -232,7 +166,7 @@ export async function consume(args: {
 export async function initListing(args: {
   program: Program<Strangemood>;
   conn: Connection;
-  user: PublicKey;
+  signer: PublicKey;
 
   // In lamports
   price: anchor.BN;
@@ -265,14 +199,14 @@ export async function initListing(args: {
   // Find or create an associated vote token account
   let associatedVoteAddress = await splToken.getAssociatedTokenAddress(
     gov.mint,
-    args.user
+    args.signer
   );
   if (!(await args.conn.getAccountInfo(associatedVoteAddress))) {
     tx.add(
       splToken.createAssociatedTokenAccountInstruction(
-        args.user,
+        args.signer,
         associatedVoteAddress,
-        args.user,
+        args.signer,
         gov.mint
       )
     );
@@ -280,14 +214,14 @@ export async function initListing(args: {
 
   let associatedSolAddress = await splToken.getAssociatedTokenAddress(
     splToken.NATIVE_MINT,
-    args.user
+    args.signer
   );
   if (!(await args.conn.getAccountInfo(associatedVoteAddress))) {
     tx.add(
       splToken.createAssociatedTokenAccountInstruction(
-        args.user,
+        args.signer,
         associatedVoteAddress,
-        args.user,
+        args.signer,
         splToken.NATIVE_MINT
       )
     );
@@ -314,7 +248,7 @@ export async function initListing(args: {
         charter: gov.charter,
         charterGovernance: gov.charter_governance,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
-        user: args.user,
+        user: args.signer,
         systemProgram: SystemProgram.programId,
       },
       signers: [mintKeypair],
@@ -333,7 +267,7 @@ export async function purchase(args: {
   program: Program<Strangemood>;
   conn: Connection;
   cashier: PublicKey;
-  purchaser: PublicKey;
+  signer: PublicKey;
   listing: {
     account: Listing;
     publicKey: PublicKey;
@@ -356,14 +290,14 @@ export async function purchase(args: {
 
   let listingTokenAccount = await splToken.getAssociatedTokenAddress(
     args.listing.account.mint,
-    args.purchaser
+    args.signer
   );
   if (!(await args.conn.getAccountInfo(listingTokenAccount))) {
     tx.add(
       splToken.createAssociatedTokenAccountInstruction(
-        args.purchaser,
+        args.signer,
         listingTokenAccount,
-        args.purchaser,
+        args.signer,
         args.listing.account.mint
       )
     );
@@ -382,7 +316,7 @@ export async function purchase(args: {
         listingMint: args.listing.account.mint,
         listingMintAuthority: listingMintAuthority,
         receipt: receipt_pda,
-        user: args.purchaser,
+        user: args.signer,
         systemProgram: SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
@@ -413,7 +347,7 @@ export async function purchase(args: {
 export async function cash(args: {
   program: Program<Strangemood>;
   conn: Connection;
-  cashier: anchor.web3.PublicKey;
+  signer: anchor.web3.PublicKey;
   receipt: {
     account: Receipt;
     publicKey: PublicKey;
@@ -438,13 +372,13 @@ export async function cash(args: {
   );
 
   const tx = new anchor.web3.Transaction({
-    feePayer: args.cashier,
+    feePayer: args.signer,
   });
 
   tx.add(
     args.program.instruction.cash(listingMintAuthorityBump, realmMintBump, {
       accounts: {
-        cashier: args.cashier,
+        cashier: args.signer,
         receipt: args.receipt.publicKey,
         listing: args.listing.publicKey,
         listingTokenAccount: args.receipt.account.listingTokenAccount,
@@ -491,25 +425,30 @@ export async function cash(args: {
   };
 }
 
-// export async function setListingPrice(
-//   program: Program<Strangemood>,
-//   user: PublicKey,
-//   listingKey: PublicKey,
-//   price: anchor.BN
-// ) {
-//   let tx = new Transaction();
+export async function setListingPrice(args: {
+  program: Program<Strangemood>;
+  conn: Connection;
+  signer: anchor.web3.PublicKey;
+  price: anchor.BN;
+  listing: {
+    account: Listing;
+    publicKey: PublicKey;
+  };
+  government?: Government;
+}) {
+  let tx = new Transaction();
 
-//   tx.add(
-//     program.instruction.setListingPrice(price, {
-//       accounts: {
-//         user,
-//         listing: listingKey,
-//         systemProgram: SystemProgram.programId,
-//       },
-//     })
-//   );
-//   return { tx };
-// }
+  tx.add(
+    args.program.instruction.setListingPrice(args.price, {
+      accounts: {
+        user: args.signer,
+        listing: args.listing,
+        systemProgram: SystemProgram.programId,
+      },
+    })
+  );
+  return { tx };
+}
 
 // export async function setListingUri(
 //   program: Program<Strangemood>,
