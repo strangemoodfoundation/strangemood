@@ -24,7 +24,7 @@ function makeReceiptNonce() {
 export class TestClient {
   provider: anchor.Provider;
   program: Program<Strangemood>;
-  realm_mint: splToken.Token;
+  realm_mint: anchor.web3.PublicKey;
   realm: anchor.web3.PublicKey;
   realm_vote_deposit: anchor.web3.PublicKey;
   realm_sol_deposit: anchor.web3.PublicKey;
@@ -117,7 +117,7 @@ export class TestClient {
     );
     const listing_vote_deposit = await createTokenAccount(
       this.program,
-      this.realm_mint.publicKey
+      this.realm_mint
     );
 
     // Create the new account and initialize it with the program.
@@ -334,7 +334,7 @@ export class TestClient {
             realmSolDepositGovernance: this.realm_sol_deposit_governance,
             realmVoteDepositGovernance: this.realm_vote_deposit_governance,
             realm: this.realm,
-            realmMint: this.realm_mint.publicKey,
+            realmMint: this.realm_mint,
             realmMintAuthority: this.realm_mint_authority,
             governanceProgram: LOCALNET.GOVERNANCE_PROGRAM_ID,
             charter: this.charter_pda,
@@ -347,6 +347,14 @@ export class TestClient {
         }
       )
     );
+
+    let sync_listing_sol_ix = splToken.createSyncNativeInstruction(
+      this.realm_sol_deposit
+    );
+    let sync_realm_sol_ix = splToken.createSyncNativeInstruction(
+      this.realm_sol_deposit
+    );
+    tx.add(sync_listing_sol_ix, sync_realm_sol_ix);
 
     // to pay for fees
     await requestAirdrop(this.program, accounts.cashier.publicKey);

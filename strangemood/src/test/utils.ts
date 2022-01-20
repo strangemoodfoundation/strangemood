@@ -22,7 +22,7 @@ export async function setupGovernance(
   provider: anchor.Provider,
   program: anchor.Program<Strangemood>
 ) {
-  let vote_mint: splToken.Token;
+  let vote_mint: anchor.web3.PublicKey;
   let realm: anchor.web3.PublicKey;
   let realm_vote_deposit: anchor.web3.PublicKey;
   let realm_sol_deposit: anchor.web3.PublicKey;
@@ -67,53 +67,57 @@ export async function setupGovernance(
   await program.provider.connection.confirmTransaction(signature);
 
   // Create a mint
-  vote_mint = await splToken.Token.createMint(
+  vote_mint = await splToken.createMint(
     program.provider.connection,
     realmAuthority,
     realmAuthority.publicKey,
     realmAuthority.publicKey,
-    9,
-    splToken.TOKEN_PROGRAM_ID
+    9
   );
   // Create an account we can use to store some initial supply
   listing_vote_deposit = await createAssociatedTokenAccount(
     program,
     provider,
-    vote_mint.publicKey
+    vote_mint
   );
   // mint some initial tokens so we can create governances
-  await vote_mint.mintTo(listing_vote_deposit, realmAuthority, [], 3000);
+  await splToken.mintTo(
+    program.provider.connection,
+    realmAuthority,
+    vote_mint,
+    listing_vote_deposit,
+    realmAuthority,
+    3000
+  );
 
   // Hand over the mint to the strangemood program, by assigning the
   // authority to a PDA
   let [ra, rb] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("mint"), vote_mint.publicKey.toBuffer()],
+    [Buffer.from("mint"), vote_mint.toBuffer()],
     program.programId
   );
   realmMintAuthority = ra;
   realmMintBump = rb;
-  await vote_mint.setAuthority(
-    vote_mint.publicKey,
-    realmMintAuthority,
-    "MintTokens",
+
+  await splToken.setAuthority(
+    program.provider.connection,
     realmAuthority,
-    []
+    vote_mint,
+    realmAuthority,
+    splToken.AuthorityType.MintTokens,
+    realmMintAuthority
   );
-  await vote_mint.setAuthority(
-    vote_mint.publicKey,
-    realmMintAuthority,
-    "FreezeAccount",
+  await splToken.setAuthority(
+    program.provider.connection,
     realmAuthority,
-    []
+    vote_mint,
+    realmAuthority,
+    splToken.AuthorityType.FreezeAccount,
+    realmMintAuthority
   );
 
-  realm = await createGovernanceRealm(
-    program,
-    realmAuthority,
-    vote_mint.publicKey
-  );
-  realm_vote_deposit = (await createTokenAccount(program, vote_mint.publicKey))
-    .publicKey;
+  realm = await createGovernanceRealm(program, realmAuthority, vote_mint);
+  realm_vote_deposit = (await createTokenAccount(program, vote_mint)).publicKey;
   realm_sol_deposit = (await createTokenAccount(program, splToken.NATIVE_MINT))
     .publicKey;
   listing_sol_deposit = await createAssociatedTokenAccount(
@@ -235,14 +239,14 @@ export async function createCharterGovernance(
   userVoteDeposit: anchor.web3.PublicKey,
   realm: anchor.web3.PublicKey,
   charter: anchor.web3.PublicKey,
-  communityMint: splToken.Token
+  communityMint: anchor.web3.PublicKey
 ) {
   let [deposit_ix] = await depositGovernanceTokens({
     amount: new anchor.BN(1000),
     realm,
     governanceProgramId: LOCALNET.GOVERNANCE_PROGRAM_ID,
     governingTokenSource: userVoteDeposit,
-    governingTokenMint: communityMint.publicKey,
+    governingTokenMint: communityMint,
     governingTokenOwner: program.provider.wallet.publicKey,
     transferAuthority: program.provider.wallet.publicKey,
     payer: program.provider.wallet.publicKey,
@@ -262,7 +266,7 @@ export async function createCharterGovernance(
       minCouncilTokensToCreateProposal: new anchor.BN(1),
     }),
     governingTokenOwner: program.provider.wallet.publicKey,
-    governingTokenMint: communityMint.publicKey,
+    governingTokenMint: communityMint,
     payer: program.provider.wallet.publicKey,
   });
   let gov_tx = new anchor.web3.Transaction();
@@ -279,14 +283,14 @@ async function createTokenGovernanceForDepositAccounts(
   userVoteDeposit: anchor.web3.PublicKey,
   realm: anchor.web3.PublicKey,
   tokenAccountToBeGoverned: anchor.web3.PublicKey,
-  communityMint: splToken.Token
+  communityMint: anchor.web3.PublicKey
 ) {
   let [deposit_ix] = await depositGovernanceTokens({
     amount: new anchor.BN(1000),
     realm,
     governanceProgramId: LOCALNET.GOVERNANCE_PROGRAM_ID,
     governingTokenSource: userVoteDeposit,
-    governingTokenMint: communityMint.publicKey,
+    governingTokenMint: communityMint,
     governingTokenOwner: program.provider.wallet.publicKey,
     transferAuthority: program.provider.wallet.publicKey,
     payer: program.provider.wallet.publicKey,
@@ -308,7 +312,7 @@ async function createTokenGovernanceForDepositAccounts(
       minCouncilTokensToCreateProposal: new anchor.BN(1),
     }),
     governingTokenOwner: program.provider.wallet.publicKey,
-    governingTokenMint: communityMint.publicKey,
+    governingTokenMint: communityMint,
     payer: program.provider.wallet.publicKey,
   });
   let gov_tx = new anchor.web3.Transaction();
@@ -319,28 +323,12 @@ async function createTokenGovernanceForDepositAccounts(
   return charter_governance;
 }
 
-async function getTokenAccount(
-  program: anchor.Program<Strangemood>,
-  mint: anchor.web3.PublicKey,
-  account: anchor.web3.PublicKey
-) {
-  const dummy = anchor.web3.Keypair.generate();
-  const token = new splToken.Token(
-    program.provider.connection,
-    mint,
-    splToken.TOKEN_PROGRAM_ID,
-    dummy
-  );
-
-  return token.getAccountInfo(account);
-}
-
 export async function createWrappedSolTokenAccount(
   program: anchor.Program<Strangemood>,
   lamports: number
 ) {
   // Allocate memory for the account
-  const balanceNeeded = await splToken.Token.getMinBalanceRentForExemptAccount(
+  const balanceNeeded = await splToken.getMinimumBalanceForRentExemptAccount(
     program.provider.connection
   );
 
@@ -370,10 +358,9 @@ export async function createWrappedSolTokenAccount(
   // the account will be initialized with a balance equal to the native token balance.
   // (i.e. amount)
   transaction.add(
-    splToken.Token.createInitAccountInstruction(
-      splToken.TOKEN_PROGRAM_ID,
-      splToken.NATIVE_MINT,
+    splToken.createInitializeAccountInstruction(
       newAccount.publicKey,
+      splToken.NATIVE_MINT,
       program.provider.wallet.publicKey
     )
   );
@@ -387,24 +374,19 @@ export async function createAssociatedTokenAccount(
   provider: anchor.Provider,
   mint: anchor.web3.PublicKey
 ) {
-  let associatedTokenAccountAddress =
-    await splToken.Token.getAssociatedTokenAddress(
-      splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
-      splToken.TOKEN_PROGRAM_ID,
-      mint,
-      program.provider.wallet.publicKey
-    );
+  let associatedTokenAccountAddress = await splToken.getAssociatedTokenAddress(
+    mint,
+    program.provider.wallet.publicKey
+  );
   let tx = new anchor.web3.Transaction({
     feePayer: provider.wallet.publicKey,
   });
   tx.add(
-    splToken.Token.createAssociatedTokenAccountInstruction(
-      splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
-      splToken.TOKEN_PROGRAM_ID,
-      mint,
+    splToken.createAssociatedTokenAccountInstruction(
+      program.provider.wallet.publicKey,
       associatedTokenAccountAddress,
       program.provider.wallet.publicKey,
-      program.provider.wallet.publicKey
+      mint
     )
   );
   await program.provider.send(tx, []);
@@ -447,16 +429,15 @@ export async function createTokenAccount(
     SystemProgram.createAccount({
       fromPubkey: program.provider.wallet.publicKey,
       newAccountPubkey: keypair.publicKey,
-      lamports: await splToken.Token.getMinBalanceRentForExemptAccount(conn),
+      lamports: await splToken.getMinimumBalanceForRentExemptAccount(conn),
       space: splToken.AccountLayout.span,
       programId: splToken.TOKEN_PROGRAM_ID,
     })
   );
   tx.add(
-    splToken.Token.createInitAccountInstruction(
-      splToken.TOKEN_PROGRAM_ID,
-      mint,
+    splToken.createInitializeAccountInstruction(
       keypair.publicKey,
+      mint,
       program.provider.wallet.publicKey
     )
   );
@@ -478,24 +459,19 @@ export async function createAssociatedTokenAccountForKeypair(
   );
   await conn.confirmTransaction(signature);
 
-  let associatedTokenAccountAddress =
-    await splToken.Token.getAssociatedTokenAddress(
-      splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
-      splToken.TOKEN_PROGRAM_ID,
-      mint,
-      keypair.publicKey
-    );
+  let associatedTokenAccountAddress = await splToken.getAssociatedTokenAddress(
+    mint,
+    keypair.publicKey
+  );
   let tx = new anchor.web3.Transaction({
     feePayer: keypair.publicKey,
   });
   tx.add(
-    splToken.Token.createAssociatedTokenAccountInstruction(
-      splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
-      splToken.TOKEN_PROGRAM_ID,
-      mint,
+    splToken.createAssociatedTokenAccountInstruction(
+      keypair.publicKey,
       associatedTokenAccountAddress,
       keypair.publicKey,
-      keypair.publicKey
+      mint
     )
   );
 

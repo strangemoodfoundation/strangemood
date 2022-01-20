@@ -137,7 +137,6 @@ pub fn move_lamports<'a>(
     **dest_account_info.lamports.borrow_mut() = dest_starting_lamports
         .checked_add(amount)
         .unwrap();
-    msg!("to source {:?} {:?}",source_account_info.lamports(),source_account_info.lamports().checked_sub(amount).unwrap(),  );
     **source_account_info.lamports.borrow_mut() = source_account_info.lamports().checked_sub(amount).unwrap();
 }
 
@@ -248,18 +247,15 @@ pub mod strangemood {
             return Err(StrangemoodError::UnexpectedListingMint.into());
         }
 
-        msg!("transfer from {:?} to {:?}", ctx.accounts.user.key(), ctx.accounts.receipt.key());
         system_transfer(
             &ctx.accounts.system_program.to_account_info(),
             &ctx.accounts.user.to_account_info(),
             &ctx.accounts.receipt.to_account_info(),
             amount * listing.price,
         )?;
-        msg!("finished transfer from {:?} to {:?}", ctx.accounts.user.key(), ctx.accounts.receipt.key());
 
         // if the listing is refundable, then mint the user the
         // token immediately (it can be burned later).
-        msg!("maybe mint immediately");
         if listing.is_refundable {
             mint_to_and_freeze(
                 ctx.accounts.token_program.to_account_info(),
@@ -403,13 +399,11 @@ pub mod strangemood {
         let contribution_amount = lamports - deposit_amount;
 
         // Transfer SOL to lister
-        msg!("receipt: {:?} listing_sol: {:?}", &ctx.accounts.receipt.to_account_info().lamports(),   &ctx.accounts.listings_sol_deposit.to_account_info().lamports());
         move_lamports(
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.listings_sol_deposit.to_account_info(),
             deposit_amount as u64,
         );
-        msg!("receipt: {:?} listing_sol: {:?}", &ctx.accounts.receipt.to_account_info().lamports(),   &ctx.accounts.listings_sol_deposit.to_account_info().lamports());
     
         move_lamports(
             &ctx.accounts.receipt.to_account_info(),
@@ -442,21 +436,10 @@ pub mod strangemood {
             contribution_amount,
         )?;
 
-        msg!("Close receipt {:?}", &ctx.accounts.receipt.to_account_info().lamports());
         close_account(
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.cashier.to_account_info(),
         );
-
-        // sync_native(
-        //     &ctx.accounts.token_program.to_account_info(),
-        //     ctx.accounts.listings_sol_deposit.to_account_info(),
-        // )?;
-
-        // sync_native(
-        //     &ctx.accounts.token_program.to_account_info(),
-        //     ctx.accounts.realm_sol_deposit.to_account_info(),
-        // )?;
 
         Ok(())
     }

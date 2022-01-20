@@ -4,7 +4,6 @@ import * as splToken from "@solana/spl-token";
 import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
-import { Token } from "@solana/spl-token";
 
 const RECEIPT_SIZE = 171;
 
@@ -34,14 +33,8 @@ describe("strangemood", () => {
     );
 
     const l = await program.account.listing.fetch(listing);
-    const keypair = anchor.web3.Keypair.generate();
-    let token = new Token(
-      provider.connection,
-      l.mint,
-      splToken.TOKEN_PROGRAM_ID,
-      keypair
-    );
-    const mint = await token.getMintInfo();
+
+    let mint = await splToken.getMint(provider.connection, l.mint);
 
     assert.equal(mint.decimals, 3);
     assert.equal(l.price.toNumber(), new anchor.BN(10).toNumber());
