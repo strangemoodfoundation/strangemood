@@ -66,7 +66,7 @@ describe("strangemood", () => {
 
     const purchaser = anchor.web3.Keypair.generate();
     const cashier = anchor.web3.Keypair.generate();
-    const { receipt, listingTokenAccount, escrow } = await client.purchase(
+    const { receipt, listingTokenAccount } = await client.purchase(
       {
         listing,
         cashier: cashier.publicKey,
@@ -79,25 +79,24 @@ describe("strangemood", () => {
     assert.equal(r.isInitialized, true, "is initialized");
     assert.equal(r.isRefundable, false, "is refundable");
     assert.equal(r.isCashable, true, "is cashable");
-    assert.equal(r.price.toNumber(), 10);
+    assert.equal(r.price.toNumber(), 10, "price is not 10");
     assert.equal(r.listing.toString(), listing.toString());
     assert.equal(
       r.listingTokenAccount.toString(),
       listingTokenAccount.toString()
     );
-    assert.equal(r.escrow.toString(), escrow.toString());
     assert.equal(r.cashier.toString(), cashier.publicKey.toString());
     assert.equal(r.purchaser.toString(), purchaser.publicKey.toString());
 
     const l = await program.account.listing.fetch(listing);
-    const escrowBalance = await program.provider.connection.getBalance(
-      r.escrow
+    const receiptBalance = await program.provider.connection.getBalance(
+      receipt
     );
 
     assert.equal(
       l.price.toNumber() * 10 + MIN_RENT,
-      escrowBalance,
-      "not enough funds in the escrow"
+      receiptBalance,
+      "not enough funds in the receipt"
     );
   });
 
@@ -118,7 +117,7 @@ describe("strangemood", () => {
     // Create the receipt for the listing
     const purchaser = anchor.web3.Keypair.generate();
     const cashier = anchor.web3.Keypair.generate();
-    const { receipt, escrow } = await client.purchase(
+    const { receipt } = await client.purchase(
       {
         listing,
         cashier: cashier.publicKey,
@@ -145,7 +144,7 @@ describe("strangemood", () => {
     // Create the receipt for the listing
     const purchaser = anchor.web3.Keypair.generate();
     const cashier = anchor.web3.Keypair.generate();
-    const { receipt, escrow } = await client.purchase(
+    const { receipt } = await client.purchase(
       {
         listing,
         cashier: cashier.publicKey,
@@ -155,8 +154,11 @@ describe("strangemood", () => {
     );
 
     assert.equal(
-      await program.provider.connection.getBalance(escrow),
-      10 + MIN_RENT
+      await program.provider.connection.getBalance(receipt),
+      10 +
+        (await client.provider.connection.getMinimumBalanceForRentExemption(
+          171
+        ))
     );
 
     await client.cash({
@@ -164,6 +166,6 @@ describe("strangemood", () => {
       receipt: receipt,
     });
 
-    assert.equal(await program.provider.connection.getBalance(escrow), 0);
+    assert.equal(await program.provider.connection.getBalance(receipt), 0);
   });
 });
