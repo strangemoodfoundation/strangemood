@@ -106,6 +106,82 @@ async function createAssociatedTokenAccount(
   return [ix, associatedTokenAccountAddress];
 }
 
+export async function setReceiptCashable(args: {
+  program: Program<Strangemood>;
+  conn: Connection;
+  cashier: anchor.web3.PublicKey;
+  receipt: {
+    account: Receipt;
+    publicKey: PublicKey;
+  };
+  government?: Government;
+}) {
+  let ix = args.program.instruction.setReceiptCashable({
+    accounts: {
+      listing: args.receipt.account.listing,
+      receipt: args.receipt.publicKey,
+      authority: args.receipt.account.authority,
+    },
+  });
+
+  let tx = new Transaction();
+  tx.add(ix);
+
+  return {
+    tx,
+  };
+}
+
+export async function cancel(args: {
+  program: Program<Strangemood>;
+  conn: Connection;
+  purchaser: anchor.web3.PublicKey;
+  receipt: {
+    account: Receipt;
+    publicKey: PublicKey;
+  };
+  listing: {
+    account: Receipt;
+    publicKey: PublicKey;
+  };
+  government?: Government;
+}) {
+  let [_, listingBump] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("listing"), args.listing.account.mint.toBuffer()],
+    args.program.programId
+  );
+
+  let [listingMintAuthority, listingMintAuthorityBump] =
+    await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("mint"), args.listing.account.mint.toBuffer()],
+      args.program.programId
+    );
+
+  const ix = args.program.instruction.cancel(
+    listingBump,
+    listingMintAuthorityBump,
+    {
+      accounts: {
+        purchaser: args.purchaser,
+        receipt: args.receipt.publicKey,
+        listingTokenAccount: args.receipt.account.listingTokenAccount,
+        listing: args.receipt.account.listing,
+        listingMint: args.listing.account.mint,
+        listingMintAuthority: listingMintAuthority,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      },
+    }
+  );
+
+  let tx = new Transaction();
+  tx.add(ix);
+
+  return {
+    tx,
+  };
+}
+
 export async function initListing(args: {
   program: Program<Strangemood>;
   conn: Connection;
@@ -212,14 +288,14 @@ export async function purchase(args: {
   cashier: PublicKey;
   purchaser: PublicKey;
   listing: {
-    data: Listing;
+    account: Listing;
     publicKey: PublicKey;
   };
   quantity: anchor.BN;
 }) {
   let [listingMintAuthority, listingMintBump] = await pda.mint(
     args.program.programId,
-    args.listing.data.mint
+    args.listing.account.mint
   );
 
   let tx = new Transaction();
@@ -232,7 +308,7 @@ export async function purchase(args: {
     );
 
   let listingTokenAccount = await splToken.getAssociatedTokenAddress(
-    args.listing.data.mint,
+    args.listing.account.mint,
     args.purchaser
   );
   if (!(await args.conn.getAccountInfo(listingTokenAccount))) {
@@ -241,7 +317,7 @@ export async function purchase(args: {
         args.purchaser,
         listingTokenAccount,
         args.purchaser,
-        args.listing.data.mint
+        args.listing.account.mint
       )
     );
   }
@@ -256,7 +332,7 @@ export async function purchase(args: {
         listing: args.listing.publicKey,
         cashier: args.cashier,
         listingTokenAccount: listingTokenAccount,
-        listingMint: args.listing.data.mint,
+        listingMint: args.listing.account.mint,
         listingMintAuthority: listingMintAuthority,
         receipt: receipt_pda,
         user: args.purchaser,
@@ -292,11 +368,11 @@ export async function cash(args: {
   conn: Connection;
   cashier: anchor.web3.PublicKey;
   receipt: {
-    data: Receipt;
+    account: Receipt;
     publicKey: PublicKey;
   };
   listing: {
-    data: Listing;
+    account: Listing;
     publicKey: PublicKey;
   };
   government?: Government;
@@ -305,7 +381,7 @@ export async function cash(args: {
 
   let [listingMintAuthority, listingMintAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), args.listing.data.mint.toBuffer()],
+      [Buffer.from("mint"), args.listing.account.mint.toBuffer()],
       args.program.programId
     );
 
@@ -324,9 +400,9 @@ export async function cash(args: {
         cashier: args.cashier,
         receipt: args.receipt.publicKey,
         listing: args.listing.publicKey,
-        listingTokenAccount: args.receipt.data.listingTokenAccount,
-        listingsSolDeposit: args.listing.data.solDeposit,
-        listingsVoteDeposit: args.listing.data.voteDeposit,
+        listingTokenAccount: args.receipt.account.listingTokenAccount,
+        listingsSolDeposit: args.listing.account.solDeposit,
+        listingsVoteDeposit: args.listing.account.voteDeposit,
         realmSolDeposit: gov.sol_account,
         realmVoteDeposit: gov.vote_account,
         realmSolDepositGovernance: gov.sol_account_governance,
@@ -339,7 +415,7 @@ export async function cash(args: {
         charterGovernance: gov.charter_governance,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-        listingMint: args.listing.data.mint,
+        listingMint: args.listing.account.mint,
         listingMintAuthority: listingMintAuthority,
       },
     })
@@ -352,9 +428,9 @@ export async function cash(args: {
   // value based on the underlying lamport value of the token account.
   //
   // Technically, your app doesn't need to sync these accounts; the listings and
-  // the realm could do it themselves. That's quite rude though (basically like spitting
-  // in their soup I hear) and the makers of the protocol would probably
-  // call you a meanie if you took these lines out.
+  // the realm could do it themselves. That's quite rude though (basically
+  // like spitting in their soup I hear) and the makers of the protocol
+  // would probably call you a meanie if you took these lines out.
   let sync_listing_sol_ix = splToken.createSyncNativeInstruction(
     this.realm_sol_deposit
   );
@@ -367,89 +443,6 @@ export async function cash(args: {
     tx,
   };
 }
-
-// export async function purchaseListing(
-//   program: Program<Strangemood>,
-//   conn: Connection,
-//   user: PublicKey,
-//   listing: { account: Listing; publicKey: PublicKey },
-//   network_constants: NET = MAINNET
-// ): Promise<{ tx: Transaction; signers: Keypair[] }> {
-//   let [listingMintAuthority, listingMintBump] = await pda.mint(
-//     program.programId,
-//     listing.account.mint
-//   );
-
-//   let [realmAuthority, realmMintBump] = await pda.mint(
-//     program.programId,
-//     network_constants.STRANGEMOOD_FOUNDATION_MINT
-//   );
-
-//   let tx = new Transaction();
-
-//   // Create a temp sol account to purchase with
-//   const [bagIxes, bag] = await createWrappedSolTokenAccountForPurchase(
-//     conn,
-//     user,
-//     listing.account.price.toNumber()
-//   );
-//   tx.add(...bagIxes);
-
-//   // Create an associated token account to buy with
-//   let [listingAccountIx, purchasersListingAddress] =
-//     await createAssociatedTokenAccount(listing.account.mint, user);
-//   tx.add(listingAccountIx);
-
-//   let purchaseIx = program.instruction.purchaseListing(
-//     listingMintBump,
-//     realmMintBump,
-//     {
-//       accounts: {
-//         listing: listing.publicKey,
-//         purchasersSolTokenAccount: bag.publicKey,
-//         purchasersListingTokenAccount: purchasersListingAddress,
-//         listingsSolDeposit: listing.account.solDeposit,
-//         listingsVoteDeposit: listing.account.voteDeposit,
-//         listingMint: listing.account.mint,
-//         listingMintAuthority: listingMintAuthority,
-//         realmSolDeposit: network_constants.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT,
-//         realmSolDepositGovernance:
-//           network_constants.STRANGEMOOD_FOUNDATION_SOL_ACCOUNT_GOVERNANCE,
-//         realmVoteDeposit: network_constants.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT,
-//         realmVoteDepositGovernance:
-//           network_constants.STRANGEMOOD_FOUNDATION_VOTE_ACCOUNT_GOVERNANCE,
-//         realmMint: network_constants.STRANGEMOOD_FOUNDATION_MINT,
-//         realmMintAuthority: realmAuthority,
-//         governanceProgram: network_constants.GOVERNANCE_PROGRAM_ID,
-//         realm: network_constants.STRANGEMOOD_FOUNDATION_REALM,
-//         charterGovernance:
-//           network_constants.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
-//         charter: network_constants.STRANGEMOOD_FOUNDATION_CHARTER,
-//         tokenProgram: splToken.TOKEN_PROGRAM_ID,
-//         user: user,
-//         systemProgram: SystemProgram.programId,
-//       },
-//     }
-//   );
-//   tx.add(purchaseIx);
-
-//   // Close the bag account, and move the remainder that was paid for rent
-//   // to the user's SOL wallet.
-//   tx.add(
-//     splToken.Token.createCloseAccountInstruction(
-//       splToken.TOKEN_PROGRAM_ID,
-//       bag.publicKey,
-//       user,
-//       user,
-//       []
-//     )
-//   );
-
-//   return {
-//     tx,
-//     signers: [bag],
-//   };
-// }
 
 // export async function setListingPrice(
 //   program: Program<Strangemood>,
