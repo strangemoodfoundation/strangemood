@@ -6,7 +6,7 @@ import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
 import { Token } from "@solana/spl-token";
 
-const MIN_RENT = 890880; // 0.00089088 SOL for an empty rent-exempt account
+const RECEIPT_SIZE = 171;
 
 describe("strangemood", () => {
   const provider = anchor.Provider.env();
@@ -94,7 +94,10 @@ describe("strangemood", () => {
     );
 
     assert.equal(
-      l.price.toNumber() * 10 + MIN_RENT,
+      l.price.toNumber() * 10 +
+        (await program.provider.connection.getMinimumBalanceForRentExemption(
+          RECEIPT_SIZE
+        )),
       receiptBalance,
       "not enough funds in the receipt"
     );
@@ -157,7 +160,7 @@ describe("strangemood", () => {
       await program.provider.connection.getBalance(receipt),
       10 +
         (await client.provider.connection.getMinimumBalanceForRentExemption(
-          171
+          RECEIPT_SIZE
         ))
     );
 

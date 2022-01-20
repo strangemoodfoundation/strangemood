@@ -17,7 +17,6 @@ function makeReceiptNonce() {
   let buffer = [];
   v4(null, buffer);
   const as_hex = buffer.map((n) => n.toString(16)).join("");
-  console.log("as_hex", as_hex);
 
   return new anchor.BN(as_hex, 16, "le");
 }
@@ -195,13 +194,6 @@ export class TestClient {
         this.program.programId
       );
 
-    console.log("Program ID", this.program.programId.toString());
-    console.log("System Program", SystemProgram.programId.toString());
-    console.log("Receipt pda", receipt_pda.toString());
-    console.log("Receipt bump", receipt_bump);
-    console.log("User account", accounts.purchaser.publicKey.toString());
-    console.log("Provider account", this.provider.wallet.publicKey.toString());
-
     let purchase_ix = this.program.instruction.purchase(
       nonce,
       receipt_bump,
@@ -316,20 +308,9 @@ export class TestClient {
     const receipt = await this.program.account.receipt.fetch(accounts.receipt);
     const listing = await this.program.account.listing.fetch(receipt.listing);
 
-    let [_, listingBump] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("listing"), listing.mint.toBuffer()],
-      this.program.programId
-    );
-
     let [listingMintAuthority, listingMintAuthorityBump] =
       await anchor.web3.PublicKey.findProgramAddress(
         [Buffer.from("mint"), listing.mint.toBuffer()],
-        this.program.programId
-      );
-
-    const [receipt_pda, receipt_bump] =
-      await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("receipt"), receipt.nonce.toBuffer("le", 16)],
         this.program.programId
       );
 
@@ -338,14 +319,12 @@ export class TestClient {
     });
     tx.add(
       this.program.instruction.cash(
-        receipt_bump,
-        listingBump,
         listingMintAuthorityBump,
         this.realm_mint_bump,
         {
           accounts: {
             cashier: accounts.cashier.publicKey,
-            receipt: receipt_pda,
+            receipt: accounts.receipt,
             listing: receipt.listing,
             listingTokenAccount: receipt.listingTokenAccount,
             listingsSolDeposit: listing.solDeposit,
@@ -371,18 +350,6 @@ export class TestClient {
 
     // to pay for fees
     await requestAirdrop(this.program, accounts.cashier.publicKey);
-
-    console.log(
-      "cashier",
-      await this.program.provider.connection.getBalance(
-        accounts.cashier.publicKey
-      )
-    );
-
-    console.log(
-      "receipt",
-      await this.program.provider.connection.getBalance(receipt_pda)
-    );
 
     const sig = await this.provider.connection.sendTransaction(tx, [
       accounts.cashier,

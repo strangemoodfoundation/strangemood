@@ -106,38 +106,10 @@ pub fn burn<'a>(
 }
 
 pub fn sync_native<'a>(token_program: &AccountInfo<'a>, account: AccountInfo<'a>) -> ProgramResult {
-    msg!(
-        "token program is {:?} {:?}",
-        &token_program.key(),
-        &spl_token::id()
-    );
     let ix = spl_token::instruction::sync_native(&token_program.key(), &account.key())?;
 
-    msg!(
-        "Got passed this instruction {:?} {:?}",
-        &token_program.key(),
-        ix.program_id
-    );
-
+    msg!("Syncing the account {:?}", account.lamports());
     solana_program::program::invoke(&ix, &[account.clone()])
-}
-
-// Transfer native SOL from one account to another using the System Program
-pub fn system_transfer_with_seeds<'a>(
-    system_program: &AccountInfo<'a>,
-    from: &AccountInfo<'a>,
-    to: &AccountInfo<'a>,
-    lamports: u64,
-    seeds: &[&[u8]],
-) -> ProgramResult {
-    let ix = system_instruction::transfer(&from.key(), &to.key(), lamports);
-
-    let signers = &[&seeds[..]];
-    solana_program::program::invoke_signed(
-        &ix,
-        &[from.clone(), to.clone(), system_program.clone()],
-        signers,
-    )
 }
 
 pub fn system_transfer<'a>(
@@ -151,14 +123,37 @@ pub fn system_transfer<'a>(
     solana_program::program::invoke(&ix, &[from.clone(), to.clone(), system_program.clone()])
 }
 
-pub fn close_account<'a>(
-    system_program: &AccountInfo<'a>,
-    account: &AccountInfo<'a>,
-    to: &AccountInfo<'a>,
-    seeds: &[&[u8]]
-) -> ProgramResult {
-    system_transfer_with_seeds(system_program, account, to, account.lamports(), seeds)
+pub fn erase_data<'a>(account: &AccountInfo<'a>) {
+    let mut data = account.data.borrow_mut();
+    data.fill(0);
 }
+
+pub fn move_lamports<'a>(
+    source_account_info: &AccountInfo<'a>,
+    dest_account_info: &AccountInfo<'a>,
+    amount: u64
+) {
+    let dest_starting_lamports = dest_account_info.lamports();
+    **dest_account_info.lamports.borrow_mut() = dest_starting_lamports
+        .checked_add(amount)
+        .unwrap();
+    msg!("to source {:?} {:?}",source_account_info.lamports(),source_account_info.lamports().checked_sub(amount).unwrap(),  );
+    **source_account_info.lamports.borrow_mut() = source_account_info.lamports().checked_sub(amount).unwrap();
+}
+
+pub fn close_account<'a>(
+    source_account_info: &AccountInfo<'a>,
+    dest_account_info: &AccountInfo<'a>,
+){
+    let dest_starting_lamports = dest_account_info.lamports();
+    **dest_account_info.lamports.borrow_mut() = dest_starting_lamports
+        .checked_add(source_account_info.lamports())
+        .unwrap();
+    **source_account_info.lamports.borrow_mut() = 0;
+
+    erase_data(source_account_info);
+}
+
 
 #[program]
 pub mod strangemood {
@@ -296,8 +291,6 @@ pub mod strangemood {
 
     pub fn cash(
         ctx: Context<Cash>,
-        receipt_bump: u8,
-        _listing_bump: u8,
         listing_mint_bump: u8,
         realm_mint_bump: u8,
     ) -> ProgramResult {
@@ -409,43 +402,20 @@ pub mod strangemood {
         let deposit_amount = (deposit_rate * lamports as f64) as u64;
         let contribution_amount = lamports - deposit_amount;
 
-        let receipt_seeds: &[&[u8]] = &[b"receipt", &receipt.nonce.to_le_bytes(), &[receipt_bump]];
-
         // Transfer SOL to lister
-        msg!(
-            "Transfering {} to lister: {:?}",
-            deposit_amount,
-            ctx.accounts.listings_sol_deposit.key()
-        );
-        system_transfer_with_seeds(
-            &ctx.accounts.system_program.to_account_info(),
+        msg!("receipt: {:?} listing_sol: {:?}", &ctx.accounts.receipt.to_account_info().lamports(),   &ctx.accounts.listings_sol_deposit.to_account_info().lamports());
+        move_lamports(
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.listings_sol_deposit.to_account_info(),
             deposit_amount as u64,
-            receipt_seeds,
-        )?;
-        sync_native(
-            &ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listings_sol_deposit.to_account_info(),
-        )?;
-
-        // Transfer SOL to realm
-        msg!(
-            "Transfering {} to realm: {:?}",
-            contribution_amount,
-            ctx.accounts.listings_sol_deposit.key()
         );
-        system_transfer_with_seeds(
-            &ctx.accounts.system_program.to_account_info(),
+        msg!("receipt: {:?} listing_sol: {:?}", &ctx.accounts.receipt.to_account_info().lamports(),   &ctx.accounts.listings_sol_deposit.to_account_info().lamports());
+    
+        move_lamports(
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.realm_sol_deposit.to_account_info(),
             contribution_amount as u64,
-            receipt_seeds,
-        )?;
-        sync_native(
-            &ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.realm_sol_deposit.to_account_info(),
-        )?;
+        );
 
         let votes = contribution_amount as f64 * charter.expansion_rate();
         let deposit_rate = 1.0 - charter.vote_contribution_rate();
@@ -472,13 +442,21 @@ pub mod strangemood {
             contribution_amount,
         )?;
 
-        msg!("Close receipt");
+        msg!("Close receipt {:?}", &ctx.accounts.receipt.to_account_info().lamports());
         close_account(
-            &ctx.accounts.system_program,
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.cashier.to_account_info(),
-            receipt_seeds
-        )?;
+        );
+
+        // sync_native(
+        //     &ctx.accounts.token_program.to_account_info(),
+        //     ctx.accounts.listings_sol_deposit.to_account_info(),
+        // )?;
+
+        // sync_native(
+        //     &ctx.accounts.token_program.to_account_info(),
+        //     ctx.accounts.realm_sol_deposit.to_account_info(),
+        // )?;
 
         Ok(())
     }
@@ -505,13 +483,10 @@ pub mod strangemood {
         }
 
         // Close the receipt account
-        let receipt_seeds: &[&[u8]] = &[b"receipt", &receipt.nonce.to_le_bytes()];
         close_account(
-            &ctx.accounts.system_program,
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.purchaser.to_account_info(),
-            receipt_seeds
-        )?;
+        );
 
         Ok(())
     }
@@ -891,30 +866,6 @@ pub struct Purchase<'info> {
         space = 8 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
     pub receipt: Box<Account<'info, Receipt>>,
 
-    // A receipt that the RedeemPurchase can use to pay everyone
-    //
-    // SOL is held in the receipt account, as an escrow,
-    // and then distributed back to the purchaser upon "refund"
-    // or to the realm & lister upon "cash".
-    //
-    // 8 for the tag
-    // 1 for is_initialized bool
-    // 1 for is_refundable bool
-    // 1 for is_cashable bool
-    // 32 for listing pubkey
-    // 32 for listing_token_account pubkey
-    // 32 for purchaser pubkey
-    // 32 for cashier pubkey
-    // 8 for quantity u64
-    // 8 for price u64
-    // 16 for the unique nonce
-    #[account(init,
-        seeds = [b"receipt" as &[u8], &receipt_nonce.to_le_bytes()],
-        bump= receipt_bump,
-        payer = user,
-        space = 8 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
-    pub receipt: Box<Account<'info, Receipt>>,
-
     #[account(mut)]
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -923,7 +874,7 @@ pub struct Purchase<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_bump:u8, listing_bump: u8, listing_mint_bump: u8, realm_mint_bump: u8)]
+#[instruction(listing_mint_bump: u8, realm_mint_bump: u8)]
 pub struct Cash<'info> {
     pub cashier: Signer<'info>,
 
