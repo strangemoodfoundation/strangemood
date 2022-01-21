@@ -5,12 +5,15 @@ import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import * as splToken from "@solana/spl-token";
 import { Strangemood } from "../target/types/strangemood";
 import { pda as _pda } from "./pda";
-import { Government, MAINNET } from "./constants";
+import * as constants from "./constants";
 import { v4 } from "uuid";
 const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
 
 export const pda = _pda;
+
+export const MAINNET = constants.MAINNET;
+export const TESTNET = constants.TESTNET;
 
 export function makeReceiptNonce() {
   let buffer = [];
@@ -52,7 +55,7 @@ export async function setReceiptCashable(args: {
     account: Receipt;
     publicKey: PublicKey;
   };
-  government?: Government;
+  government?: constants.Government;
 }) {
   let ix = args.program.instruction.setReceiptCashable({
     accounts: {
@@ -139,7 +142,7 @@ export async function consume(args: {
   };
   listingTokenAccount: PublicKey;
   quantity: anchor.BN;
-  government?: Government;
+  government?: constants.Government;
 }) {
   let [_, listingBump] = await anchor.web3.PublicKey.findProgramAddress(
     [Buffer.from("listing"), args.listing.account.mint.toBuffer()],
@@ -202,7 +205,7 @@ export async function initListing(args: {
   // Can this listing be purchased?
   is_available: boolean;
 
-  governance?: Government;
+  governance?: constants.Government;
 }) {
   const mintKeypair = anchor.web3.Keypair.generate();
   const gov = args.governance || MAINNET.government;
@@ -382,7 +385,7 @@ export async function cash(args: {
     account: Listing;
     publicKey: PublicKey;
   };
-  government?: Government;
+  government?: constants.Government;
 }) {
   const gov = args.government || MAINNET.government;
 
