@@ -40,6 +40,10 @@ export type Receipt = Awaited<
   ReturnType<Program<Strangemood>["account"]["receipt"]["fetch"]>
 >;
 
+/**
+ * Allows a purchase to be cashable, effectively marking
+ * it as no-longer refundable.
+ */
 export async function setReceiptCashable(args: {
   program: Program<Strangemood>;
   conn: Connection;
@@ -66,6 +70,12 @@ export async function setReceiptCashable(args: {
   };
 }
 
+/**
+ * Cancels an in-progress purchase, returning
+ * the escrow the purchaser, and, if the purchase
+ * was refundable, burns the tokens they received
+ * at purchase time.
+ */
 export async function cancel(args: {
   program: Program<Strangemood>;
   conn: Connection;
@@ -115,6 +125,10 @@ export async function cancel(args: {
   };
 }
 
+/**
+ * If the listing is consumable, burns tokens of a
+ * particular account.
+ */
 export async function consume(args: {
   program: Program<Strangemood>;
   conn: Connection;
@@ -162,6 +176,9 @@ export async function consume(args: {
   };
 }
 
+/**
+ * Creates a new listing for sale.
+ */
 export async function initListing(args: {
   program: Program<Strangemood>;
   conn: Connection;
@@ -170,13 +187,19 @@ export async function initListing(args: {
   // In lamports
   price: anchor.BN;
 
+  // The decimals on the underlying mint.
   decimals: number;
 
   // Example: "ipfs://my-cid"
   uri: string;
 
+  // Can the lister burn tokens?
   is_consumable: boolean;
+
+  // Can the purchaser refund?
   is_refundable: boolean;
+
+  // Can this listing be purchased?
   is_available: boolean;
 
   governance?: Government;
@@ -262,6 +285,10 @@ export async function initListing(args: {
   };
 }
 
+/**
+ * Initiates a purchase. The purchase must eventually
+ * be "cashed" by the cashier.
+ */
 export async function purchase(args: {
   program: Program<Strangemood>;
   conn: Connection;
@@ -546,186 +573,3 @@ export async function setListingAuthority(args: {
   );
   return { tx };
 }
-
-// export async function setListingUri(
-//   program: Program<Strangemood>,
-//   user: PublicKey,
-//   listingKey: PublicKey,
-//   uri: string
-// ) {
-//   let tx = new Transaction();
-
-//   tx.add(
-//     program.instruction.setListingUri(uri, {
-//       accounts: {
-//         user,
-//         listing: listingKey,
-//         systemProgram: SystemProgram.programId,
-//       },
-//     })
-//   );
-//   return { tx };
-// }
-
-// export async function setListingAvailability(
-//   program: Program<Strangemood>,
-//   user: PublicKey,
-//   listingKey: PublicKey,
-//   isAvailable: string
-// ) {
-//   let tx = new Transaction();
-
-//   tx.add(
-//     program.instruction.setListingAvailability(isAvailable, {
-//       accounts: {
-//         user,
-//         listing: listingKey,
-//         systemProgram: SystemProgram.programId,
-//       },
-//     })
-//   );
-//   return { tx };
-// }
-
-// export async function setListingDeposits(
-//   program: Program<Strangemood>,
-//   user: PublicKey,
-//   listingKey: PublicKey,
-//   voteDeposit: PublicKey,
-//   solDeposit: PublicKey
-// ) {
-//   let tx = new Transaction();
-
-//   tx.add(
-//     program.instruction.setListingDeposits({
-//       accounts: {
-//         user,
-//         listing: listingKey,
-
-//         voteDeposit,
-//         solDeposit,
-
-//         systemProgram: SystemProgram.programId,
-//       },
-//     })
-//   );
-//   return { tx };
-// }
-
-// export async function setListingAuthority(
-//   program: Program<Strangemood>,
-//   user: PublicKey,
-//   listingKey: PublicKey,
-//   authority: PublicKey
-// ) {
-//   let tx = new Transaction();
-
-//   tx.add(
-//     program.instruction.setListingAuthority({
-//       accounts: {
-//         user,
-//         listing: listingKey,
-//         authority,
-//         systemProgram: SystemProgram.programId,
-//       },
-//     })
-//   );
-//   return { tx };
-// }
-
-// export async function initListing(
-//   program: Program<Strangemood>,
-//   conn: Connection,
-//   user: PublicKey,
-//   price: anchor.BN,
-//   uri: string,
-//   network_constants: NET = MAINNET
-// ): Promise<{ tx: Transaction; signers: Keypair[]; publicKey: PublicKey }> {
-//   const mintKeypair = anchor.web3.Keypair.generate();
-
-//   let tx = new Transaction();
-
-//   let [listingMintAuthority, listingMintBump] = await pda.mint(
-//     program.programId,
-//     mintKeypair.publicKey
-//   );
-//   let [listingPDA, listingBump] = await pda.listing(
-//     program.programId,
-//     mintKeypair.publicKey
-//   );
-
-//   // Find or create an associated vote token account
-//   let associatedVoteAddress = await splToken.Token.getAssociatedTokenAddress(
-//     splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
-//     splToken.TOKEN_PROGRAM_ID,
-//     network_constants.STRANGEMOOD_FOUNDATION_MINT,
-//     user
-//   );
-//   if (!(await conn.getAccountInfo(associatedVoteAddress))) {
-//     tx.add(
-//       splToken.Token.createAssociatedTokenAccountInstruction(
-//         splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
-//         splToken.TOKEN_PROGRAM_ID,
-//         network_constants.STRANGEMOOD_FOUNDATION_MINT,
-//         associatedVoteAddress,
-//         user,
-//         user
-//       )
-//     );
-//   }
-
-//   // Find or create an associated wrapped sol account
-//   let associatedSolAddress = await splToken.Token.getAssociatedTokenAddress(
-//     splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
-//     splToken.TOKEN_PROGRAM_ID,
-//     splToken.NATIVE_MINT,
-//     user
-//   );
-//   if (!(await conn.getAccountInfo(associatedSolAddress))) {
-//     tx.add(
-//       splToken.Token.createAssociatedTokenAccountInstruction(
-//         splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
-//         splToken.TOKEN_PROGRAM_ID,
-//         splToken.NATIVE_MINT,
-//         associatedSolAddress,
-//         user,
-//         user
-//       )
-//     );
-//   }
-
-//   let init_instruction_ix = program.instruction.initListing(
-//     listingMintBump,
-//     listingBump,
-//     price,
-//     uri,
-//     {
-//       accounts: {
-//         listing: listingPDA,
-//         mint: mintKeypair.publicKey,
-//         mintAuthorityPda: listingMintAuthority,
-//         rent: SYSVAR_RENT_PUBKEY,
-//         solDeposit: associatedSolAddress,
-//         voteDeposit: associatedVoteAddress,
-//         realm: network_constants.STRANGEMOOD_FOUNDATION_REALM,
-//         governanceProgram: network_constants.GOVERNANCE_PROGRAM_ID,
-//         charter: network_constants.STRANGEMOOD_FOUNDATION_CHARTER,
-//         charterGovernance:
-//           network_constants.STRANGEMOOD_FOUNDATION_CHARTER_GOVERNANCE,
-//         tokenProgram: splToken.TOKEN_PROGRAM_ID,
-//         user: user,
-//         systemProgram: SystemProgram.programId,
-//       },
-//       signers: [mintKeypair],
-//     }
-//   );
-//   tx.add(init_instruction_ix);
-
-//   return {
-//     tx,
-//     signers: [mintKeypair],
-//     publicKey: listingPDA,
-//   };
-// }
-
-// export { MAINNET, TESTNET };
