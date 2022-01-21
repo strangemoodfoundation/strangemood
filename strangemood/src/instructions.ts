@@ -56,8 +56,6 @@ export async function depositGovernanceTokens(params: {
       params.governanceProgramId
     );
 
-  console.log("sent to", governingTokenHoldingAddress.toString());
-
   const keys = [
     {
       pubkey: params.realm,

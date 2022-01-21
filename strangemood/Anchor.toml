@@ -14,4 +14,4 @@ cluster = "localnet"
 wallet = "/home/ubuntu/.config/solana/id.json"
 
 [scripts]
-test = "yarn ts-mocha -p ./tsconfig.json -t 1000000 src/**/*.test.ts"
+test = "yarn ts-mocha -p ./tsconfig.json -t 1000000 src/test/*.test.ts"
