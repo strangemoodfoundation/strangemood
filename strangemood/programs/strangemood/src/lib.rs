@@ -1,10 +1,8 @@
-use anchor_lang::{prelude::*, solana_program};
+use anchor_lang::{solana_program, declare_id, prelude::*, System, account, Accounts};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-mod external;
 use anchor_lang::solana_program::system_instruction;
-use solana_program::sysvar::rent::Rent;
 
-declare_id!("smtaswNwG1JkZY2EbogfBn9JmRdsjgMrRHgLvfikoVq");
+declare_id!("sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW");
 
 pub fn mint_to_and_freeze<'a>(
     token_program: AccountInfo<'a>,
@@ -14,6 +12,7 @@ pub fn mint_to_and_freeze<'a>(
     bump: u8,
     amount: u64,
 ) -> ProgramResult {
+
     mint_to(
         token_program.clone(),
         mint.clone(),
@@ -108,7 +107,6 @@ pub fn burn<'a>(
 pub fn sync_native<'a>(token_program: &AccountInfo<'a>, account: AccountInfo<'a>) -> ProgramResult {
     let ix = spl_token::instruction::sync_native(&token_program.key(), &account.key())?;
 
-    msg!("Syncing the account {:?}", account.lamports());
     solana_program::program::invoke(&ix, &[account.clone()])
 }
 
@@ -156,6 +154,8 @@ pub fn close_account<'a>(
 
 #[program]
 pub mod strangemood {
+    use anchor_lang::prelude::Context;
+
     use super::*;
 
     pub fn init_listing(
@@ -1072,10 +1072,8 @@ impl Charter {
 
 #[error]
 pub enum StrangemoodError {
-    #[msg("Invalid Purchase Amount: the price given does not match the listing")]
-    InvalidPurchaseAmount,
 
-    #[msg("Only Wrapped Sol Is Supported: Listing Deposit Accounts must be Wrapped SOL")]
+    #[msg("Only Wrapped Sol Is Supported")]
     OnlyWrappedSolIsSupported,
 
     #[msg("Unauthorized Charter")]
@@ -1093,9 +1091,6 @@ pub enum StrangemoodError {
     #[msg("Realm Mint was not the Realm's Mint")]
     UnauthorizedRealmMint,
 
-    #[msg("Account Did Not Deserialize")]
-    AccountDidNotDeserialize,
-
     #[msg("Provided Authority Account Does Not Have Access")]
     UnauthorizedAuthority,
 
@@ -1104,9 +1099,6 @@ pub enum StrangemoodError {
 
     #[msg("Only Cashable by the Cashier")]
     OnlyCashableByTheCashier,
-
-    #[msg("Lamport balance below rent-exempt threshold")]
-    NotRentExempt,
 
     #[msg("Listing is Unavailable")]
     ListingUnavailable,
