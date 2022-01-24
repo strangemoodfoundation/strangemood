@@ -2,7 +2,13 @@ import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 export { Strangemood } from "../target/types/strangemood";
 import { Connection, PublicKey, Transaction } from "@solana/web3.js";
-import * as splToken from "@solana/spl-token";
+import {
+  createAssociatedTokenAccountInstruction,
+  createSyncNativeInstruction,
+  getAssociatedTokenAddress,
+  NATIVE_MINT,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import { Strangemood } from "../target/types/strangemood";
 import { pda as _pda } from "./pda";
 import * as constants from "./constants";
@@ -114,7 +120,7 @@ export async function cancel(args: {
         listing: args.receipt.account.listing,
         listingMint: args.listing.account.mint,
         listingMintAuthority: listingMintAuthority,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       },
     }
@@ -165,7 +171,7 @@ export async function consume(args: {
         mint: args.listing.account.mint,
         mintAuthority: listingMintAuthority,
         listingTokenAccount: args.listingTokenAccount,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
         authority: args.signer,
       },
     }
@@ -222,13 +228,13 @@ export async function initListing(args: {
   );
 
   // Find or create an associated vote token account
-  let associatedVoteAddress = await splToken.getAssociatedTokenAddress(
+  let associatedVoteAddress = await getAssociatedTokenAddress(
     gov.mint,
     args.signer
   );
   if (!(await args.conn.getAccountInfo(associatedVoteAddress))) {
     tx.add(
-      splToken.createAssociatedTokenAccountInstruction(
+      createAssociatedTokenAccountInstruction(
         args.signer,
         associatedVoteAddress,
         args.signer,
@@ -237,17 +243,17 @@ export async function initListing(args: {
     );
   }
 
-  let associatedSolAddress = await splToken.getAssociatedTokenAddress(
-    splToken.NATIVE_MINT,
+  let associatedSolAddress = await getAssociatedTokenAddress(
+    NATIVE_MINT,
     args.signer
   );
   if (!(await args.conn.getAccountInfo(associatedVoteAddress))) {
     tx.add(
-      splToken.createAssociatedTokenAccountInstruction(
+      createAssociatedTokenAccountInstruction(
         args.signer,
         associatedVoteAddress,
         args.signer,
-        splToken.NATIVE_MINT
+        NATIVE_MINT
       )
     );
   }
@@ -272,7 +278,7 @@ export async function initListing(args: {
         governanceProgram: gov.governance_program_id,
         charter: gov.charter,
         charterGovernance: gov.charter_governance,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
         user: args.signer,
         systemProgram: SystemProgram.programId,
       },
@@ -317,13 +323,13 @@ export async function purchase(args: {
       args.program.programId
     );
 
-  let listingTokenAccount = await splToken.getAssociatedTokenAddress(
+  let listingTokenAccount = await getAssociatedTokenAddress(
     args.listing.account.mint,
     args.signer
   );
   if (!(await args.conn.getAccountInfo(listingTokenAccount))) {
     tx.add(
-      splToken.createAssociatedTokenAccountInstruction(
+      createAssociatedTokenAccountInstruction(
         args.signer,
         listingTokenAccount,
         args.signer,
@@ -347,7 +353,7 @@ export async function purchase(args: {
         receipt: receipt_pda,
         user: args.signer,
         systemProgram: SystemProgram.programId,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
       },
     }
@@ -423,7 +429,7 @@ export async function cash(args: {
         governanceProgram: args.government,
         charter: gov.charter,
         charterGovernance: gov.charter_governance,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         listingMint: args.listing.account.mint,
         listingMintAuthority: listingMintAuthority,
@@ -441,12 +447,8 @@ export async function cash(args: {
   // the realm could do it themselves. That's quite rude though (basically
   // like spitting in their soup I hear) and the makers of the protocol
   // would probably call you a meanie if you took these lines out.
-  let sync_listing_sol_ix = splToken.createSyncNativeInstruction(
-    this.realm_sol_deposit
-  );
-  let sync_realm_sol_ix = splToken.createSyncNativeInstruction(
-    this.realm_sol_deposit
-  );
+  let sync_listing_sol_ix = createSyncNativeInstruction(this.realm_sol_deposit);
+  let sync_realm_sol_ix = createSyncNativeInstruction(this.realm_sol_deposit);
   tx.add(sync_listing_sol_ix, sync_realm_sol_ix);
 
   return {
