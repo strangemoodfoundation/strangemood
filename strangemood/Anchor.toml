@@ -1,5 +1,5 @@
 [programs.localnet]
-strangemood = "smtaswNwG1JkZY2EbogfBn9JmRdsjgMrRHgLvfikoVq"
+strangemood = "sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW"
 
 # Bundle the governance program into the local test environment
 [[test.genesis]]

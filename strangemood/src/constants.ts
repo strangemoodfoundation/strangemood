@@ -22,7 +22,7 @@ export type Environment = {
 
 export const MAINNET: Environment = {
   strangemood_program_id: new anchor.web3.PublicKey(
-    "smtaswNwG1JkZY2EbogfBn9JmRdsjgMrRHgLvfikoVq"
+    "sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW"
   ),
   government: {
     governance_program_id: new anchor.web3.PublicKey(
@@ -60,7 +60,7 @@ export const MAINNET: Environment = {
 
 export const TESTNET: Environment = {
   strangemood_program_id: new anchor.web3.PublicKey(
-    "smtaswNwG1JkZY2EbogfBn9JmRdsjgMrRHgLvfikoVq"
+    "sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW"
   ),
   government: {
     governance_program_id: new anchor.web3.PublicKey(
