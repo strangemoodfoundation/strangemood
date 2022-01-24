@@ -1,6 +1,6 @@
 {
   "name": "@strangemood/strangemood",
-  "version": "0.0.0-41",
+  "version": "0.0.0-42",
   "main": "dist/src/index.js",
   "typings": "dist/src/index.d.ts",
   "dependencies": {
