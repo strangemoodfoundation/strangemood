@@ -73,7 +73,7 @@ export const TESTNET: Environment = {
       "ApRKmRxykkXFHjJtxWR4bk8m4AJTw5x46DyaX65VZMPe"
     ),
     charter: new anchor.web3.PublicKey(
-      "8xkw3m8r2uo3B9w3UrLjLpAYLqXJEjEyZePsPEgeigLn"
+      "BXoctCMnGs5Y1nrRYuYWLBwdg79o9JfGUsbYzPJbLjvT"
     ),
     sol_account: new anchor.web3.PublicKey(
       "4U9UYj9KcEghQ5n6Datvq8HPAbhkqENebyn9BuMfdCB5"
@@ -88,7 +88,7 @@ export const TESTNET: Environment = {
       "CK5k5UCC9DNyAXCBwzYpFAZ24ZRoe6DomvsGrNyC7HVg"
     ),
     charter_governance: new anchor.web3.PublicKey(
-      "Bs4nkSyZoP7pKk5RviR2eHV2WMD9dbsgRWZA5uQK1GN7"
+      "8BxgjyhxXQkhibc2jKzjVhTnM5KZGCcVbKoCod141f1R"
     ),
     mint_authority: new anchor.web3.PublicKey(
       "Hi9KN3FHbJpjJxtnzyEvVFKm4x4iYkXDg4CPehUYUPAH"
