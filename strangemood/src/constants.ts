@@ -44,10 +44,10 @@ export const MAINNET: Environment = {
       "BPXhmqQZ8BUmd5F17a2K2QogPRQ45Fisa3NZfnfAoXzN"
     ),
     charter_governance: new anchor.web3.PublicKey(
-      "5jUJkBMX9PMZ3LYCRW3K9E1xpxGKxR6VNYvicJTQB68F"
+      "HLHjZydWuWQa23Ykp53YTgCmT2XccrM3amgHvTCpWLK4"
     ),
     charter: new anchor.web3.PublicKey(
-      "A5yVjHjp8LTjpkw7VEhRP3KPoKKqTqWtkhTR47sJbxJg"
+      "BdbEbwDDLF5421zZdoZJLGjbRZYACyRBhE7cmKwfhmZF"
     ),
     realm: new anchor.web3.PublicKey(
       "FvzZFjf3NPTZbKAmQA4Gf1v7uTW7HFcP5Pcr2oVm49t3"
