@@ -578,3 +578,59 @@ export async function setListingAuthority(args: {
   );
   return { tx };
 }
+
+export async function initCharter(args: {
+  program: Program<Strangemood>;
+  conn: Connection;
+  governanceProgramId: PublicKey;
+  realm: PublicKey;
+  authority: PublicKey;
+  realmSolDeposit: PublicKey;
+  realmVoteDeposit: PublicKey;
+  signer: PublicKey;
+  expansionAmount: anchor.BN;
+  expansionDecimals: number;
+  solContributionAmount: anchor.BN;
+  solContributionDecimals: number;
+  voteContributionAmount: anchor.BN;
+  voteContributionDecimals: number;
+  uri: string;
+}) {
+  let tx = new Transaction();
+
+  let [charterPDA, charterBump] =
+    await anchor.web3.PublicKey.findProgramAddress(
+      [
+        Buffer.from("charter"),
+        args.governanceProgramId.toBuffer(),
+        args.realm.toBuffer(),
+      ],
+      args.program.programId
+    );
+
+  tx.add(
+    args.program.instruction.initCharter(
+      charterBump,
+      args.expansionAmount, // Expansion amount
+      args.expansionDecimals, // expansion decimals
+      args.solContributionAmount, // sol contribution amount
+      args.solContributionDecimals, // sol contribution decimals
+      args.voteContributionAmount, // vote contribution amount
+      args.voteContributionDecimals, // vote contribution decimals
+      args.uri,
+      {
+        accounts: {
+          charter: charterPDA,
+          authority: args.authority,
+          realmSolDeposit: args.realmSolDeposit,
+          realmVoteDeposit: args.realmVoteDeposit,
+          realm: args.realm,
+          governanceProgram: args.governanceProgramId,
+          user: args.signer,
+          systemProgram: SystemProgram.programId,
+        },
+      }
+    )
+  );
+  return { tx, charter: charterPDA };
+}
