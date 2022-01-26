@@ -425,13 +425,22 @@ export async function cash(args: {
   program: Program<Strangemood>;
   signer: anchor.web3.PublicKey;
   receipt: AccountInfo<Receipt> | PublicKey;
-  listing: AccountInfo<Listing> | PublicKey;
+  listing?: AccountInfo<Listing> | PublicKey;
   government?: constants.Government;
 }) {
   const gov = args.government || MAINNET.government;
 
-  let listingInfo = await asListingInfo(args.program, args.listing);
   let receiptInfo = await asReceiptInfo(args.program, args.receipt);
+
+  let listingInfo: AccountInfo<Listing>;
+  if (args.listing) {
+    listingInfo = await asListingInfo(args.program, args.listing);
+  } else {
+    listingInfo = await asListingInfo(
+      args.program,
+      receiptInfo.account.listing
+    );
+  }
 
   let [listingMintAuthority, listingMintAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
