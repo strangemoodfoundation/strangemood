@@ -49,24 +49,62 @@ export type Receipt = Awaited<
   ReturnType<Program<Strangemood>["account"]["receipt"]["fetch"]>
 >;
 
+export interface AccountInfo<Acc> {
+  account: Acc;
+  publicKey: PublicKey;
+}
+
+function isAccountInfo<T>(
+  arg: AccountInfo<T> | PublicKey
+): arg is AccountInfo<T> {
+  return (
+    (arg as AccountInfo<T>).account !== undefined &&
+    (arg as AccountInfo<T>).publicKey !== undefined
+  );
+}
+
+async function asReceiptInfo(
+  program: Program<Strangemood>,
+  arg: AccountInfo<Receipt> | PublicKey
+): Promise<AccountInfo<Receipt>> {
+  if (isAccountInfo(arg)) {
+    return arg;
+  }
+  return {
+    account: await program.account.receipt.fetch(arg),
+    publicKey: arg,
+  };
+}
+
+async function asListingInfo(
+  program: Program<Strangemood>,
+  arg: AccountInfo<Receipt> | PublicKey
+): Promise<AccountInfo<Receipt>> {
+  if (isAccountInfo(arg)) {
+    return arg;
+  }
+  return {
+    account: await program.account.receipt.fetch(arg),
+    publicKey: arg,
+  };
+}
+
 /**
  * Allows a purchase to be cashable, effectively marking
  * it as no-longer refundable.
  */
 export async function setReceiptCashable(args: {
   program: Program<Strangemood>;
-  conn: Connection;
   signer: anchor.web3.PublicKey;
-  receipt: {
-    account: Receipt;
-    publicKey: PublicKey;
-  };
+  receipt: AccountInfo<Receipt> | PublicKey;
   government?: constants.Government;
 }) {
+  let receiptInfo = await asReceiptInfo(args.program, args.receipt);
+
   let ix = args.program.instruction.setReceiptCashable({
     accounts: {
-      listing: args.receipt.account.listing,
-      receipt: args.receipt.publicKey,
+      listing: receiptInfo.account.listing,
+      receipt: receiptInfo.publicKey,
       authority: args.signer,
     },
   });
@@ -87,25 +125,21 @@ export async function setReceiptCashable(args: {
  */
 export async function cancel(args: {
   program: Program<Strangemood>;
-  conn: Connection;
   signer: anchor.web3.PublicKey;
-  receipt: {
-    account: Receipt;
-    publicKey: PublicKey;
-  };
-  listing: {
-    account: Receipt;
-    publicKey: PublicKey;
-  };
+  receipt: AccountInfo<Receipt> | PublicKey;
+  listing: AccountInfo<Listing> | PublicKey;
 }) {
+  let receiptInfo = await asReceiptInfo(args.program, args.receipt);
+  let listingInfo = await asListingInfo(args.program, args.listing);
+
   let [_, listingBump] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("listing"), args.listing.account.mint.toBuffer()],
+    [Buffer.from("listing"), listingInfo.account.mint.toBuffer()],
     args.program.programId
   );
 
   let [listingMintAuthority, listingMintAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), args.listing.account.mint.toBuffer()],
+      [Buffer.from("mint"), listingInfo.account.mint.toBuffer()],
       args.program.programId
     );
 
@@ -115,10 +149,10 @@ export async function cancel(args: {
     {
       accounts: {
         purchaser: args.signer,
-        receipt: args.receipt.publicKey,
-        listingTokenAccount: args.receipt.account.listingTokenAccount,
-        listing: args.receipt.account.listing,
-        listingMint: args.listing.account.mint,
+        receipt: receiptInfo.publicKey,
+        listingTokenAccount: receiptInfo.account.listingTokenAccount,
+        listing: receiptInfo.account.listing,
+        listingMint: listingInfo.account.mint,
         listingMintAuthority: listingMintAuthority,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
@@ -140,24 +174,22 @@ export async function cancel(args: {
  */
 export async function consume(args: {
   program: Program<Strangemood>;
-  conn: Connection;
   signer: PublicKey;
-  listing: {
-    account: Receipt;
-    publicKey: PublicKey;
-  };
+  listing: AccountInfo<Receipt> | PublicKey;
   listingTokenAccount: PublicKey;
   quantity: anchor.BN;
   government?: constants.Government;
 }) {
+  let listingInfo = await asListingInfo(args.program, args.listing);
+
   let [_, listingBump] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("listing"), args.listing.account.mint.toBuffer()],
+    [Buffer.from("listing"), listingInfo.account.mint.toBuffer()],
     args.program.programId
   );
 
   let [listingMintAuthority, listingMintAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), args.listing.account.mint.toBuffer()],
+      [Buffer.from("mint"), listingInfo.account.mint.toBuffer()],
       args.program.programId
     );
 
@@ -167,8 +199,8 @@ export async function consume(args: {
     args.quantity,
     {
       accounts: {
-        listing: args.listing.publicKey,
-        mint: args.listing.account.mint,
+        listing: listingInfo.publicKey,
+        mint: listingInfo.account.mint,
         mintAuthority: listingMintAuthority,
         listingTokenAccount: args.listingTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -190,7 +222,6 @@ export async function consume(args: {
  */
 export async function initListing(args: {
   program: Program<Strangemood>;
-  conn: Connection;
   signer: PublicKey;
 
   // In lamports
@@ -232,7 +263,11 @@ export async function initListing(args: {
     gov.mint,
     args.signer
   );
-  if (!(await args.conn.getAccountInfo(associatedVoteAddress))) {
+  if (
+    !(await args.program.provider.connection.getAccountInfo(
+      associatedVoteAddress
+    ))
+  ) {
     tx.add(
       createAssociatedTokenAccountInstruction(
         args.signer,
@@ -247,7 +282,11 @@ export async function initListing(args: {
     NATIVE_MINT,
     args.signer
   );
-  if (!(await args.conn.getAccountInfo(associatedVoteAddress))) {
+  if (
+    !(await args.program.provider.connection.getAccountInfo(
+      associatedVoteAddress
+    ))
+  ) {
     tx.add(
       createAssociatedTokenAccountInstruction(
         args.signer,
@@ -300,18 +339,17 @@ export async function initListing(args: {
  */
 export async function purchase(args: {
   program: Program<Strangemood>;
-  conn: Connection;
+
   cashier: PublicKey;
   signer: PublicKey;
-  listing: {
-    account: Listing;
-    publicKey: PublicKey;
-  };
+  listing: AccountInfo<Listing> | PublicKey;
   quantity: anchor.BN;
 }) {
+  let listingInfo = await asListingInfo(args.program, args.listing);
+
   let [listingMintAuthority, listingMintBump] = await pda.mint(
     args.program.programId,
-    args.listing.account.mint
+    listingInfo.account.mint
   );
 
   let tx = new Transaction();
@@ -324,16 +362,20 @@ export async function purchase(args: {
     );
 
   let listingTokenAccount = await getAssociatedTokenAddress(
-    args.listing.account.mint,
+    listingInfo.account.mint,
     args.signer
   );
-  if (!(await args.conn.getAccountInfo(listingTokenAccount))) {
+  if (
+    !(await args.program.provider.connection.getAccountInfo(
+      listingTokenAccount
+    ))
+  ) {
     tx.add(
       createAssociatedTokenAccountInstruction(
         args.signer,
         listingTokenAccount,
         args.signer,
-        args.listing.account.mint
+        listingInfo.account.mint
       )
     );
   }
@@ -345,10 +387,10 @@ export async function purchase(args: {
     new anchor.BN(args.quantity),
     {
       accounts: {
-        listing: args.listing.publicKey,
+        listing: listingInfo.publicKey,
         cashier: args.cashier,
         listingTokenAccount: listingTokenAccount,
-        listingMint: args.listing.account.mint,
+        listingMint: listingInfo.account.mint,
         listingMintAuthority: listingMintAuthority,
         receipt: receipt_pda,
         user: args.signer,
@@ -381,23 +423,19 @@ export async function purchase(args: {
  */
 export async function cash(args: {
   program: Program<Strangemood>;
-  conn: Connection;
   signer: anchor.web3.PublicKey;
-  receipt: {
-    account: Receipt;
-    publicKey: PublicKey;
-  };
-  listing: {
-    account: Listing;
-    publicKey: PublicKey;
-  };
+  receipt: AccountInfo<Receipt> | PublicKey;
+  listing: AccountInfo<Listing> | PublicKey;
   government?: constants.Government;
 }) {
   const gov = args.government || MAINNET.government;
 
+  let listingInfo = await asListingInfo(args.program, args.listing);
+  let receiptInfo = await asReceiptInfo(args.program, args.receipt);
+
   let [listingMintAuthority, listingMintAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), args.listing.account.mint.toBuffer()],
+      [Buffer.from("mint"), listingInfo.account.mint.toBuffer()],
       args.program.programId
     );
 
@@ -414,11 +452,11 @@ export async function cash(args: {
     args.program.instruction.cash(listingMintAuthorityBump, realmMintBump, {
       accounts: {
         cashier: args.signer,
-        receipt: args.receipt.publicKey,
-        listing: args.listing.publicKey,
-        listingTokenAccount: args.receipt.account.listingTokenAccount,
-        listingsSolDeposit: args.listing.account.solDeposit,
-        listingsVoteDeposit: args.listing.account.voteDeposit,
+        receipt: receiptInfo.publicKey,
+        listing: listingInfo.publicKey,
+        listingTokenAccount: receiptInfo.account.listingTokenAccount,
+        listingsSolDeposit: listingInfo.account.solDeposit,
+        listingsVoteDeposit: listingInfo.account.voteDeposit,
         realmSolDeposit: gov.sol_account,
         realmVoteDeposit: gov.vote_account,
         realmSolDepositGovernance: gov.sol_account_governance,
@@ -431,7 +469,7 @@ export async function cash(args: {
         charterGovernance: gov.charter_governance,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-        listingMint: args.listing.account.mint,
+        listingMint: listingInfo.account.mint,
         listingMintAuthority: listingMintAuthority,
       },
     })
@@ -458,21 +496,21 @@ export async function cash(args: {
 
 export async function setListingPrice(args: {
   program: Program<Strangemood>;
-  conn: Connection;
+
   signer: anchor.web3.PublicKey;
   price: anchor.BN;
-  listing: {
-    account: Listing;
-    publicKey: PublicKey;
-  };
+  listing: AccountInfo<Listing> | PublicKey;
 }) {
   let tx = new Transaction();
+  let listingKey: PublicKey = isAccountInfo(args.listing)
+    ? args.listing.publicKey
+    : args.listing;
 
   tx.add(
     args.program.instruction.setListingPrice(args.price, {
       accounts: {
         user: args.signer,
-        listing: args.listing,
+        listing: listingKey,
         systemProgram: SystemProgram.programId,
       },
     })
@@ -482,21 +520,22 @@ export async function setListingPrice(args: {
 
 export async function setListingUri(args: {
   program: Program<Strangemood>;
-  conn: Connection;
+
   signer: anchor.web3.PublicKey;
   uri: string;
-  listing: {
-    account: Listing;
-    publicKey: PublicKey;
-  };
+  listing: AccountInfo<Listing> | PublicKey;
 }) {
   let tx = new Transaction();
+
+  let listingKey: PublicKey = isAccountInfo(args.listing)
+    ? args.listing.publicKey
+    : args.listing;
 
   tx.add(
     args.program.instruction.setListingUri(args.uri, {
       accounts: {
         user: args.signer,
-        listing: args.listing,
+        listing: listingKey,
         systemProgram: SystemProgram.programId,
       },
     })
@@ -506,22 +545,23 @@ export async function setListingUri(args: {
 
 export async function setListingDeposits(args: {
   program: Program<Strangemood>;
-  conn: Connection;
+
   signer: anchor.web3.PublicKey;
-  listing: {
-    account: Listing;
-    publicKey: PublicKey;
-  };
+  listing: AccountInfo<Listing> | PublicKey;
   solDeposit: PublicKey;
   voteDeposit: PublicKey;
 }) {
   let tx = new Transaction();
 
+  let listingKey: PublicKey = isAccountInfo(args.listing)
+    ? args.listing.publicKey
+    : args.listing;
+
   tx.add(
     args.program.instruction.setListingDeposits({
       accounts: {
         user: args.signer,
-        listing: args.listing,
+        listing: listingKey,
         solDeposit: args.solDeposit,
         voteDeposit: args.voteDeposit,
         systemProgram: SystemProgram.programId,
@@ -533,20 +573,21 @@ export async function setListingDeposits(args: {
 
 export async function setListingAvailability(args: {
   program: Program<Strangemood>;
-  conn: Connection;
+
   signer: anchor.web3.PublicKey;
-  listing: {
-    account: Listing;
-    publicKey: PublicKey;
-  };
+  listing: AccountInfo<Listing> | PublicKey;
 }) {
   let tx = new Transaction();
+
+  let listingKey: PublicKey = isAccountInfo(args.listing)
+    ? args.listing.publicKey
+    : args.listing;
 
   tx.add(
     args.program.instruction.setListingAvailability(true, {
       accounts: {
         user: args.signer,
-        listing: args.listing,
+        listing: listingKey,
         systemProgram: SystemProgram.programId,
       },
     })
@@ -556,21 +597,22 @@ export async function setListingAvailability(args: {
 
 export async function setListingAuthority(args: {
   program: Program<Strangemood>;
-  conn: Connection;
+
   signer: anchor.web3.PublicKey;
-  listing: {
-    account: Listing;
-    publicKey: PublicKey;
-  };
+  listing: AccountInfo<Listing> | PublicKey;
   newAuthority: anchor.web3.PublicKey;
 }) {
   let tx = new Transaction();
+
+  let listingKey: PublicKey = isAccountInfo(args.listing)
+    ? args.listing.publicKey
+    : args.listing;
 
   tx.add(
     args.program.instruction.setListingAuthority({
       accounts: {
         user: args.signer,
-        listing: args.listing,
+        listing: listingKey,
         systemProgram: SystemProgram.programId,
         authority: args.newAuthority,
       },
@@ -581,7 +623,7 @@ export async function setListingAuthority(args: {
 
 export async function initCharter(args: {
   program: Program<Strangemood>;
-  conn: Connection;
+
   governanceProgramId: PublicKey;
   realm: PublicKey;
   authority: PublicKey;
