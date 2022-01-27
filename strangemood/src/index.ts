@@ -15,7 +15,7 @@ import * as constants from "./constants";
 import { v4 } from "uuid";
 const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
-require("buffer")
+import { Buffer } from "buffer";
 
 export const pda = _pda;
 

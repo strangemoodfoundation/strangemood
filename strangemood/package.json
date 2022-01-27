@@ -1,8 +1,11 @@
 {
   "name": "@strangemood/strangemood",
-  "version": "0.0.0-51",
-  "main": "dist/src/index.js",
+  "version": "0.0.0-53",
+  "license": "MIT",
   "typings": "dist/src/index.d.ts",
+  "module": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.js",
+  "browser": "./dist/browser/index.js",
   "dependencies": {
     "@project-serum/anchor": "^0.20.1",
     "@solana/buffer-layout": "^4.0.0",
@@ -16,17 +19,27 @@
     "dist"
   ],
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^21.0.1",
+    "@rollup/plugin-node-resolve": "^13.0.6",
+    "@rollup/plugin-replace": "^3.0.0",
+    "@rollup/plugin-typescript": "^8.3.0",
     "@types/chai": "^4.3.0",
     "@types/mocha": "^9.0.0",
-    "@types/node": "^17.0.10",
+    "@types/node": "^17.0.12",
     "@types/uuid": "^8.3.4",
     "chai": "^4.3.4",
     "mocha": "^9.0.3",
     "pako": "^2.0.4",
+    "rollup": "^2.60.2",
+    "rollup-plugin-terser": "^7.0.2",
     "ts-mocha": "^8.0.0",
-    "typescript": "^4.3.5"
+    "typescript": "^4.3.5",
+    "rimraf": "^3.0.2"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "rimraf dist/ && yarn build:node && yarn build:browser",
+    "build:node": "tsc && tsc -p tsconfig.cjs.json",
+    "build:browser": "rollup --config",
+    "prepublishOnly": "yarn build"
   }
 }
