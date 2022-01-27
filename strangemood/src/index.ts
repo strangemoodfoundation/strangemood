@@ -1,7 +1,7 @@
 import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 export { Strangemood } from "../target/types/strangemood";
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
   createSyncNativeInstruction,
@@ -358,7 +358,7 @@ export async function purchase(args: {
   const nonce = makeReceiptNonce();
   const [receipt_pda, receipt_bump] =
     await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("receipt"), nonce.toBuffer("le", 16)],
+      [Buffer.from("receipt"), nonce.toArrayLike(Buffer, "le", 16)],
       args.program.programId
     );
 
@@ -474,7 +474,7 @@ export async function cash(args: {
         realm: gov.realm,
         realmMint: gov.mint,
         realmMintAuthority: gov.mint_authority,
-        governanceProgram: args.government,
+        governanceProgram: gov.governance_program_id,
         charter: gov.charter,
         charterGovernance: gov.charter_governance,
         tokenProgram: TOKEN_PROGRAM_ID,
