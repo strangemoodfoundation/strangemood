@@ -4,8 +4,14 @@ import * as splToken from "@solana/spl-token";
 import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
+import { makeReceiptNonce } from "..";
 
 const RECEIPT_SIZE = 171;
+
+describe("no nonce buffer bug", () => {
+  const nonce = makeReceiptNonce();
+  nonce.toBuffer();
+});
 
 describe("strangemood", () => {
   const provider = anchor.Provider.env();

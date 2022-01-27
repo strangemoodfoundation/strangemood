@@ -1,6 +1,6 @@
 {
   "name": "@strangemood/strangemood",
-  "version": "0.0.0-50",
+  "version": "0.0.0-51",
   "main": "dist/src/index.js",
   "typings": "dist/src/index.d.ts",
   "dependencies": {
@@ -8,6 +8,7 @@
     "@solana/buffer-layout": "^4.0.0",
     "@solana/spl-token": "0.2.0-alpha.2",
     "borsh": "^0.7.0",
+    "buffer": "^6.0.3",
     "uuid": "^8.3.2"
   },
   "sideEffects": false,

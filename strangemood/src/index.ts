@@ -15,6 +15,7 @@ import * as constants from "./constants";
 import { v4 } from "uuid";
 const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
+require("buffer")
 
 export const pda = _pda;
 
@@ -234,13 +235,13 @@ export async function initListing(args: {
   uri: string;
 
   // Can the lister burn tokens?
-  is_consumable: boolean;
+  isConsumable: boolean;
 
   // Can the purchaser refund?
-  is_refundable: boolean;
+  isRefundable: boolean;
 
   // Can this listing be purchased?
-  is_available: boolean;
+  isAvailable: boolean;
 
   governance?: constants.Government;
 }) {
@@ -301,9 +302,9 @@ export async function initListing(args: {
     listingBump,
     args.decimals,
     args.price,
-    args.is_refundable,
-    args.is_consumable,
-    args.is_available,
+    args.isRefundable,
+    args.isConsumable,
+    args.isAvailable,
     args.uri,
     {
       accounts: {
