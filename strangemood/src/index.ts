@@ -85,7 +85,7 @@ async function asListingInfo(
     return arg;
   }
   return {
-    account: await program.account.receipt.fetch(arg),
+    account: await program.account.listing.fetch(arg),
     publicKey: arg,
   };
 }
@@ -449,10 +449,11 @@ export async function cash(args: {
       args.program.programId
     );
 
-  let [_, realmMintBump] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("mint"), gov.mint.toBuffer()],
-    args.program.programId
-  );
+  let [realmMintAuthority, realmMintBump] =
+    await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("mint"), gov.mint.toBuffer()],
+      args.program.programId
+    );
 
   const tx = new anchor.web3.Transaction({
     feePayer: args.signer,
@@ -473,7 +474,7 @@ export async function cash(args: {
         realmVoteDepositGovernance: gov.vote_account_governance,
         realm: gov.realm,
         realmMint: gov.mint,
-        realmMintAuthority: gov.mint_authority,
+        realmMintAuthority: realmMintAuthority,
         governanceProgram: gov.governance_program_id,
         charter: gov.charter,
         charterGovernance: gov.charter_governance,
@@ -495,8 +496,10 @@ export async function cash(args: {
   // the realm could do it themselves. That's quite rude though (basically
   // like spitting in their soup I hear) and the makers of the protocol
   // would probably call you a meanie if you took these lines out.
-  let sync_listing_sol_ix = createSyncNativeInstruction(this.realm_sol_deposit);
-  let sync_realm_sol_ix = createSyncNativeInstruction(this.realm_sol_deposit);
+  let sync_listing_sol_ix = createSyncNativeInstruction(
+    listingInfo.account.solDeposit
+  );
+  let sync_realm_sol_ix = createSyncNativeInstruction(gov.sol_account);
   tx.add(sync_listing_sol_ix, sync_realm_sol_ix);
 
   return {

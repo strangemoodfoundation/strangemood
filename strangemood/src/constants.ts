@@ -29,31 +29,31 @@ export const MAINNET: Environment = {
       "smfjietFKFJ4Sbw1cqESBTpPhF4CwbMwN8kBEC1e5ui"
     ),
     mint: new anchor.web3.PublicKey(
-      "moodzXgRAZuPDjdogxtWCQSs3xjyiXKtiqsFGTPpkeW"
+      "moodn6VC7wWoFEmx5xGRkFJTNqXdiWBE2c9a3JhEC5p"
     ),
     sol_account: new anchor.web3.PublicKey(
-      "5BGdQ9MKMSbkHRKPvC1XNq5ky9hVCU4s1QbNxLBYgJDv"
+      "9PsSpZjRbVErAuZ2j5NExLMKFXnp9P4QfaRSp9paGym7"
     ),
     sol_account_governance: new anchor.web3.PublicKey(
-      "4SxNGraPXoS3ia38Wt89MdTBN1AACSjzJE56LLLAonrL"
+      "BgAtADKLwHNrNDP1s11W9f4ZqYhVwcg4XUTuizA4HgpR"
     ),
     vote_account: new anchor.web3.PublicKey(
-      "3tHFaRiaiSoJsBkx5HbSm6Ep8J43Xuev2Sm1TwSnraUZ"
+      "ronqxZ9Cq6My2qJeL2CpMA5EChe81QY7vcsKefy1Hs5"
     ),
     vote_account_governance: new anchor.web3.PublicKey(
-      "BPXhmqQZ8BUmd5F17a2K2QogPRQ45Fisa3NZfnfAoXzN"
+      "CpPq4mUd5YFSScJYLHMgyRumk2MWKPKxxrWZAsmcLXSS"
     ),
     charter_governance: new anchor.web3.PublicKey(
-      "HLHjZydWuWQa23Ykp53YTgCmT2XccrM3amgHvTCpWLK4"
+      "13byAJcsk6io7q3Q7MBSmBqsGjcJAtLB7kgNJ3uVAxt6"
     ),
     charter: new anchor.web3.PublicKey(
       "BdbEbwDDLF5421zZdoZJLGjbRZYACyRBhE7cmKwfhmZF"
     ),
     realm: new anchor.web3.PublicKey(
-      "FvzZFjf3NPTZbKAmQA4Gf1v7uTW7HFcP5Pcr2oVm49t3"
+      "2kH9MSnUnBcTG4A7khDuYVwvjJWQVFNDqreAAEpP4atV"
     ),
     mint_authority: new anchor.web3.PublicKey(
-      "4TTmTnvvBqH6aSJ1aLqapHBitfH47AfvSoZpGmEA88hu"
+      "FHxaV3WNNYrqdoKE3w8rUtnUMDoRQAxmL642fdXHmEca"
     ),
   },
 };
