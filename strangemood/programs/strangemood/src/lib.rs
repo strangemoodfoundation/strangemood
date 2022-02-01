@@ -184,7 +184,6 @@ pub mod strangemood {
             return Err(StrangemoodError::MintNotSupported.into())
         }
 
-
         let listing = &mut ctx.accounts.listing;
         listing.is_initialized = true;
         listing.price = price;
