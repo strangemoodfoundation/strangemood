@@ -6,6 +6,8 @@ import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
 import { makeReceiptNonce } from "..";
 import { createTokenAccount } from "./utils";
+import { pda } from "../pda";
+const { SystemProgram } = anchor.web3;
 
 const RECEIPT_SIZE = 171;
 
@@ -24,6 +26,56 @@ describe("strangemood", () => {
 
   before(async () => {
     await client.init();
+  });
+
+  it("created charter correctly", async () => {
+    const charter = await program.account.charter.fetch(client.charter_pda);
+    assert.equal(charter.mint.toString(), client.realm_mint.toString());
+  });
+
+  it("can't create another charter with the same mint", async () => {
+    // Create charter
+    let [charterPDA, charterBump] = await pda.charter(
+      program.programId,
+      client.realm_mint
+    );
+
+    let myNefariousPaymentAccount = await createTokenAccount(
+      program,
+      splToken.NATIVE_MINT
+    );
+    let myNefariousVoteAccount = await createTokenAccount(
+      program,
+      client.realm_mint
+    );
+
+    let throws = false;
+    try {
+      await program.rpc.initCharter(
+        charterBump,
+        new anchor.BN(30), // Expansion amount
+        0, // expansion decimals
+        new anchor.BN(6), // sol contribution amount
+        3, // sol contribution decimals
+        new anchor.BN(2), // vote contribution amount
+        1, // vote contribution decimals
+        "https://strangemood.org",
+        {
+          accounts: {
+            charter: charterPDA,
+            authority: program.provider.wallet.publicKey,
+            paymentDeposit: myNefariousPaymentAccount.publicKey,
+            voteDeposit: myNefariousVoteAccount.publicKey,
+            mint: client.realm_mint,
+            user: provider.wallet.publicKey,
+            systemProgram: SystemProgram.programId,
+          },
+        }
+      );
+    } catch (err) {
+      throws = true;
+    }
+    assert.equal(throws, true, "Expected initCharter to throw");
   });
 
   it("can make a listing", async () => {
@@ -49,6 +101,11 @@ describe("strangemood", () => {
     assert.equal(l.isConsumable, true, "should be consumable");
     assert.equal(l.isRefundable, false, "not refundable");
     assert.equal(l.isAvailable, true, "is unexpectedly not available");
+    assert.equal(
+      l.charter.toString(),
+      client.charter_pda.toString(),
+      "is not created with this charter"
+    );
   });
 
   it("can create a receipt", async () => {
@@ -178,11 +235,11 @@ describe("strangemood", () => {
 
     let charter = await program.account.charter.fetch(client.charter_pda);
     assert.notEqual(
-      charter.realmSolDeposit.toString(),
+      charter.paymentDeposit.toString(),
       solDeposit.publicKey.toString()
     );
     assert.notEqual(
-      charter.realmVoteDeposit.toString(),
+      charter.voteDeposit.toString(),
       voteDeposit.publicKey.toString()
     );
 
@@ -194,11 +251,11 @@ describe("strangemood", () => {
 
     charter = await program.account.charter.fetch(client.charter_pda);
     assert.equal(
-      charter.realmSolDeposit.toString(),
+      charter.paymentDeposit.toString(),
       solDeposit.publicKey.toString()
     );
     assert.equal(
-      charter.realmVoteDeposit.toString(),
+      charter.voteDeposit.toString(),
       voteDeposit.publicKey.toString()
     );
   });
