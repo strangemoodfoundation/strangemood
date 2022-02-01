@@ -306,6 +306,22 @@ export class TestClient {
     });
   }
 
+  async setCharterDeposit(accounts: {
+    authority: anchor.web3.PublicKey;
+    solDeposit: anchor.web3.PublicKey;
+    voteDeposit: anchor.web3.PublicKey;
+  }) {
+    await this.program.rpc.setCharterDeposits({
+      accounts: {
+        solDeposit: accounts.solDeposit,
+        voteDeposit: accounts.voteDeposit,
+        charter: this.charter_pda,
+        systemProgram: SystemProgram.programId,
+        user: accounts.authority,
+      },
+    });
+  }
+
   async cash(accounts: {
     cashier: anchor.web3.Keypair;
     receipt: anchor.web3.PublicKey;

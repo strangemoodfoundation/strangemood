@@ -443,6 +443,18 @@ export async function cash(args: {
     );
   }
 
+  if (
+    gov.charter_governance.toString() !==
+    listingInfo.account.charterGovernance.toString()
+  ) {
+    // If you're getting this error, you're probably trying to cash a listing
+    // that does not belong to the default co-op. To fix this, consider
+    // passing a `args.government` of the listing.
+    throw new Error(
+      `The Listing at '${listingInfo.publicKey}' does not contain the charter_governance '${gov.charter_governance}'. In other words, this listing does not belong to this governance, and so the instruction will fail if we try to send it.`
+    );
+  }
+
   let [listingMintAuthority, listingMintAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
       [Buffer.from("mint"), listingInfo.account.mint.toBuffer()],

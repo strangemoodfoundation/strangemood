@@ -44,7 +44,7 @@ export const MAINNET: Environment = {
       "CpPq4mUd5YFSScJYLHMgyRumk2MWKPKxxrWZAsmcLXSS"
     ),
     charter_governance: new anchor.web3.PublicKey(
-      "13byAJcsk6io7q3Q7MBSmBqsGjcJAtLB7kgNJ3uVAxt6"
+      "BR4ZTgXdFr1xYJcQwRToy87uydzimsju4Sp1H5HXQ6yc"
     ),
     charter: new anchor.web3.PublicKey(
       "BdbEbwDDLF5421zZdoZJLGjbRZYACyRBhE7cmKwfhmZF"

@@ -217,11 +217,22 @@ export async function createGovernanceRealm(
   );
   await program.provider.connection.confirmTransaction(signature);
 
+  function makeRandomString(length) {
+    var result = "";
+    var characters =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    var charactersLength = characters.length;
+    for (var i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+  }
+
   const [realm_ix, realm] = await createRealm({
     authority: realmAuthority.publicKey,
     communityMint: mint,
     payer: realmAuthority.publicKey,
-    name: "test",
+    name: "test" + makeRandomString(5),
     governanceProgramId: GOVERNANCE_PROGRAM_ID,
   });
 

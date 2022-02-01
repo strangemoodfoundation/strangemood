@@ -630,6 +630,16 @@ pub mod strangemood {
         ctx.accounts.charter.authority = ctx.accounts.authority.key();
         Ok(())
     }
+
+    pub fn set_charter_deposits(ctx: Context<UpdateCharterDeposit>) -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.charter.realm_vote_deposit = ctx.accounts.vote_deposit.key();
+        ctx.accounts.charter.realm_sol_deposit = ctx.accounts.sol_deposit.key();
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -911,6 +921,18 @@ pub struct UpdateCharter<'info> {
     pub charter: Account<'info, Charter>,
 
     #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateCharterDeposit<'info> {
+    #[account(mut)]
+    pub charter: Account<'info, Charter>,
+
+    pub sol_deposit: Account<'info, TokenAccount>,
+    pub vote_deposit: Account<'info, TokenAccount>,
+
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
 }

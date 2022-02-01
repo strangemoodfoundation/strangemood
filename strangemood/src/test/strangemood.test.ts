@@ -5,6 +5,7 @@ import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
 import { makeReceiptNonce } from "..";
+import { createTokenAccount } from "./utils";
 
 const RECEIPT_SIZE = 171;
 
@@ -169,5 +170,36 @@ describe("strangemood", () => {
     });
 
     assert.equal(await program.provider.connection.getBalance(receipt), 0);
+  });
+
+  it("Can update charter deposits", async () => {
+    const voteDeposit = await createTokenAccount(program, client.realm_mint);
+    const solDeposit = await createTokenAccount(program, splToken.NATIVE_MINT);
+
+    let charter = await program.account.charter.fetch(client.charter_pda);
+    assert.notEqual(
+      charter.realmSolDeposit.toString(),
+      solDeposit.publicKey.toString()
+    );
+    assert.notEqual(
+      charter.realmVoteDeposit.toString(),
+      voteDeposit.publicKey.toString()
+    );
+
+    await client.setCharterDeposit({
+      authority: provider.wallet.publicKey,
+      voteDeposit: voteDeposit.publicKey,
+      solDeposit: solDeposit.publicKey,
+    });
+
+    charter = await program.account.charter.fetch(client.charter_pda);
+    assert.equal(
+      charter.realmSolDeposit.toString(),
+      solDeposit.publicKey.toString()
+    );
+    assert.equal(
+      charter.realmVoteDeposit.toString(),
+      voteDeposit.publicKey.toString()
+    );
   });
 });
