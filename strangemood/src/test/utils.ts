@@ -132,8 +132,7 @@ export async function setupGovernance(
   // Create charter
   let [myCharterPDA, charterBump] = await pda.charter(
     program.programId,
-    GOVERNANCE_PROGRAM_ID,
-    realm
+    vote_mint
   );
   charterPDA = myCharterPDA;
   await program.rpc.initCharter(
@@ -149,10 +148,9 @@ export async function setupGovernance(
       accounts: {
         charter: charterPDA,
         authority: program.provider.wallet.publicKey,
-        realmSolDeposit: realm_sol_deposit,
-        realmVoteDeposit: realm_vote_deposit,
-        realm,
-        governanceProgram: GOVERNANCE_PROGRAM_ID,
+        paymentDeposit: realm_sol_deposit,
+        voteDeposit: realm_vote_deposit,
+        mint: vote_mint,
         user: provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
       },

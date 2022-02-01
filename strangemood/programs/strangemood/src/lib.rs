@@ -169,50 +169,19 @@ pub mod strangemood {
         available: bool,
         uri: String,
     ) -> ProgramResult {
-        // Check that the sol_deposit is wrapped sol
-        let sol_deposit = ctx.accounts.sol_deposit.clone().into_inner();
+
+        let charter = ctx.accounts.charter.clone().into_inner();
+
+        // Check that the payment deposit is wrapped sol
+        let sol_deposit = ctx.accounts.payment_deposit.clone().into_inner();
         if sol_deposit.mint != spl_token::native_mint::ID {
-            return Err(StrangemoodError::OnlyWrappedSolIsSupported.into());
+            return Err(StrangemoodError::MintNotSupported.into());
         }
 
-        // Check that the realm is owned by the governance program
-        let governance_program = ctx.accounts.governance_program.clone().to_account_info();
-        let realm_account = ctx.accounts.realm.clone().to_account_info();
-        spl_governance::state::realm::assert_is_valid_realm(
-            governance_program.key,
-            &realm_account,
-        )?;
-
-        // Check that the vote_deposit is the realm's mint
+        // Check that the vote_deposit is the charter's mint
         let vote_deposit = ctx.accounts.vote_deposit.clone().into_inner();
-        let realm_mint = vote_deposit.mint;
-        let realm =
-            spl_governance::state::realm::get_realm_data(governance_program.key, &realm_account)?;
-        realm.assert_is_valid_governing_token_mint(&realm_mint)?;
-
-        // Check the charter governance
-        let charter_governance_account = ctx.accounts.charter_governance.clone().to_account_info();
-        let charter_governance = spl_governance::state::governance::get_governance_data(
-            governance_program.key,
-            &charter_governance_account,
-        )?;
-        if charter_governance.realm != *realm_account.key {
-            return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
-        }
-
-        // Check the charter
-        let charter_account = ctx.accounts.charter.clone().to_account_info();
-
-        let gov_address = spl_governance::state::governance::get_account_governance_address(
-            governance_program.key,
-            &realm_account.key,
-            charter_account.key,
-        );
-        if *charter_governance_account.key != gov_address {
-            return Err(StrangemoodError::UnauthorizedCharter.into());
-        }
-        if *charter_account.owner != *ctx.program_id {
-            return Err(ProgramError::IllegalOwner);
+        if vote_deposit.mint != charter.mint {
+            return Err(StrangemoodError::MintNotSupported.into())
         }
 
         let listing = &mut ctx.accounts.listing;
@@ -220,9 +189,9 @@ pub mod strangemood {
         listing.price = price;
         listing.mint = ctx.accounts.mint.key();
         listing.authority = *ctx.accounts.user.key;
-        listing.sol_deposit = ctx.accounts.sol_deposit.key();
+        listing.payment_deposit = ctx.accounts.payment_deposit.key();
         listing.vote_deposit = ctx.accounts.vote_deposit.key();
-        listing.charter_governance = ctx.accounts.charter_governance.key();
+        listing.charter = ctx.accounts.charter.key();
         listing.uri = uri;
         listing.is_refundable = refundable;
         listing.is_consumable = consumable;
@@ -309,75 +278,29 @@ pub mod strangemood {
 
         // Check that the listing deposits match the listing account
         if listing.vote_deposit != ctx.accounts.listings_vote_deposit.key()
-            || listing.sol_deposit != ctx.accounts.listings_sol_deposit.key()
+            || listing.payment_deposit != ctx.accounts.listings_payment_deposit.key()
         {
-            return Err(StrangemoodError::UnexpectedDeposit.into());
+            return Err(StrangemoodError::DepositIsNotFoundInListing.into());
         }
 
-        // Check that the realm is owned by the governance program
-        let governance_program = ctx.accounts.governance_program.clone().to_account_info();
-        let realm_account = ctx.accounts.realm.clone().to_account_info();
-        spl_governance::state::realm::assert_is_valid_realm(
-            governance_program.key,
-            &realm_account,
-        )?;
-
-        // Check that the realm_mint account is actually the realm mint
-        let realm =
-            spl_governance::state::realm::get_realm_data(governance_program.key, &realm_account)?;
-        let realm_mint = ctx.accounts.realm_mint.clone().to_account_info();
-        if realm.community_mint != *realm_mint.key {
-            return Err(StrangemoodError::UnauthorizedRealmMint.into());
-        }
-
-        // Check that the charter governance is owned by the realm
-        let charter_governance_account = ctx.accounts.charter_governance.clone().to_account_info();
-        let charter_governance = spl_governance::state::governance::get_governance_data(
-            governance_program.key,
-            &charter_governance_account,
-        )?;
-        if charter_governance.realm != *realm_account.key {
-            return Err(spl_governance::error::GovernanceError::InvalidRealmForGovernance.into());
-        }
-
-        // Check that the charter_governance is actually for the charter
-        let charter_account = ctx.accounts.charter.clone().to_account_info();
-        let gov_address = spl_governance::state::governance::get_account_governance_address(
-            governance_program.key,
-            &realm_account.key,
-            charter_account.key,
-        );
-        if *charter_governance_account.key != gov_address {
+        // Check that the charter passed in is the one that's in the listing
+        if listing.charter != ctx.accounts.charter.key() {
             return Err(StrangemoodError::UnauthorizedCharter.into());
         }
-        if *charter_account.owner != *ctx.program_id {
-            return Err(ProgramError::IllegalOwner);
+        
+        // Check that the mint is the same that's in the charter
+        if charter.mint != ctx.accounts.charter_mint.key() {
+            return Err(StrangemoodError::MintIsNotFoundInCharter.into());
         }
 
-        // Check that the realm sol deposit account is actually owned by the realm
-        let sol_deposit_governance = spl_governance::state::governance::get_governance_data(
-            governance_program.key,
-            &ctx.accounts.realm_sol_deposit_governance,
-        )?;
-        if sol_deposit_governance.realm != *realm_account.key {
-            return Err(StrangemoodError::RealmDepositNotOwnedByRealm.into());
-        }
-        let realm_sol_deposit = ctx.accounts.realm_sol_deposit.clone().into_inner();
-        if realm_sol_deposit.owner != *ctx.accounts.realm_sol_deposit_governance.key {
-            return Err(StrangemoodError::UnexpectedDeposit.into());
+        // Check that the payment deposit is the same as what's found in the mint
+        if ctx.accounts.charter_payment_deposit.key() != charter.payment_deposit {
+            return Err(StrangemoodError::DepositIsNotFoundInCharter.into());
         }
 
-        // Check that the realm vote deposit account is actually owned by the realm
-        let vote_deposit_governance = spl_governance::state::governance::get_governance_data(
-            governance_program.key,
-            &ctx.accounts.realm_vote_deposit_governance,
-        )?;
-        if vote_deposit_governance.realm != *realm_account.key {
-            return Err(StrangemoodError::RealmDepositNotOwnedByRealm.into());
-        }
-        let realm_vote_deposit = ctx.accounts.realm_vote_deposit.clone().into_inner();
-        if realm_vote_deposit.owner != *ctx.accounts.realm_vote_deposit_governance.key {
-            return Err(StrangemoodError::UnexpectedDeposit.into());
+        // Check that the vote deposit is the same as what's found in the mint
+        if ctx.accounts.charter_vote_deposit.key() != charter.vote_deposit {
+            return Err(StrangemoodError::DepositIsNotFoundInCharter.into());
         }
 
         // If the receipt is refundable, then we've already minted
@@ -401,13 +324,13 @@ pub mod strangemood {
         // Transfer SOL to lister
         move_lamports(
             &ctx.accounts.receipt.to_account_info(),
-            &ctx.accounts.listings_sol_deposit.to_account_info(),
+            &ctx.accounts.listings_payment_deposit.to_account_info(),
             deposit_amount as u64,
         );
     
         move_lamports(
             &ctx.accounts.receipt.to_account_info(),
-            &ctx.accounts.realm_sol_deposit.to_account_info(),
+            &ctx.accounts.charter_payment_deposit.to_account_info(),
             contribution_amount as u64,
         );
 
@@ -419,19 +342,19 @@ pub mod strangemood {
         // Mint votes to lister
         mint_to(
             ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.realm_mint.to_account_info(),
+            ctx.accounts.charter_mint.to_account_info(),
             ctx.accounts.listings_vote_deposit.to_account_info(),
-            ctx.accounts.realm_mint_authority.to_account_info(),
+            ctx.accounts.charter_mint_authority.to_account_info(),
             realm_mint_bump,
             deposit_amount,
         )?;
 
-        // Mint votes to realm
+        // Mint votes to charter
         mint_to(
             ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.realm_mint.to_account_info(),
-            ctx.accounts.realm_vote_deposit.to_account_info(),
-            ctx.accounts.realm_mint_authority.to_account_info(),
+            ctx.accounts.charter_mint.to_account_info(),
+            ctx.accounts.charter_vote_deposit.to_account_info(),
+            ctx.accounts.charter_mint_authority.to_account_info(),
             realm_mint_bump,
             contribution_amount,
         )?;
@@ -528,18 +451,19 @@ pub mod strangemood {
         charter.authority = ctx.accounts.authority.key();
         charter.expansion_rate_amount = expansion_rate_amount;
         charter.expansion_rate_decimals = expansion_rate_decimals;
-        charter.sol_contribution_rate_amount = sol_contribution_rate_amount;
-        charter.sol_contribution_rate_decimals = sol_contribution_rate_decimals;
+        charter.payment_contribution_rate_amount = sol_contribution_rate_amount;
+        charter.payment_contribution_rate_decimals = sol_contribution_rate_decimals;
         charter.vote_contribution_rate_amount = vote_contribution_rate_amount;
         charter.vote_contribution_rate_decimals = vote_contribution_rate_decimals;
-        charter.realm_sol_deposit = ctx.accounts.realm_sol_deposit.key();
-        charter.realm_vote_deposit = ctx.accounts.realm_vote_deposit.key();
+        charter.payment_deposit = ctx.accounts.payment_deposit.key();
+        charter.vote_deposit = ctx.accounts.vote_deposit.key();
+        charter.mint = ctx.accounts.mint.key();
         charter.uri = uri;
 
         Ok(())
     }
 
-    pub fn set_listing_price(ctx: Context<UpdateListing>, price: u64) -> ProgramResult {
+    pub fn set_listing_price(ctx: Context<SetListing>, price: u64) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -548,7 +472,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_uri(ctx: Context<UpdateListing>, uri: String) -> ProgramResult {
+    pub fn set_listing_uri(ctx: Context<SetListing>, uri: String) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -558,7 +482,7 @@ pub mod strangemood {
     }
 
     pub fn set_listing_availability(
-        ctx: Context<UpdateListing>,
+        ctx: Context<SetListing>,
         is_available: bool,
     ) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
@@ -569,17 +493,17 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_deposits(ctx: Context<UpdateListingDeposit>) -> ProgramResult {
+    pub fn set_listing_deposits(ctx: Context<SetListingDeposit>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
         ctx.accounts.listing.vote_deposit = ctx.accounts.vote_deposit.key();
-        ctx.accounts.listing.sol_deposit = ctx.accounts.sol_deposit.key();
+        ctx.accounts.listing.payment_deposit = ctx.accounts.sol_deposit.key();
         Ok(())
     }
 
-    pub fn set_listing_authority(ctx: Context<UpdateListingAuthority>) -> ProgramResult {
+    pub fn set_listing_authority(ctx: Context<SetListingAuthority>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -588,8 +512,18 @@ pub mod strangemood {
         Ok(())
     }
 
+    // Migrate a listing to a different charter
+    pub fn set_listing_charter(ctx: Context<SetListingCharter>) -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.listing.charter = ctx.accounts.charter.key();
+        Ok(())
+    }
+
     pub fn set_charter_expansion_rate(
-        ctx: Context<UpdateCharter>,
+        ctx: Context<SetCharter>,
         expansion_rate_amount: u64,
         expansion_rate_decimals: u8,
     ) -> ProgramResult {
@@ -603,7 +537,7 @@ pub mod strangemood {
     }
 
     pub fn set_charter_contribution_rate(
-        ctx: Context<UpdateCharter>,
+        ctx: Context<SetCharter>,
         sol_contribution_rate_amount: u64,
         sol_contribution_rate_decimals: u8,
         vote_contribution_rate_amount: u64,
@@ -613,8 +547,8 @@ pub mod strangemood {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
-        ctx.accounts.charter.sol_contribution_rate_amount = sol_contribution_rate_amount;
-        ctx.accounts.charter.sol_contribution_rate_decimals = sol_contribution_rate_decimals;
+        ctx.accounts.charter.payment_contribution_rate_amount = sol_contribution_rate_amount;
+        ctx.accounts.charter.payment_contribution_rate_decimals = sol_contribution_rate_decimals;
 
         ctx.accounts.charter.vote_contribution_rate_amount = vote_contribution_rate_amount;
         ctx.accounts.charter.vote_contribution_rate_decimals = vote_contribution_rate_decimals;
@@ -622,7 +556,8 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_charter_authority(ctx: Context<UpdateCharterAuthority>) -> ProgramResult {
+    // Migrates the charter to a different authority, like a new governance program
+    pub fn set_charter_authority(ctx: Context<SetCharterAuthority>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         } 
@@ -631,13 +566,13 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_charter_deposits(ctx: Context<UpdateCharterDeposit>) -> ProgramResult {
+    pub fn set_charter_deposits(ctx: Context<SetCharterDeposit>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
-        ctx.accounts.charter.realm_vote_deposit = ctx.accounts.vote_deposit.key();
-        ctx.accounts.charter.realm_sol_deposit = ctx.accounts.sol_deposit.key();
+        ctx.accounts.charter.vote_deposit = ctx.accounts.vote_deposit.key();
+        ctx.accounts.charter.payment_deposit = ctx.accounts.sol_deposit.key();
         Ok(())
     }
 }
@@ -696,7 +631,7 @@ pub struct Purchase<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(listing_mint_bump: u8, realm_mint_bump: u8)]
+#[instruction(listing_mint_bump: u8, charter_mint_bump: u8)]
 pub struct Cash<'info> {
     pub cashier: Signer<'info>,
 
@@ -708,7 +643,7 @@ pub struct Cash<'info> {
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub listings_sol_deposit: Box<Account<'info, TokenAccount>>,
+    pub listings_payment_deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub listings_vote_deposit: Box<Account<'info, TokenAccount>>,
@@ -729,23 +664,20 @@ pub struct Cash<'info> {
     pub listing_mint_authority: AccountInfo<'info>,
 
     #[account(mut)]
-    pub realm_sol_deposit: Box<Account<'info, TokenAccount>>,
-    pub realm_sol_deposit_governance: AccountInfo<'info>,
-    #[account(mut)]
-    pub realm_vote_deposit: Box<Account<'info, TokenAccount>>,
-    pub realm_vote_deposit_governance: AccountInfo<'info>,
+    pub charter_payment_deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub realm_mint: Box<Account<'info, Mint>>,
+    pub charter_vote_deposit: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub charter_mint: Box<Account<'info, Mint>>,
+
     #[account(
-        seeds = [b"mint", realm_mint.key().as_ref()],
-        bump = realm_mint_bump,
+        seeds = [b"mint", charter_mint.key().as_ref()],
+        bump = charter_mint_bump,
     )]
-    pub realm_mint_authority: AccountInfo<'info>,
-    pub governance_program: AccountInfo<'info>,
+    pub charter_mint_authority: AccountInfo<'info>,
 
-    pub realm: AccountInfo<'info>,
-    pub charter_governance: AccountInfo<'info>,
     // Box'd to move the charter (which is fairly hefty)
     // to the heap instead of the stack.
     // Not actually sure if this is a good idea, but
@@ -841,12 +773,8 @@ pub struct InitListing<'info> {
     #[account(init, mint::decimals = listing_mint_decimals, mint::authority = mint_authority_pda, mint::freeze_authority = mint_authority_pda, payer = user)]
     pub mint: Box<Account<'info, Mint>>,
 
-    pub sol_deposit: Box<Account<'info, TokenAccount>>,
+    pub payment_deposit: Box<Account<'info, TokenAccount>>,
     pub vote_deposit: Box<Account<'info, TokenAccount>>,
-
-    pub governance_program: UncheckedAccount<'info>,
-    pub realm: UncheckedAccount<'info>,
-    pub charter_governance: UncheckedAccount<'info>,
 
     // Box'd to move the charter (which is fairly hefty)
     // to the heap instead of the stack.
@@ -862,7 +790,7 @@ pub struct InitListing<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateListing<'info> {
+pub struct SetListing<'info> {
     #[account(mut)]
     pub listing: Account<'info, Listing>,
 
@@ -872,7 +800,7 @@ pub struct UpdateListing<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateListingDeposit<'info> {
+pub struct SetListingDeposit<'info> {
     #[account(mut)]
     pub listing: Account<'info, Listing>,
 
@@ -885,7 +813,7 @@ pub struct UpdateListingDeposit<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateListingAuthority<'info> {
+pub struct SetListingAuthority<'info> {
     #[account(mut)]
     pub listing: Account<'info, Listing>,
 
@@ -895,28 +823,44 @@ pub struct UpdateListingAuthority<'info> {
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
+
+
+#[derive(Accounts)]
+pub struct SetListingCharter<'info> {
+    #[account(mut)]
+    pub listing: Account<'info, Listing>,
+
+    pub charter: Account<'info, Charter>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 
 #[derive(Accounts)]
 #[instruction(charter_bump: u8)]
 pub struct InitCharter<'info> {
     // 8 for the tag
-    // 316 for the size of the charter account itself
-    #[account(init, seeds = [b"charter", governance_program.key().as_ref(), realm.key().as_ref()], bump=charter_bump, payer = user, space = 8 + 316)]
+    // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 32 + 128 for the charter
+    // 256 as a buffer for future versions
+    #[account(init, seeds = [b"charter", mint.key().as_ref()], bump=charter_bump, payer = user, space = 8 + 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 32 + 128 + 256)]
     pub charter: Account<'info, Charter>,
+
+    pub mint: Account<'info, Mint>,
 
     pub authority: AccountInfo<'info>,
 
-    pub realm_sol_deposit: Account<'info, TokenAccount>,
-    pub realm_vote_deposit: Account<'info, TokenAccount>,
-    pub realm: AccountInfo<'info>,
-    pub governance_program: AccountInfo<'info>,
+    pub payment_deposit: Account<'info, TokenAccount>,
+    pub vote_deposit: Account<'info, TokenAccount>,
+
     #[account(mut)]
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct UpdateCharter<'info> {
+pub struct SetCharter<'info> {
     #[account(mut)]
     pub charter: Account<'info, Charter>,
 
@@ -926,7 +870,7 @@ pub struct UpdateCharter<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateCharterDeposit<'info> {
+pub struct SetCharterDeposit<'info> {
     #[account(mut)]
     pub charter: Account<'info, Charter>,
 
@@ -938,7 +882,7 @@ pub struct UpdateCharterDeposit<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateCharterAuthority<'info> {
+pub struct SetCharterAuthority<'info> {
     #[account(mut)]
     pub charter: Account<'info, Charter>,
 
@@ -1000,14 +944,14 @@ pub struct Listing {
     // If "false", this listing cannot be bought.
     pub is_available: bool,
 
-    // This binds this listing to a governance, bound by a charter.
-    pub charter_governance: Pubkey,
+    // The charter that this listing is associated with
+    pub charter: Pubkey,
 
     /// The entity that's allowed to modify this listing
     pub authority: Pubkey,
 
     /// The token account to deposit sol into
-    pub sol_deposit: Pubkey,
+    pub payment_deposit: Pubkey,
 
     /// The token account to deposit community votes into
     pub vote_deposit: Pubkey,
@@ -1050,20 +994,30 @@ pub struct Charter {
     pub expansion_rate_decimals: u8,
 
     // The % of each purchase that goes to the community account.
-    pub sol_contribution_rate_amount: u64,
-    pub sol_contribution_rate_decimals: u8,
+    pub payment_contribution_rate_amount: u64,
+    pub payment_contribution_rate_decimals: u8,
 
     // The % of each vote token minting goes back to the governance to fund
     // new ecosystem projects
     pub vote_contribution_rate_amount: u64,
     pub vote_contribution_rate_decimals: u8,
 
-    // The pubkey of the keypair that can modify this charter.
+    // The pubkey of the keypair that can modify this charter. 
+    // If this points to a system account, then this is basically 
+    // a dictatorship. If it points to a PDA of a program, then 
+    // this can be any arbitrary governance.
     pub authority: Pubkey,
 
-    // The community account of the realm that contributions go to
-    pub realm_sol_deposit: Pubkey,
-    pub realm_vote_deposit: Pubkey,
+    // The native token of this governance that's issued to listers
+    // upon sale. The authority of this mint must be a PDA with seeds 
+    // ["mint", mint.key()].
+    pub mint: Pubkey,
+
+    // The community treasury where payments are split to.
+    pub payment_deposit: Pubkey,
+
+    // The community treasury of the native token.
+    pub vote_deposit: Pubkey,
 
     // The URL host where off-chain services can be found for this governance.
     // Example: "https://strangemood.org", "http://localhost:3000", "https://api.strangemood.org:4040"
@@ -1080,8 +1034,8 @@ impl Charter {
     }
     pub fn sol_contribution_rate(&self) -> f64 {
         amount_as_float(
-            self.sol_contribution_rate_amount,
-            self.sol_contribution_rate_decimals,
+            self.payment_contribution_rate_amount,
+            self.payment_contribution_rate_decimals,
         )
     }
     pub fn vote_contribution_rate(&self) -> f64 {
@@ -1094,25 +1048,30 @@ impl Charter {
 
 #[error]
 pub enum StrangemoodError {
-
-    #[msg("Only Wrapped Sol Is Supported")]
-    OnlyWrappedSolIsSupported,
+    #[msg("MintNotSupported")]
+    MintNotSupported,
 
     #[msg("Unauthorized Charter")]
     UnauthorizedCharter,
 
-    #[msg("Unexpected Deposit Accounts")]
-    UnexpectedDeposit,
+    #[msg("Deposit not found in listing")]
+    DepositIsNotFoundInListing,
 
     #[msg("Unexpected Listing Token Account")]
     UnexpectedListingTokenAccount,
 
-    #[msg("Realm Deposit Not Owned By Realm")]
-    RealmDepositNotOwnedByRealm,
+    // You attempted to pass in a deposit that is not the one 
+    // found in the charter
+    #[msg("Deposit not found in charter")]
+    DepositIsNotFoundInCharter, 
 
-    #[msg("Realm Mint was not the Realm's Mint")]
-    UnauthorizedRealmMint,
+    // You attempted to pass in a mint that is not the one 
+    // found in the charter
+    #[msg("Mint is not found in charter")]
+    MintIsNotFoundInCharter,
 
+    // You attempted to pass in an authority that is not the 
+    // authority of a listing or charter
     #[msg("Provided Authority Account Does Not Have Access")]
     UnauthorizedAuthority,
 

@@ -19,17 +19,9 @@ export const pda = {
     );
   },
 
-  charter: async (
-    strangemoodProgramId: PublicKey,
-    governanceProgramId: PublicKey,
-    realmId: PublicKey
-  ) => {
+  charter: async (strangemoodProgramId: PublicKey, mint: PublicKey) => {
     return web3.PublicKey.findProgramAddress(
-      [
-        Buffer.from("charter"),
-        governanceProgramId.toBuffer(),
-        realmId.toBuffer(),
-      ],
+      [Buffer.from("charter"), mint.toBuffer()],
       strangemoodProgramId
     );
   },
