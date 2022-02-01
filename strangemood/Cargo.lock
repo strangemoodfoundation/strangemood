@@ -1133,43 +1133,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spl-governance"
-version = "2.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fc31263f3feca631b33aca30658d644c43fb3108fde479e1b429290a707e76c"
-dependencies = [
- "arrayref",
- "bincode",
- "borsh",
- "num-derive",
- "num-traits",
- "serde",
- "serde_derive",
- "solana-program",
- "spl-governance-tools",
- "spl-token",
- "thiserror",
-]
-
-[[package]]
-name = "spl-governance-tools"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e7983eeef811e31e39948ceca10fab09a5abad04f179f85f6e6eb552c19d528"
-dependencies = [
- "arrayref",
- "bincode",
- "borsh",
- "num-derive",
- "num-traits",
- "serde",
- "serde_derive",
- "solana-program",
- "spl-token",
- "thiserror",
-]
-
-[[package]]
 name = "spl-token"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1189,7 +1152,6 @@ version = "0.1.1"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
- "spl-governance",
  "spl-token",
 ]
 

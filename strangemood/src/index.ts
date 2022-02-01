@@ -312,12 +312,9 @@ export async function initListing(args: {
         mint: mintKeypair.publicKey,
         mintAuthorityPda: listingMintAuthority,
         rent: SYSVAR_RENT_PUBKEY,
-        solDeposit: associatedSolAddress,
+        paymentDeposit: associatedSolAddress,
         voteDeposit: associatedVoteAddress,
-        realm: gov.realm,
-        governanceProgram: gov.governance_program_id,
         charter: gov.charter,
-        charterGovernance: gov.charter_governance,
         tokenProgram: TOKEN_PROGRAM_ID,
         user: args.signer,
         systemProgram: SystemProgram.programId,
@@ -443,15 +440,12 @@ export async function cash(args: {
     );
   }
 
-  if (
-    gov.charter_governance.toString() !==
-    listingInfo.account.charterGovernance.toString()
-  ) {
+  if (gov.charter.toString() !== listingInfo.account.charter.toString()) {
     // If you're getting this error, you're probably trying to cash a listing
     // that does not belong to the default co-op. To fix this, consider
     // passing a `args.government` of the listing.
     throw new Error(
-      `The Listing at '${listingInfo.publicKey}' does not contain the charter_governance '${gov.charter_governance}'. In other words, this listing does not belong to this governance, and so the instruction will fail if we try to send it.`
+      `The Listing at '${listingInfo.publicKey}' does not belong to the charter '${gov.charter}'.`
     );
   }
 
@@ -478,18 +472,13 @@ export async function cash(args: {
         receipt: receiptInfo.publicKey,
         listing: listingInfo.publicKey,
         listingTokenAccount: receiptInfo.account.listingTokenAccount,
-        listingsSolDeposit: listingInfo.account.solDeposit,
+        listingsPaymentDeposit: listingInfo.account.paymentDeposit,
         listingsVoteDeposit: listingInfo.account.voteDeposit,
-        realmSolDeposit: gov.sol_account,
-        realmVoteDeposit: gov.vote_account,
-        realmSolDepositGovernance: gov.sol_account_governance,
-        realmVoteDepositGovernance: gov.vote_account_governance,
-        realm: gov.realm,
-        realmMint: gov.mint,
-        realmMintAuthority: realmMintAuthority,
-        governanceProgram: gov.governance_program_id,
+        charterPaymentDeposit: gov.sol_account,
+        charterVoteDeposit: gov.vote_account,
+        charterMint: gov.mint,
+        charterMintAuthority: realmMintAuthority,
         charter: gov.charter,
-        charterGovernance: gov.charter_governance,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         listingMint: listingInfo.account.mint,
@@ -509,7 +498,7 @@ export async function cash(args: {
   // like spitting in their soup I hear) and the makers of the protocol
   // would probably call you a meanie if you took these lines out.
   let sync_listing_sol_ix = createSyncNativeInstruction(
-    listingInfo.account.solDeposit
+    listingInfo.account.paymentDeposit
   );
   let sync_realm_sol_ix = createSyncNativeInstruction(gov.sol_account);
   tx.add(sync_listing_sol_ix, sync_realm_sol_ix);
@@ -652,8 +641,9 @@ export async function initCharter(args: {
   governanceProgramId: PublicKey;
   realm: PublicKey;
   authority: PublicKey;
-  realmSolDeposit: PublicKey;
-  realmVoteDeposit: PublicKey;
+  paymentDeposit: PublicKey;
+  voteDeposit: PublicKey;
+  mint: PublicKey;
   signer: PublicKey;
   expansionAmount: anchor.BN;
   expansionDecimals: number;
@@ -689,10 +679,9 @@ export async function initCharter(args: {
         accounts: {
           charter: charterPDA,
           authority: args.authority,
-          realmSolDeposit: args.realmSolDeposit,
-          realmVoteDeposit: args.realmVoteDeposit,
-          realm: args.realm,
-          governanceProgram: args.governanceProgramId,
+          paymentDeposit: args.paymentDeposit,
+          voteDeposit: args.voteDeposit,
+          mint: args.mint,
           user: args.signer,
           systemProgram: SystemProgram.programId,
         },

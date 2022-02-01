@@ -464,7 +464,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_price(ctx: Context<UpdateListing>, price: u64) -> ProgramResult {
+    pub fn set_listing_price(ctx: Context<SetListing>, price: u64) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -473,7 +473,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_uri(ctx: Context<UpdateListing>, uri: String) -> ProgramResult {
+    pub fn set_listing_uri(ctx: Context<SetListing>, uri: String) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -483,7 +483,7 @@ pub mod strangemood {
     }
 
     pub fn set_listing_availability(
-        ctx: Context<UpdateListing>,
+        ctx: Context<SetListing>,
         is_available: bool,
     ) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
@@ -494,7 +494,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_deposits(ctx: Context<UpdateListingDeposit>) -> ProgramResult {
+    pub fn set_listing_deposits(ctx: Context<SetListingDeposit>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -504,7 +504,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_authority(ctx: Context<UpdateListingAuthority>) -> ProgramResult {
+    pub fn set_listing_authority(ctx: Context<SetListingAuthority>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -513,8 +513,18 @@ pub mod strangemood {
         Ok(())
     }
 
+    // Migrate a listing to a different charter
+    pub fn set_listing_charter(ctx: Context<SetListingCharter>) -> ProgramResult {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+            return Err(StrangemoodError::UnauthorizedAuthority.into());
+        }
+
+        ctx.accounts.listing.charter = ctx.accounts.charter.key();
+        Ok(())
+    }
+
     pub fn set_charter_expansion_rate(
-        ctx: Context<UpdateCharter>,
+        ctx: Context<SetCharter>,
         expansion_rate_amount: u64,
         expansion_rate_decimals: u8,
     ) -> ProgramResult {
@@ -528,7 +538,7 @@ pub mod strangemood {
     }
 
     pub fn set_charter_contribution_rate(
-        ctx: Context<UpdateCharter>,
+        ctx: Context<SetCharter>,
         sol_contribution_rate_amount: u64,
         sol_contribution_rate_decimals: u8,
         vote_contribution_rate_amount: u64,
@@ -547,7 +557,8 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_charter_authority(ctx: Context<UpdateCharterAuthority>) -> ProgramResult {
+    // Migrates the charter to a different authority, like a new governance program
+    pub fn set_charter_authority(ctx: Context<SetCharterAuthority>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         } 
@@ -556,7 +567,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_charter_deposits(ctx: Context<UpdateCharterDeposit>) -> ProgramResult {
+    pub fn set_charter_deposits(ctx: Context<SetCharterDeposit>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -780,7 +791,7 @@ pub struct InitListing<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateListing<'info> {
+pub struct SetListing<'info> {
     #[account(mut)]
     pub listing: Account<'info, Listing>,
 
@@ -790,7 +801,7 @@ pub struct UpdateListing<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateListingDeposit<'info> {
+pub struct SetListingDeposit<'info> {
     #[account(mut)]
     pub listing: Account<'info, Listing>,
 
@@ -803,7 +814,7 @@ pub struct UpdateListingDeposit<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateListingAuthority<'info> {
+pub struct SetListingAuthority<'info> {
     #[account(mut)]
     pub listing: Account<'info, Listing>,
 
@@ -814,12 +825,27 @@ pub struct UpdateListingAuthority<'info> {
     pub system_program: Program<'info, System>,
 }
 
+
+#[derive(Accounts)]
+pub struct SetListingCharter<'info> {
+    #[account(mut)]
+    pub listing: Account<'info, Listing>,
+
+    pub charter: Account<'info, Charter>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+
 #[derive(Accounts)]
 #[instruction(charter_bump: u8)]
 pub struct InitCharter<'info> {
     // 8 for the tag
-    // 316 for the size of the charter account itself
-    #[account(init, seeds = [b"charter", mint.key().as_ref()], bump=charter_bump, payer = user, space = 8 + 316)]
+    // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 32 + 128 for the charter
+    // 256 as a buffer for future versions
+    #[account(init, seeds = [b"charter", mint.key().as_ref()], bump=charter_bump, payer = user, space = 8 + 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 32 + 128 + 256)]
     pub charter: Account<'info, Charter>,
 
     pub mint: Account<'info, Mint>,
@@ -835,7 +861,7 @@ pub struct InitCharter<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateCharter<'info> {
+pub struct SetCharter<'info> {
     #[account(mut)]
     pub charter: Account<'info, Charter>,
 
@@ -845,7 +871,7 @@ pub struct UpdateCharter<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateCharterDeposit<'info> {
+pub struct SetCharterDeposit<'info> {
     #[account(mut)]
     pub charter: Account<'info, Charter>,
 
@@ -857,7 +883,7 @@ pub struct UpdateCharterDeposit<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateCharterAuthority<'info> {
+pub struct SetCharterAuthority<'info> {
     #[account(mut)]
     pub charter: Account<'info, Charter>,
 
