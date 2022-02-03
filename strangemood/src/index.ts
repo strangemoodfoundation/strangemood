@@ -110,11 +110,10 @@ export async function setReceiptCashable(args: {
     },
   });
 
-  let tx = new Transaction();
-  tx.add(ix);
+  let instructions = [ix];
 
   return {
-    tx,
+    instructions,
   };
 }
 
@@ -161,11 +160,10 @@ export async function cancel(args: {
     }
   );
 
-  let tx = new Transaction();
-  tx.add(ix);
+  let instructions = [ix];
 
   return {
-    tx,
+    instructions,
   };
 }
 
@@ -210,11 +208,10 @@ export async function consume(args: {
     }
   );
 
-  let tx = new Transaction();
-  tx.add(ix);
+  let instructions = [ix];
 
   return {
-    tx,
+    instructions,
   };
 }
 
@@ -248,7 +245,7 @@ export async function initListing(args: {
   const mintKeypair = anchor.web3.Keypair.generate();
   const gov = args.governance || MAINNET.government;
 
-  let tx = new Transaction();
+  let instructions = [];
 
   let [listingMintAuthority, listingMintBump] = await pda.mint(
     args.program.programId,
@@ -269,7 +266,7 @@ export async function initListing(args: {
       associatedVoteAddress
     ))
   ) {
-    tx.add(
+    instructions.push(
       createAssociatedTokenAccountInstruction(
         args.signer,
         associatedVoteAddress,
@@ -288,7 +285,7 @@ export async function initListing(args: {
       associatedVoteAddress
     ))
   ) {
-    tx.add(
+    instructions.push(
       createAssociatedTokenAccountInstruction(
         args.signer,
         associatedVoteAddress,
@@ -322,10 +319,10 @@ export async function initListing(args: {
       signers: [mintKeypair],
     }
   );
-  tx.add(init_instruction_ix);
+  instructions.push(init_instruction_ix);
 
   return {
-    tx,
+    instructions,
     signers: [mintKeypair],
     publicKey: listingPDA,
   };
@@ -350,7 +347,7 @@ export async function purchase(args: {
     listingInfo.account.mint
   );
 
-  let tx = new Transaction();
+  let instructions = [];
 
   const nonce = makeReceiptNonce();
   const [receipt_pda, receipt_bump] =
@@ -368,7 +365,7 @@ export async function purchase(args: {
       listingTokenAccount
     ))
   ) {
-    tx.add(
+    instructions.push(
       createAssociatedTokenAccountInstruction(
         args.signer,
         listingTokenAccount,
@@ -398,10 +395,10 @@ export async function purchase(args: {
       },
     }
   );
-  tx.add(purchase_ix);
+  instructions.push(purchase_ix);
 
   return {
-    tx,
+    instructions,
     receipt: receipt_pda,
   };
 }
@@ -461,11 +458,9 @@ export async function cash(args: {
       args.program.programId
     );
 
-  const tx = new anchor.web3.Transaction({
-    feePayer: args.signer,
-  });
+  let instructions = [];
 
-  tx.add(
+  instructions.push(
     args.program.instruction.cash(listingMintAuthorityBump, realmMintBump, {
       accounts: {
         cashier: args.signer,
@@ -501,10 +496,10 @@ export async function cash(args: {
     listingInfo.account.paymentDeposit
   );
   let sync_realm_sol_ix = createSyncNativeInstruction(gov.sol_account);
-  tx.add(sync_listing_sol_ix, sync_realm_sol_ix);
+  instructions.push(sync_listing_sol_ix, sync_realm_sol_ix);
 
   return {
-    tx,
+    instructions,
   };
 }
 
@@ -515,12 +510,12 @@ export async function setListingPrice(args: {
   price: anchor.BN;
   listing: AccountInfo<Listing> | PublicKey;
 }) {
-  let tx = new Transaction();
   let listingKey: PublicKey = isAccountInfo(args.listing)
     ? args.listing.publicKey
     : args.listing;
 
-  tx.add(
+  let instructions = [];
+  instructions.push(
     args.program.instruction.setListingPrice(args.price, {
       accounts: {
         user: args.signer,
@@ -529,7 +524,7 @@ export async function setListingPrice(args: {
       },
     })
   );
-  return { tx };
+  return { instructions };
 }
 
 export async function setListingUri(args: {
@@ -539,13 +534,13 @@ export async function setListingUri(args: {
   uri: string;
   listing: AccountInfo<Listing> | PublicKey;
 }) {
-  let tx = new Transaction();
+  let instructions = [];
 
   let listingKey: PublicKey = isAccountInfo(args.listing)
     ? args.listing.publicKey
     : args.listing;
 
-  tx.add(
+  instructions.push(
     args.program.instruction.setListingUri(args.uri, {
       accounts: {
         user: args.signer,
@@ -554,7 +549,7 @@ export async function setListingUri(args: {
       },
     })
   );
-  return { tx };
+  return { instructions };
 }
 
 export async function setListingDeposits(args: {
@@ -565,13 +560,13 @@ export async function setListingDeposits(args: {
   solDeposit: PublicKey;
   voteDeposit: PublicKey;
 }) {
-  let tx = new Transaction();
+  let instructions = [];
 
   let listingKey: PublicKey = isAccountInfo(args.listing)
     ? args.listing.publicKey
     : args.listing;
 
-  tx.add(
+  instructions.push(
     args.program.instruction.setListingDeposits({
       accounts: {
         user: args.signer,
@@ -582,7 +577,7 @@ export async function setListingDeposits(args: {
       },
     })
   );
-  return { tx };
+  return { instructions };
 }
 
 export async function setListingAvailability(args: {
@@ -591,13 +586,13 @@ export async function setListingAvailability(args: {
   signer: anchor.web3.PublicKey;
   listing: AccountInfo<Listing> | PublicKey;
 }) {
-  let tx = new Transaction();
+  let instructions = [];
 
   let listingKey: PublicKey = isAccountInfo(args.listing)
     ? args.listing.publicKey
     : args.listing;
 
-  tx.add(
+  instructions.push(
     args.program.instruction.setListingAvailability(true, {
       accounts: {
         user: args.signer,
@@ -606,7 +601,7 @@ export async function setListingAvailability(args: {
       },
     })
   );
-  return { tx };
+  return { instructions };
 }
 
 export async function setListingAuthority(args: {
@@ -616,13 +611,13 @@ export async function setListingAuthority(args: {
   listing: AccountInfo<Listing> | PublicKey;
   newAuthority: anchor.web3.PublicKey;
 }) {
-  let tx = new Transaction();
+  let instructions = [];
 
   let listingKey: PublicKey = isAccountInfo(args.listing)
     ? args.listing.publicKey
     : args.listing;
 
-  tx.add(
+  instructions.push(
     args.program.instruction.setListingAuthority({
       accounts: {
         user: args.signer,
@@ -632,7 +627,7 @@ export async function setListingAuthority(args: {
       },
     })
   );
-  return { tx };
+  return { instructions };
 }
 
 export async function initCharter(args: {
@@ -653,7 +648,7 @@ export async function initCharter(args: {
   voteContributionDecimals: number;
   uri: string;
 }) {
-  let tx = new Transaction();
+  let instructions = [];
 
   let [charterPDA, charterBump] =
     await anchor.web3.PublicKey.findProgramAddress(
@@ -665,7 +660,7 @@ export async function initCharter(args: {
       args.program.programId
     );
 
-  tx.add(
+  instructions.push(
     args.program.instruction.initCharter(
       charterBump,
       args.expansionAmount, // Expansion amount
@@ -688,5 +683,5 @@ export async function initCharter(args: {
       }
     )
   );
-  return { tx, charter: charterPDA };
+  return { instructions, charter: charterPDA };
 }
