@@ -66,20 +66,24 @@ pub fn freeze_account<'a>(
 }
 
 // Transfer from one token account to another using the Token Program
-pub fn token_transfer<'a>(
+pub fn token_escrow_transfer<'a>(
     token_program: AccountInfo<'a>,
     from: AccountInfo<'a>,
     to: AccountInfo<'a>,
     authority: AccountInfo<'a>,
     amount: u64,
+    bump: u8,
 ) -> ProgramResult {
     let cpi_program = token_program;
+    let key = from.key.clone();
     let cpi_accounts = anchor_spl::token::Transfer {
         from,
         to,
         authority,
     };
-    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+    let seeds = &[b"escrow", key.as_ref(), &[bump]];
+    let signers = &[&seeds[..]];
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
     anchor_spl::token::transfer(cpi_ctx, amount)
 }
 
@@ -138,7 +142,7 @@ pub fn move_lamports<'a>(
     **source_account_info.lamports.borrow_mut() = source_account_info.lamports().checked_sub(amount).unwrap();
 }
 
-pub fn close_account<'a>(
+pub fn close_native_account<'a>(
     source_account_info: &AccountInfo<'a>,
     dest_account_info: &AccountInfo<'a>,
 ){
@@ -151,6 +155,25 @@ pub fn close_account<'a>(
     erase_data(source_account_info);
 }
 
+pub fn close_token_escrow_account<'a>(
+    token_program: AccountInfo<'a>,
+    from: AccountInfo<'a>,
+    to: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    bump: u8,
+) -> ProgramResult {
+    let cpi_program = token_program;
+    let key = from.key.clone();
+    let cpi_accounts = anchor_spl::token::CloseAccount {
+        authority,
+        account: from,
+        destination: to,
+    };
+    let seeds = &[b"escrow", key.as_ref(), &[bump]];
+    let signers = &[&seeds[..]];
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
+    anchor_spl::token::close_account(cpi_ctx)
+}
 
 #[program]
 pub mod strangemood {
@@ -173,8 +196,8 @@ pub mod strangemood {
         let charter = ctx.accounts.charter.clone().into_inner();
 
         // Check that the payment deposit is wrapped sol
-        let sol_deposit = ctx.accounts.payment_deposit.clone().into_inner();
-        if sol_deposit.mint != spl_token::native_mint::ID {
+        let payment_deposit = ctx.accounts.payment_deposit.clone().into_inner();
+        if payment_deposit.mint != spl_token::native_mint::ID {
             return Err(StrangemoodError::MintNotSupported.into());
         }
 
@@ -294,9 +317,9 @@ pub mod strangemood {
         }
 
         // Check that the payment deposit is the same as what's found in the mint
-        if ctx.accounts.charter_payment_deposit.key() != charter.payment_deposit {
-            return Err(StrangemoodError::DepositIsNotFoundInCharter.into());
-        }
+        // if ctx.accounts.charter_payment_deposit.key() != charter.payment_deposit {
+        //     return Err(StrangemoodError::DepositIsNotFoundInCharter.into());
+        // }
 
         // Check that the vote deposit is the same as what's found in the mint
         if ctx.accounts.charter_vote_deposit.key() != charter.vote_deposit {
@@ -330,7 +353,7 @@ pub mod strangemood {
     
         move_lamports(
             &ctx.accounts.receipt.to_account_info(),
-            &ctx.accounts.charter_payment_deposit.to_account_info(),
+            &ctx.accounts.charter_treasury_deposit.to_account_info(),
             contribution_amount as u64,
         );
 
@@ -359,7 +382,7 @@ pub mod strangemood {
             contribution_amount,
         )?;
 
-        close_account(
+        close_native_account(
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.cashier.to_account_info(),
         );
@@ -372,6 +395,7 @@ pub mod strangemood {
         _receipt_bump: u8,
         _listing_bump: u8,
         listing_mint_bump: u8,
+        escrow_authority_bump:u8,
     ) -> ProgramResult {
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
@@ -389,10 +413,29 @@ pub mod strangemood {
         }
 
         // Close the receipt account
-        close_account(
+        close_native_account(
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.purchaser.to_account_info(),
         );
+
+        // Transfer all the funds in the escrow back to the user 
+        token_escrow_transfer(            
+            ctx.accounts.token_program.to_account_info(), 
+            ctx.accounts.escrow.to_account_info(), 
+            ctx.accounts.return_deposit.to_account_info(), 
+            ctx.accounts.escrow_authority.to_account_info(), 
+            ctx.accounts.escrow.amount,
+            escrow_authority_bump
+        )?;
+
+        // Close the escrow
+        close_token_escrow_account(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.purchaser.to_account_info(),
+            ctx.accounts.escrow_authority.to_account_info(),
+            escrow_authority_bump
+        )?;
 
         Ok(())
     }
@@ -455,7 +498,7 @@ pub mod strangemood {
         charter.payment_contribution_rate_decimals = sol_contribution_rate_decimals;
         charter.vote_contribution_rate_amount = vote_contribution_rate_amount;
         charter.vote_contribution_rate_decimals = vote_contribution_rate_decimals;
-        charter.payment_deposit = ctx.accounts.payment_deposit.key();
+        // charter.payment_deposit = ctx.accounts.payment_deposit.key();
         charter.vote_deposit = ctx.accounts.vote_deposit.key();
         charter.mint = ctx.accounts.mint.key();
         charter.uri = uri;
@@ -499,7 +542,7 @@ pub mod strangemood {
         }
 
         ctx.accounts.listing.vote_deposit = ctx.accounts.vote_deposit.key();
-        ctx.accounts.listing.payment_deposit = ctx.accounts.sol_deposit.key();
+        ctx.accounts.listing.payment_deposit = ctx.accounts.payment_deposit.key();
         Ok(())
     }
 
@@ -566,22 +609,33 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_charter_deposits(ctx: Context<SetCharterDeposit>) -> ProgramResult {
+    pub fn set_charter_vote_deposit(ctx: Context<SetCharterVoteDeposit>) -> ProgramResult {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
         ctx.accounts.charter.vote_deposit = ctx.accounts.vote_deposit.key();
-        ctx.accounts.charter.payment_deposit = ctx.accounts.sol_deposit.key();
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, receipt_bump:u8, listing_mint_bump: u8)]
+#[instruction(receipt_nonce: u128, receipt_bump:u8, listing_mint_bump: u8, escrow_bump:u8, escrow_authority_bump:u8)]
 pub struct Purchase<'info> {
     // The listing to purchase
+    #[account(
+        constraint=listing_payment_deposit.key()==listing.clone().into_inner().payment_deposit.key(),
+        constraint=listing_mint.key()==listing.clone().into_inner().mint.key(),
+    )]
     pub listing: Box<Account<'info, Listing>>,
+
+    #[account(
+        constraint=listing_payment_deposit.mint==listing_payment_deposit_mint.key()
+    )]
+    pub listing_payment_deposit: Account<'info, TokenAccount>,
+
+    // The type of funds that this 
+    pub listing_payment_deposit_mint: Account<'info, Mint>,
 
     // The person who's allowed to cash out the listing
     pub cashier: AccountInfo<'info>,
@@ -613,6 +667,7 @@ pub struct Purchase<'info> {
     // 32 for listing_token_account pubkey
     // 32 for purchaser pubkey
     // 32 for cashier pubkey
+    // 32 for escrow pubkey
     // 8 for quantity u64
     // 8 for price u64
     // 16 for the unique nonce
@@ -620,8 +675,22 @@ pub struct Purchase<'info> {
         seeds = [b"receipt" as &[u8], &receipt_nonce.to_le_bytes()],
         bump= receipt_bump,
         payer = user,
-        space = 8 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
+        space = 8 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
     pub receipt: Box<Account<'info, Receipt>>,
+
+    #[account(
+        init, 
+        payer=user,
+        token::mint = listing_payment_deposit_mint,
+        token::authority = escrow_authority,
+    )]
+    pub escrow: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds=[b"authority", escrow.key().as_ref()],
+        bump=escrow_authority_bump,
+    )]
+    pub escrow_authority: AccountInfo<'info>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -636,8 +705,13 @@ pub struct Cash<'info> {
     pub cashier: Signer<'info>,
 
     #[account(mut,
-        has_one=listing, has_one=listing_token_account, has_one=cashier)]
+        has_one=listing, has_one=listing_token_account, has_one=cashier, has_one=escrow)]
     pub receipt: Account<'info, Receipt>,
+
+    #[account(mut)]
+    pub escrow: Account<'info, TokenAccount>,
+
+    pub escrow_authority: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
@@ -649,9 +723,12 @@ pub struct Cash<'info> {
     pub listings_vote_deposit: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
-    // TODO: add a constraint that the listing.mint matches listing_mint
-    // TODO: add a constraint that the listing.sol_deposit matches listings_sol_deposit
-    // TODO: add a constraint that the listing.vote_deposit matches listings_vote_deposit
+    #[account(
+        constraint=charter.key()==listing.clone().into_inner().charter.key(),
+        constraint=listing_mint.key()==listing.clone().into_inner().mint.key(),
+        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit.key(),
+        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit.key(),
+    )]
     pub listing: Box<Account<'info, Listing>>,
 
     #[account(mut)]
@@ -663,8 +740,14 @@ pub struct Cash<'info> {
     )]
     pub listing_mint_authority: AccountInfo<'info>,
 
+    #[account(
+        has_one=charter,
+        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit.key()
+    )]
+    pub charter_treasury: Box<Account<'info, CharterTreasury>>,
+
     #[account(mut)]
-    pub charter_payment_deposit: Box<Account<'info, TokenAccount>>,
+    pub charter_treasury_deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub charter_vote_deposit: Box<Account<'info, TokenAccount>>,
@@ -682,6 +765,9 @@ pub struct Cash<'info> {
     // to the heap instead of the stack.
     // Not actually sure if this is a good idea, but
     // without the Box, we run out of space?
+    #[account(
+        constraint=charter.clone().into_inner().mint==charter_mint.key()
+    )]
     pub charter: Box<Account<'info, Charter>>,
 
     pub token_program: Program<'info, Token>,
@@ -693,15 +779,24 @@ pub struct Cash<'info> {
 pub struct Cancel<'info> {
     pub purchaser: Signer<'info>,
 
+    // Where we'll return the tokens back to 
+    pub return_deposit: Account<'info, TokenAccount>,
+
     #[account(mut,       
         seeds = [b"receipt" as &[u8],
          &receipt_nonce.to_le_bytes()],
         bump= receipt_bump, 
         has_one=listing, 
         has_one=listing_token_account, 
-        has_one=purchaser
+        has_one=purchaser,
+        has_one=escrow
     )]
     pub receipt: Account<'info, Receipt>,
+
+    #[account(mut)]
+    pub escrow: Account<'info, TokenAccount>,
+
+    pub escrow_authority: Account<'info, TokenAccount>,
 
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -804,7 +899,7 @@ pub struct SetListingDeposit<'info> {
     #[account(mut)]
     pub listing: Account<'info, Listing>,
 
-    pub sol_deposit: Account<'info, TokenAccount>,
+    pub payment_deposit: Account<'info, TokenAccount>,
     pub vote_deposit: Account<'info, TokenAccount>,
 
     #[account(mut)]
@@ -842,16 +937,15 @@ pub struct SetListingCharter<'info> {
 #[instruction(charter_bump: u8)]
 pub struct InitCharter<'info> {
     // 8 for the tag
-    // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 32 + 128 for the charter
+    // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 for the charter
     // 256 as a buffer for future versions
-    #[account(init, seeds = [b"charter", mint.key().as_ref()], bump=charter_bump, payer = user, space = 8 + 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 32 + 128 + 256)]
+    #[account(init, seeds = [b"charter", mint.key().as_ref()], bump=charter_bump, payer = user, space = 8 + 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 + 256)]
     pub charter: Account<'info, Charter>,
 
     pub mint: Account<'info, Mint>,
 
     pub authority: AccountInfo<'info>,
 
-    pub payment_deposit: Account<'info, TokenAccount>,
     pub vote_deposit: Account<'info, TokenAccount>,
 
     #[account(mut)]
@@ -870,11 +964,10 @@ pub struct SetCharter<'info> {
 }
 
 #[derive(Accounts)]
-pub struct SetCharterDeposit<'info> {
+pub struct SetCharterVoteDeposit<'info> {
     #[account(mut)]
     pub charter: Account<'info, Charter>,
 
-    pub sol_deposit: Account<'info, TokenAccount>,
     pub vote_deposit: Account<'info, TokenAccount>,
 
     pub user: Signer<'info>,
@@ -922,6 +1015,9 @@ pub struct Receipt {
     // Typically the marketplace or
     // the client application that started the sale.
     pub cashier: Pubkey,
+
+    // A token account where payment is held in escrow
+    pub escrow: Pubkey,
 
     // The amount of the listing token to be distributed upon redeem
     pub quantity: u64,
@@ -1013,15 +1109,32 @@ pub struct Charter {
     // ["mint", mint.key()].
     pub mint: Pubkey,
 
-    // The community treasury where payments are split to.
-    pub payment_deposit: Pubkey,
-
     // The community treasury of the native token.
     pub vote_deposit: Pubkey,
 
     // The URL host where off-chain services can be found for this governance.
     // Example: "https://strangemood.org", "http://localhost:3000", "https://api.strangemood.org:4040"
     pub uri: String,
+}
+
+// An charter-approved deposit account. 
+#[account]
+pub struct CharterTreasury {
+    // If false, this charter deposit is no longer accepting payments.
+    pub is_available: Pubkey,
+
+    // The charter this is associated with
+    pub charter: Pubkey,
+
+    // The token account for this charter 
+    pub deposit: Pubkey,
+
+    // Increases or decreases the amount of voting tokens.
+    // distributed based on this deposit type.
+    // amount=1 and decimals=0 is 1.0
+    // amount=15 and decimals=1 is 1.5
+    pub expansion_scalar_amount: u64,
+    pub expansion_scalar_decimals: u8,
 }
 
 pub(crate) fn amount_as_float(amount: u64, decimals: u8) -> f64 {

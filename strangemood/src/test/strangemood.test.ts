@@ -4,9 +4,10 @@ import * as splToken from "@solana/spl-token";
 import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
-import { makeReceiptNonce } from "..";
+import { fetchStrangemoodProgram, makeReceiptNonce } from "..";
 import { createTokenAccount } from "./utils";
 import { pda } from "../pda";
+import { MAINNET } from "../constants";
 const { SystemProgram } = anchor.web3;
 
 const RECEIPT_SIZE = 171;
