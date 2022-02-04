@@ -9,6 +9,7 @@ import {
   setupGovernance,
 } from "./utils";
 import { v4 } from "uuid";
+import { pda } from "../pda";
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = anchor.web3;
 
 // Generates a uuid, and converts it to 16-byte (u128) BN
@@ -29,6 +30,7 @@ export class TestClient {
   realm_sol_deposit: anchor.web3.PublicKey;
   realm_vote_deposit_governance: anchor.web3.PublicKey;
   realm_sol_deposit_governance: anchor.web3.PublicKey;
+  realm_sol_deposit_treasury: anchor.web3.PublicKey;
   listing_sol_deposit: anchor.web3.PublicKey;
   listing_vote_deposit: anchor.web3.PublicKey;
   charter: {
@@ -68,6 +70,7 @@ export class TestClient {
       charter_governance,
       realm_mint_authority,
       realm_mint_bump,
+      realm_sol_deposit_treasury,
     } = await setupGovernance(this.provider, this.program);
     this.realm_mint = vote_mint;
     this.realm = realm;
@@ -82,6 +85,7 @@ export class TestClient {
     this.charter_governance = charter_governance;
     this.realm_mint_authority = realm_mint_authority;
     this.realm_mint_bump = realm_mint_bump;
+    this.realm_sol_deposit_treasury = realm_sol_deposit_treasury;
   }
 
   async initListing(
@@ -163,6 +167,10 @@ export class TestClient {
     amount: number
   ) {
     const listing = await this.program.account.listing.fetch(accounts.listing);
+    const listingDeposit = await splToken.getAccount(
+      this.program.provider.connection,
+      listing.deposit
+    );
 
     let [mintAuthorityPda, mintAuthorityBump] =
       await anchor.web3.PublicKey.findProgramAddress(
@@ -190,10 +198,18 @@ export class TestClient {
         this.program.programId
       );
 
+    let escrowKeypair = anchor.web3.Keypair.generate();
+    let [escrowAuthority, escrowAuthorityBump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("authority"), escrowKeypair.publicKey.toBuffer()],
+        this.program.programId
+      );
+
     let purchase_ix = this.program.instruction.purchase(
       nonce,
       receipt_bump,
       mintAuthorityBump,
+      escrowAuthorityBump,
       new anchor.BN(amount),
       {
         accounts: {
@@ -202,7 +218,11 @@ export class TestClient {
           listingTokenAccount: listingTokenAccount,
           listingMint: listing.mint,
           listingMintAuthority: mintAuthorityPda,
+          listingPaymentDeposit: listing.deposit,
+          listingPaymentDepositMint: listingDeposit.mint,
           receipt: receipt_pda,
+          escrow: escrowKeypair.publicKey,
+          escrowAuthority: escrowAuthority,
           user: accounts.purchaser.publicKey,
           systemProgram: SystemProgram.programId,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
@@ -214,6 +234,7 @@ export class TestClient {
 
     const sig = await this.provider.connection.sendTransaction(transaction, [
       accounts.purchaser,
+      escrowKeypair,
     ]);
     await this.provider.connection.confirmTransaction(sig);
 
@@ -260,6 +281,7 @@ export class TestClient {
   async cancel(accounts: {
     purchaser: anchor.web3.Keypair;
     receipt: anchor.web3.PublicKey;
+    returnDeposit: anchor.web3.PublicKey;
   }) {
     const receipt = await this.program.account.receipt.fetch(accounts.receipt);
     const listing = await this.program.account.listing.fetch(receipt.listing);
@@ -275,10 +297,19 @@ export class TestClient {
         this.program.programId
       );
 
+    let [escrowAuthority, escrowAuthorityBump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("authority"), receipt.escrow.toBuffer()],
+        this.program.programId
+      );
+
     await this.program.rpc.cancel(listingBump, listingMintAuthorityBump, {
       accounts: {
         purchaser: accounts.purchaser,
+        returnDeposit: accounts.returnDeposit,
         receipt: accounts.receipt,
+        escrow: receipt.escrow,
+        escrowAuthority: escrowAuthority,
         listingTokenAccount: listing.listingTokenAccount,
         listing: receipt.listing,
         listingMint: listing.mint,
@@ -304,12 +335,10 @@ export class TestClient {
 
   async setCharterDeposit(accounts: {
     authority: anchor.web3.PublicKey;
-    solDeposit: anchor.web3.PublicKey;
     voteDeposit: anchor.web3.PublicKey;
   }) {
-    await this.program.rpc.setCharterDeposits({
+    await this.program.rpc.setCharterVoteDeposit({
       accounts: {
-        solDeposit: accounts.solDeposit,
         voteDeposit: accounts.voteDeposit,
         charter: this.charter_pda,
         systemProgram: SystemProgram.programId,
@@ -324,12 +353,32 @@ export class TestClient {
   }) {
     const receipt = await this.program.account.receipt.fetch(accounts.receipt);
     const listing = await this.program.account.listing.fetch(receipt.listing);
+    const listingDeposit = await splToken.getAccount(
+      this.program.provider.connection,
+      listing.deposit
+    );
 
     let [listingMintAuthority, listingMintAuthorityBump] =
       await anchor.web3.PublicKey.findProgramAddress(
         [Buffer.from("mint"), listing.mint.toBuffer()],
         this.program.programId
       );
+
+    let [escrowAuthority, escrowAuthorityBump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("authority"), receipt.escrow.toBuffer()],
+        this.program.programId
+      );
+
+    let [treasury_pda, treasury_bump] = await pda.treasury(
+      this.program.programId,
+      receipt.charter,
+      listingDeposit.mint
+    );
+
+    let treasury = await this.program.account.charterTreasury.fetch(
+      treasury_pda
+    );
 
     const tx = new anchor.web3.Transaction({
       feePayer: accounts.cashier.publicKey,
@@ -342,15 +391,18 @@ export class TestClient {
           accounts: {
             cashier: accounts.cashier.publicKey,
             receipt: accounts.receipt,
+            escrow: receipt.escrow,
+            escrowAuthority: escrowAuthority,
             listing: receipt.listing,
             listingTokenAccount: receipt.listingTokenAccount,
             listingsPaymentDeposit: listing.paymentDeposit,
             listingsVoteDeposit: listing.voteDeposit,
-            charterPaymentDeposit: this.realm_sol_deposit,
             charterVoteDeposit: this.realm_vote_deposit,
             charterMint: this.realm_mint,
             charterMintAuthority: this.realm_mint_authority,
             charter: this.charter_pda,
+            charterTreasury: treasury_pda,
+            charterTreasuryDeposit: treasury.deposit,
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
             listingMint: listing.mint,

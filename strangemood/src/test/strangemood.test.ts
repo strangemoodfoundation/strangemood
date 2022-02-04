@@ -5,7 +5,7 @@ import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
 import { fetchStrangemoodProgram, makeReceiptNonce } from "..";
-import { createTokenAccount } from "./utils";
+import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
 import { MAINNET } from "../constants";
 const { SystemProgram } = anchor.web3;
@@ -32,6 +32,68 @@ describe("strangemood", () => {
   it("created charter correctly", async () => {
     const charter = await program.account.charter.fetch(client.charter_pda);
     assert.equal(charter.mint.toString(), client.realm_mint.toString());
+  });
+
+  it("can create a new treasury", async () => {
+    let charter = await program.account.charter.fetch(client.charter_pda);
+
+    let mint = await createMint(program);
+    let myDeposit = await createTokenAccount(program, mint.publicKey);
+
+    let [treasury_pda, bump] = await pda.treasury(
+      program.programId,
+      client.charter_pda,
+      mint.publicKey
+    );
+
+    await program.rpc.initCharterTreasury(bump, new anchor.BN(1), 0, {
+      accounts: {
+        treasury: treasury_pda,
+        charter: client.charter_pda,
+        mint: mint.publicKey,
+        deposit: myDeposit.publicKey,
+        systemProgram: SystemProgram.programId,
+        authority: charter.authority,
+      },
+    });
+
+    let treasury = await program.account.charterTreasury.fetch(treasury_pda);
+
+    assert.equal(treasury.deposit.toString(), myDeposit.publicKey.toString());
+    assert.equal(treasury.charter.toString(), client.charter_pda.toString());
+    assert.equal(treasury.expansionScalarAmount.toNumber(), 1);
+    assert.equal(treasury.expansionScalarDecimals, 0);
+
+    // can set the treasury to another treasury
+    let anotherDeposit = await createTokenAccount(program, mint.publicKey);
+    await program.rpc.setCharterTreasuryDeposit({
+      accounts: {
+        treasury: treasury_pda,
+        charter: client.charter_pda,
+        mint: mint.publicKey,
+        deposit: anotherDeposit.publicKey,
+        systemProgram: SystemProgram.programId,
+        authority: charter.authority,
+      },
+    });
+    treasury = await program.account.charterTreasury.fetch(treasury_pda);
+    assert.equal(
+      treasury.deposit.toString(),
+      anotherDeposit.publicKey.toString()
+    );
+
+    // Can change the expansion scalar
+    await program.rpc.setCharterTreasuryExpansionScalar(new anchor.BN(25), 1, {
+      accounts: {
+        treasury: treasury_pda,
+        charter: client.charter_pda,
+        systemProgram: SystemProgram.programId,
+        authority: charter.authority,
+      },
+    });
+    treasury = await program.account.charterTreasury.fetch(treasury_pda);
+    assert.equal(treasury.expansionScalarAmount.toNumber(), 25);
+    assert.equal(treasury.expansionScalarDecimals, 1);
   });
 
   it("can't create another charter with the same mint", async () => {
@@ -65,7 +127,6 @@ describe("strangemood", () => {
           accounts: {
             charter: charterPDA,
             authority: program.provider.wallet.publicKey,
-            paymentDeposit: myNefariousPaymentAccount.publicKey,
             voteDeposit: myNefariousVoteAccount.publicKey,
             mint: client.realm_mint,
             user: provider.wallet.publicKey,
@@ -232,13 +293,9 @@ describe("strangemood", () => {
 
   it("Can update charter deposits", async () => {
     const voteDeposit = await createTokenAccount(program, client.realm_mint);
-    const solDeposit = await createTokenAccount(program, splToken.NATIVE_MINT);
 
     let charter = await program.account.charter.fetch(client.charter_pda);
-    assert.notEqual(
-      charter.paymentDeposit.toString(),
-      solDeposit.publicKey.toString()
-    );
+
     assert.notEqual(
       charter.voteDeposit.toString(),
       voteDeposit.publicKey.toString()
@@ -247,14 +304,9 @@ describe("strangemood", () => {
     await client.setCharterDeposit({
       authority: provider.wallet.publicKey,
       voteDeposit: voteDeposit.publicKey,
-      solDeposit: solDeposit.publicKey,
     });
 
     charter = await program.account.charter.fetch(client.charter_pda);
-    assert.equal(
-      charter.paymentDeposit.toString(),
-      solDeposit.publicKey.toString()
-    );
     assert.equal(
       charter.voteDeposit.toString(),
       voteDeposit.publicKey.toString()

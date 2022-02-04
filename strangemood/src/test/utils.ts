@@ -49,6 +49,7 @@ export async function setupGovernance(
   let realmMintBump: number;
   let realm_vote_deposit_governance: anchor.web3.PublicKey;
   let realm_sol_deposit_governance: anchor.web3.PublicKey;
+  let realm_sol_deposit_treasury: anchor.web3.PublicKey;
 
   let governance_program = await provider.connection.getAccountInfo(
     GOVERNANCE_PROGRAM_ID
@@ -148,7 +149,6 @@ export async function setupGovernance(
       accounts: {
         charter: charterPDA,
         authority: program.provider.wallet.publicKey,
-        paymentDeposit: realm_sol_deposit,
         voteDeposit: realm_vote_deposit,
         mint: vote_mint,
         user: provider.wallet.publicKey,
@@ -157,6 +157,23 @@ export async function setupGovernance(
     }
   );
   charter = (await program.account.charter.fetch(charterPDA)) as any;
+
+  let [treasury_pda, treasury_bump] = await pda.treasury(
+    program.programId,
+    charterPDA,
+    splToken.NATIVE_MINT
+  );
+  await program.rpc.initCharterTreasury(treasury_bump, new anchor.BN(1), 0, {
+    accounts: {
+      treasury: treasury_pda,
+      charter: charterPDA,
+      mint: splToken.NATIVE_MINT,
+      deposit: realm_sol_deposit,
+      systemProgram: SystemProgram.programId,
+      authority: charter.authority,
+    },
+  });
+  realm_sol_deposit_treasury = treasury_pda;
 
   realm_sol_deposit_governance = await createTokenGovernanceForDepositAccounts(
     program,
@@ -198,6 +215,7 @@ export async function setupGovernance(
     realm_mint_bump: realmMintBump,
     realm_sol_deposit_governance,
     realm_vote_deposit_governance,
+    realm_sol_deposit_treasury,
   };
 }
 
@@ -498,4 +516,40 @@ export function getTimestampFromDays(days: number): number {
   const SECONDS_PER_DAY = 86400;
 
   return days * SECONDS_PER_DAY;
+}
+
+export async function createMint(program: anchor.Program<any>) {
+  const conn = program.provider.connection;
+  let lamports = anchor.web3.LAMPORTS_PER_SOL;
+  let signature = await program.provider.connection.requestAirdrop(
+    program.provider.wallet.publicKey,
+    lamports
+  );
+
+  let tx = new anchor.web3.Transaction({
+    feePayer: program.provider.wallet.publicKey,
+  });
+
+  let keypair = anchor.web3.Keypair.generate();
+
+  tx.add(
+    SystemProgram.createAccount({
+      fromPubkey: program.provider.wallet.publicKey,
+      newAccountPubkey: keypair.publicKey,
+      lamports: await splToken.getMinimumBalanceForRentExemptMint(conn),
+      space: splToken.MintLayout.span,
+      programId: splToken.TOKEN_PROGRAM_ID,
+    })
+  );
+  tx.add(
+    splToken.createInitializeMintInstruction(
+      keypair.publicKey,
+      0,
+      program.provider.wallet.publicKey,
+      program.provider.wallet.publicKey
+    )
+  );
+
+  await program.provider.send(tx, [keypair]);
+  return keypair;
 }

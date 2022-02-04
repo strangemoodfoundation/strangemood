@@ -617,10 +617,37 @@ pub mod strangemood {
         ctx.accounts.charter.vote_deposit = ctx.accounts.vote_deposit.key();
         Ok(())
     }
+
+    pub fn init_charter_treasury(ctx: Context<InitCharterTreasury>, _treasury_bump: u8, expansion_scalar_amount: u64, expansion_scalar_decimals: u8) -> ProgramResult {
+        
+        let treasury = &mut ctx.accounts.treasury;
+        treasury.charter = ctx.accounts.charter.key();
+        treasury.deposit = ctx.accounts.deposit.key(); 
+        treasury.expansion_scalar_amount = expansion_scalar_amount; 
+        treasury.expansion_scalar_decimals = expansion_scalar_decimals; 
+
+        Ok(())
+    }
+
+    pub fn set_charter_treasury_expansion_scalar(ctx: Context<SetCharterTreasuryExpansionScalar>, expansion_scalar_amount: u64, expansion_scalar_decimals: u8) -> ProgramResult {
+        
+        let treasury = &mut ctx.accounts.treasury;
+        treasury.expansion_scalar_amount = expansion_scalar_amount; 
+        treasury.expansion_scalar_decimals = expansion_scalar_decimals; 
+
+        Ok(())
+    }
+
+    pub fn set_charter_treasury_deposit(ctx: Context<SetCharterTreasuryDeposit>) -> ProgramResult {
+        let treasury = &mut ctx.accounts.treasury;
+        treasury.deposit = ctx.accounts.deposit.key(); 
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, receipt_bump:u8, listing_mint_bump: u8, escrow_bump:u8, escrow_authority_bump:u8)]
+#[instruction(receipt_nonce: u128, receipt_bump:u8, listing_mint_bump: u8,  escrow_authority_bump:u8)]
 pub struct Purchase<'info> {
     // The listing to purchase
     #[account(
@@ -775,18 +802,15 @@ pub struct Cash<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, receipt_bump: u8, listing_bump: u8, listing_mint_authority_bump: u8)]
+#[instruction(listing_bump: u8, listing_mint_authority_bump: u8)]
 pub struct Cancel<'info> {
     pub purchaser: Signer<'info>,
 
     // Where we'll return the tokens back to 
     pub return_deposit: Account<'info, TokenAccount>,
 
-    #[account(mut,       
-        seeds = [b"receipt" as &[u8],
-         &receipt_nonce.to_le_bytes()],
-        bump= receipt_bump, 
-        has_one=listing, 
+    #[account(mut,
+        has_one=listing,
         has_one=listing_token_account, 
         has_one=purchaser,
         has_one=escrow
@@ -986,6 +1010,69 @@ pub struct SetCharterAuthority<'info> {
     pub system_program: Program<'info, System>,
 }
 
+
+#[derive(Accounts)]
+#[instruction(treasury_bump: u8)]
+pub struct InitCharterTreasury<'info> {
+    // 8 for the tag
+    // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 for the charter
+    // 128 as a buffer for future versions
+    #[account(init,
+        seeds = [b"treasury", charter.key().as_ref(), mint.key().as_ref()],
+        bump = treasury_bump,
+        payer = authority,
+        space = 8 + 1 + 32 + 32 + 8 + 1 + 128
+    )]
+    pub treasury: Account<'info, CharterTreasury>,
+
+    #[account(
+        has_one=authority
+    )]
+    pub charter: Account<'info, Charter>,
+
+    #[account(
+        has_one=mint
+    )]
+    pub deposit: Account<'info, TokenAccount>,
+
+    // The mint of the deposit account 
+    pub mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetCharterTreasuryExpansionScalar<'info> {
+    #[account(mut, has_one=charter)]
+    pub treasury: Account<'info, CharterTreasury>,
+
+    #[account(has_one=authority)]
+    pub charter: Account<'info, Charter>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetCharterTreasuryDeposit<'info> {
+    #[account(mut, has_one=charter)]
+    pub treasury: Account<'info, CharterTreasury>,
+
+    #[account(has_one=authority)]
+    pub charter: Account<'info, Charter>,
+
+    #[account(has_one=mint)]
+    pub deposit: Account<'info, TokenAccount>,
+    pub mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 pub struct Receipt {
     /// Set to "true" by the program when BeginPurchase is run
@@ -1117,12 +1204,9 @@ pub struct Charter {
     pub uri: String,
 }
 
-// An charter-approved deposit account. 
+// An charter-approved deposit account. There is only one treasury per mint and charter.
 #[account]
 pub struct CharterTreasury {
-    // If false, this charter deposit is no longer accepting payments.
-    pub is_available: Pubkey,
-
     // The charter this is associated with
     pub charter: Pubkey,
 

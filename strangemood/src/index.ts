@@ -571,7 +571,7 @@ export async function setListingDeposits(args: {
       accounts: {
         user: args.signer,
         listing: listingKey,
-        solDeposit: args.solDeposit,
+        paymentDeposit: args.solDeposit,
         voteDeposit: args.voteDeposit,
         systemProgram: SystemProgram.programId,
       },
