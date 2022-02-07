@@ -1,7 +1,7 @@
 import assert from "assert";
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
-import { Program } from "@project-serum/anchor";
+import { Program, splitArgsAndCtx } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
 import { TestClient } from "./testClient";
 import { fetchStrangemoodProgram, makeReceiptNonce } from "..";
@@ -25,8 +25,18 @@ describe("strangemood", () => {
   const program = anchor.workspace.Strangemood as Program<Strangemood>;
   const client = new TestClient(provider, program);
 
+  let dummy_mint: anchor.web3.PublicKey;
+  let dummy_treasury: anchor.web3.PublicKey;
+
   before(async () => {
     await client.init();
+
+    dummy_mint = await client.createMint();
+    dummy_treasury = await client.createTreasury(
+      dummy_mint,
+      new anchor.BN(1),
+      0
+    );
   });
 
   it("created charter correctly", async () => {
@@ -138,7 +148,10 @@ describe("strangemood", () => {
 
   it("can make a listing", async () => {
     const { listing } = await client.initListing(
-      {},
+      {
+        mint_to_be_paid_in: dummy_mint,
+        treasury: dummy_treasury,
+      },
       {
         price: new anchor.BN(10),
         decimals: 3,
@@ -168,7 +181,10 @@ describe("strangemood", () => {
 
   it("can create a receipt", async () => {
     const { listing } = await client.initListing(
-      {},
+      {
+        mint_to_be_paid_in: dummy_mint,
+        treasury: dummy_treasury,
+      },
       {
         price: new anchor.BN(10),
         decimals: 3,
@@ -180,6 +196,12 @@ describe("strangemood", () => {
     );
 
     const purchaser = anchor.web3.Keypair.generate();
+    await client.mintToAssociatedTokenAccount(
+      dummy_mint,
+      purchaser.publicKey,
+      1000
+    );
+
     const cashier = anchor.web3.Keypair.generate();
     const {
       receipt,
@@ -219,25 +241,28 @@ describe("strangemood", () => {
       r.escrow
     );
 
-    // const l = await program.account.listing.fetch(r.listing);
-    // assert.equal(escrow.amount, l.price.mul(r.quantity).toNumber());
+    const l = await program.account.listing.fetch(r.listing);
+    assert.equal(escrow.amount, l.price.mul(r.quantity).toNumber());
 
-    // const receiptBalance = await program.provider.connection.getBalance(
-    //   receipt
-    // );
-    // assert.equal(
-    //   await program.provider.connection.getMinimumBalanceForRentExemption(
-    //     RECEIPT_SIZE
-    //   ),
-    //   receiptBalance,
-    //   "not enough funds in the receipt"
-    // );
+    const receiptBalance = await program.provider.connection.getBalance(
+      receipt
+    );
+    assert.equal(
+      await program.provider.connection.getMinimumBalanceForRentExemption(
+        RECEIPT_SIZE
+      ),
+      receiptBalance,
+      "not enough funds in the receipt"
+    );
   });
 
   it("can close a receipt", async () => {
     // Create a new listing
     const { listing } = await client.initListing(
-      {},
+      {
+        mint_to_be_paid_in: dummy_mint,
+        treasury: dummy_treasury,
+      },
       {
         price: new anchor.BN(10),
         decimals: 3,
@@ -250,6 +275,12 @@ describe("strangemood", () => {
 
     // Create the receipt for the listing
     const purchaser = anchor.web3.Keypair.generate();
+    await client.mintToAssociatedTokenAccount(
+      dummy_mint,
+      purchaser.publicKey,
+      1000
+    );
+
     const cashier = anchor.web3.Keypair.generate();
     const { receipt } = await client.purchase(
       {
@@ -264,7 +295,10 @@ describe("strangemood", () => {
   it("can cash a receipt", async () => {
     // Create a new listing
     const { listing } = await client.initListing(
-      {},
+      {
+        mint_to_be_paid_in: dummy_mint,
+        treasury: dummy_treasury,
+      },
       {
         price: new anchor.BN(10),
         decimals: 3,
@@ -277,6 +311,12 @@ describe("strangemood", () => {
 
     // Create the receipt for the listing
     const purchaser = anchor.web3.Keypair.generate();
+    await client.mintToAssociatedTokenAccount(
+      dummy_mint,
+      purchaser.publicKey,
+      1000
+    );
+
     const cashier = anchor.web3.Keypair.generate();
     const { receipt } = await client.purchase(
       {

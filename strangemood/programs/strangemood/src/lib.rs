@@ -214,7 +214,7 @@ pub mod strangemood {
 
         // Check that the payment deposit is wrapped sol
         let payment_deposit = ctx.accounts.payment_deposit.clone().into_inner();
-        if payment_deposit.mint != spl_token::native_mint::ID {
+        if payment_deposit.mint != ctx.accounts.charter_treasury.clone().into_inner().mint {
             return Err(StrangemoodError::MintNotSupported.into());
         }
 
@@ -648,6 +648,7 @@ pub mod strangemood {
         let treasury = &mut ctx.accounts.treasury;
         treasury.charter = ctx.accounts.charter.key();
         treasury.deposit = ctx.accounts.deposit.key(); 
+        treasury.mint = ctx.accounts.mint.key();
         treasury.expansion_scalar_amount = expansion_scalar_amount; 
         treasury.expansion_scalar_decimals = expansion_scalar_decimals; 
 
@@ -676,7 +677,7 @@ pub mod strangemood {
 pub struct Purchase<'info> {
 
     // The user's token account where funds will be transfered from
-    pub purchase_token_account: Account<'info, TokenAccount>,
+    pub purchase_token_account: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
     #[account(
@@ -688,7 +689,7 @@ pub struct Purchase<'info> {
     #[account(
         constraint=listing_payment_deposit.mint==listing_payment_deposit_mint.key()
     )]
-    pub listing_payment_deposit: Account<'info, TokenAccount>,
+    pub listing_payment_deposit: Box<Account<'info, TokenAccount>>,
 
     // The type of funds that this 
     pub listing_payment_deposit_mint: Account<'info, Mint>,
@@ -933,6 +934,10 @@ pub struct InitListing<'info> {
     // Not actually sure if this is a good idea, but
     // without the Box, we run out of space?
     pub charter: Box<Account<'info, Charter>>,
+
+    #[account(has_one=charter)]
+    pub charter_treasury: Box<Account<'info, CharterTreasury>>,
+
     pub rent: Sysvar<'info, Rent>,
     pub token_program: Program<'info, Token>,
 
@@ -1245,6 +1250,9 @@ pub struct CharterTreasury {
 
     // The token account for this charter 
     pub deposit: Pubkey,
+
+    // The mint of the deposit that this is associated with.
+    pub mint: Pubkey,
 
     // Increases or decreases the amount of voting tokens.
     // distributed based on this deposit type.

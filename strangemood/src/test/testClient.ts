@@ -1,5 +1,5 @@
 import * as anchor from "@project-serum/anchor";
-import { Program } from "@project-serum/anchor";
+import { Program, splitArgsAndCtx } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
 import * as splToken from "@solana/spl-token";
 import {
@@ -11,7 +11,7 @@ import {
 } from "./utils";
 import { v4 } from "uuid";
 import { pda } from "../pda";
-const { SystemProgram, SYSVAR_RENT_PUBKEY } = anchor.web3;
+const { SystemProgram, SYSVAR_RENT_PUBKEY, Transaction } = anchor.web3;
 
 // Generates a uuid, and converts it to 16-byte (u128) BN
 function makeReceiptNonce() {
@@ -87,6 +87,43 @@ export class TestClient {
     this.realm_mint_bump = realm_mint_bump;
   }
 
+  async mintToAssociatedTokenAccount(
+    mint: anchor.web3.PublicKey,
+    purchaser: anchor.web3.PublicKey,
+    amount: number
+  ) {
+    let address = await splToken.getAssociatedTokenAddress(mint, purchaser);
+
+    let tx = new Transaction();
+
+    // Create ata if it doesn't exist
+    let tokenAccount = await this.program.provider.connection.getAccountInfo(
+      address
+    );
+    if (!tokenAccount) {
+      let ix = splToken.createAssociatedTokenAccountInstruction(
+        this.program.provider.wallet.publicKey,
+        address,
+        purchaser,
+        mint
+      );
+      tx.add(ix);
+    }
+
+    // mint tokens
+    let ix = splToken.createMintToInstruction(
+      mint,
+      address,
+      this.program.provider.wallet.publicKey,
+      amount
+    );
+    tx.add(ix);
+
+    await this.program.provider.send(tx);
+
+    return address;
+  }
+
   async createMint() {
     let mint = await createMint(this.program);
     return mint.publicKey;
@@ -113,17 +150,21 @@ export class TestClient {
         accounts: {
           treasury: treasury_pda,
           charter: this.charter_pda,
-          mint: splToken.NATIVE_MINT,
+          mint: mint,
           deposit: deposit.publicKey,
           systemProgram: SystemProgram.programId,
           authority: charter.authority,
         },
       }
     );
+    return treasury_pda;
   }
 
   async initListing(
-    accounts: {},
+    accounts: {
+      mint_to_be_paid_in: anchor.web3.PublicKey;
+      treasury: anchor.web3.PublicKey;
+    },
     args: {
       price: anchor.BN;
       decimals: number;
@@ -148,9 +189,9 @@ export class TestClient {
         this.program.programId
       );
 
-    const listing_sol_deposit = await createTokenAccount(
+    const listing_payment_deposit = await createTokenAccount(
       this.program,
-      splToken.NATIVE_MINT
+      accounts.mint_to_be_paid_in
     );
     const listing_vote_deposit = await createTokenAccount(
       this.program,
@@ -169,11 +210,12 @@ export class TestClient {
       args.uri,
       {
         accounts: {
+          charterTreasury: accounts.treasury,
           listing: listingPDA,
           mint: mintKeypair.publicKey,
           mintAuthorityPda: listingMintAuthority,
           rent: SYSVAR_RENT_PUBKEY,
-          paymentDeposit: listing_sol_deposit.publicKey,
+          paymentDeposit: listing_payment_deposit.publicKey,
           voteDeposit: listing_vote_deposit.publicKey,
           charter: this.charter_pda,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
@@ -187,7 +229,7 @@ export class TestClient {
     return {
       mint: mintKeypair.publicKey,
       listing: listingPDA,
-      listing_sol_deposit,
+      listing_payment_deposit,
       listing_vote_deposit,
     };
   }

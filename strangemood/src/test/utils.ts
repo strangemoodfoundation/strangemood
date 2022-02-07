@@ -444,10 +444,6 @@ export async function createTokenAccount(
 ) {
   const conn = program.provider.connection;
   let lamports = anchor.web3.LAMPORTS_PER_SOL;
-  let signature = await program.provider.connection.requestAirdrop(
-    program.provider.wallet.publicKey,
-    lamports
-  );
 
   let tx = new anchor.web3.Transaction({
     feePayer: program.provider.wallet.publicKey,
