@@ -87,6 +87,23 @@ pub fn token_escrow_transfer<'a>(
     anchor_spl::token::transfer(cpi_ctx, amount)
 }
 
+pub fn token_transfer<'a>(
+    token_program: AccountInfo<'a>,
+    from: AccountInfo<'a>,
+    to: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    amount: u64,
+) -> ProgramResult {
+    let cpi_program = token_program;
+    let cpi_accounts = anchor_spl::token::Transfer {
+        from,
+        to,
+        authority,
+    };
+    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+    anchor_spl::token::transfer(cpi_ctx, amount)
+}
+
 pub fn burn<'a>(
     token_program: AccountInfo<'a>,
     mint: AccountInfo<'a>,
@@ -228,6 +245,7 @@ pub mod strangemood {
         receipt_nonce: u128,
         _receipt_bump: u8,
         listing_mint_bump: u8,
+        _escrow_authority_bump: u8,
         amount: u64,
     ) -> ProgramResult {
         let listing = ctx.accounts.listing.clone().into_inner();
@@ -239,10 +257,11 @@ pub mod strangemood {
             return Err(StrangemoodError::UnexpectedListingMint.into());
         }
 
-        system_transfer(
-            &ctx.accounts.system_program.to_account_info(),
-            &ctx.accounts.user.to_account_info(),
-            &ctx.accounts.receipt.to_account_info(),
+        token_transfer(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.purchase_token_account.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.user.to_account_info(),
             amount * listing.price,
         )?;
 
@@ -269,6 +288,7 @@ pub mod strangemood {
         receipt.cashier = ctx.accounts.cashier.key();
         receipt.nonce = receipt_nonce;
         receipt.price = listing.price;
+        receipt.escrow = ctx.accounts.escrow.key();
 
         // If the listing is refundable, then you can't immediately
         // cash out the receipt.
@@ -280,7 +300,8 @@ pub mod strangemood {
     pub fn cash(
         ctx: Context<Cash>,
         listing_mint_bump: u8,
-        realm_mint_bump: u8,
+        charter_mint_bump: u8,
+        escrow_authority_bump: u8
     ) -> ProgramResult {
         let listing = ctx.accounts.listing.clone().into_inner();
         let charter = ctx.accounts.charter.clone().into_inner();
@@ -340,16 +361,19 @@ pub mod strangemood {
         }
 
         let lamports: u64 = receipt.price;
-        let deposit_rate = 1.0 - charter.sol_contribution_rate();
+        let deposit_rate = 1.0 - charter.payment_contribution_rate();
         let deposit_amount = (deposit_rate * lamports as f64) as u64;
         let contribution_amount = lamports - deposit_amount;
 
         // Transfer SOL to lister
-        move_lamports(
-            &ctx.accounts.receipt.to_account_info(),
-            &ctx.accounts.listings_payment_deposit.to_account_info(),
+        token_escrow_transfer(
+            ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.listings_payment_deposit.to_account_info(),
+            ctx.accounts.escrow_authority.to_account_info(),
             deposit_amount as u64,
-        );
+            escrow_authority_bump
+        )?;
     
         move_lamports(
             &ctx.accounts.receipt.to_account_info(),
@@ -357,7 +381,8 @@ pub mod strangemood {
             contribution_amount as u64,
         );
 
-        let votes = contribution_amount as f64 * charter.expansion_rate();
+        let treasury = ctx.accounts.charter_treasury.clone().into_inner();
+        let votes = contribution_amount as f64 * charter.expansion_rate(treasury.expansion_scalar_amount, treasury.expansion_scalar_decimals);
         let deposit_rate = 1.0 - charter.vote_contribution_rate();
         let deposit_amount = (deposit_rate * votes as f64) as u64;
         let contribution_amount = (votes as u64) - deposit_amount;
@@ -368,7 +393,7 @@ pub mod strangemood {
             ctx.accounts.charter_mint.to_account_info(),
             ctx.accounts.listings_vote_deposit.to_account_info(),
             ctx.accounts.charter_mint_authority.to_account_info(),
-            realm_mint_bump,
+            charter_mint_bump,
             deposit_amount,
         )?;
 
@@ -378,7 +403,7 @@ pub mod strangemood {
             ctx.accounts.charter_mint.to_account_info(),
             ctx.accounts.charter_vote_deposit.to_account_info(),
             ctx.accounts.charter_mint_authority.to_account_info(),
-            realm_mint_bump,
+            charter_mint_bump,
             contribution_amount,
         )?;
 
@@ -649,6 +674,10 @@ pub mod strangemood {
 #[derive(Accounts)]
 #[instruction(receipt_nonce: u128, receipt_bump:u8, listing_mint_bump: u8,  escrow_authority_bump:u8)]
 pub struct Purchase<'info> {
+
+    // The user's token account where funds will be transfered from
+    pub purchase_token_account: Account<'info, TokenAccount>,
+
     // The listing to purchase
     #[account(
         constraint=listing_payment_deposit.key()==listing.clone().into_inner().payment_deposit.key(),
@@ -727,7 +756,7 @@ pub struct Purchase<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(listing_mint_bump: u8, charter_mint_bump: u8)]
+#[instruction(listing_mint_bump: u8, charter_mint_bump: u8, escrow_authority_bump: u8)]
 pub struct Cash<'info> {
     pub cashier: Signer<'info>,
 
@@ -738,6 +767,10 @@ pub struct Cash<'info> {
     #[account(mut)]
     pub escrow: Account<'info, TokenAccount>,
 
+    #[account(
+        seeds=[b"authority", escrow.key().as_ref()],
+        bump=escrow_authority_bump,
+    )]
     pub escrow_authority: Account<'info, TokenAccount>,
 
     #[account(mut)]
@@ -769,7 +802,7 @@ pub struct Cash<'info> {
 
     #[account(
         has_one=charter,
-        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit.key()
+        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit.key(),
     )]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
 
@@ -1226,10 +1259,11 @@ pub(crate) fn amount_as_float(amount: u64, decimals: u8) -> f64 {
 }
 
 impl Charter {
-    pub fn expansion_rate(&self) -> f64 {
-        amount_as_float(self.expansion_rate_amount, self.expansion_rate_decimals)
+    pub fn expansion_rate(&self, scalar_amount: u64, scalar_decimals: u8) -> f64 {
+        amount_as_float(self.expansion_rate_amount, self.expansion_rate_decimals) 
+            * amount_as_float(scalar_amount, scalar_decimals)
     }
-    pub fn sol_contribution_rate(&self) -> f64 {
+    pub fn payment_contribution_rate(&self) -> f64 {
         amount_as_float(
             self.payment_contribution_rate_amount,
             self.payment_contribution_rate_decimals,

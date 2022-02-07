@@ -4,6 +4,7 @@ import { Strangemood } from "../../target/types/strangemood";
 import * as splToken from "@solana/spl-token";
 import {
   createAssociatedTokenAccountForKeypair,
+  createMint,
   createTokenAccount,
   requestAirdrop,
   setupGovernance,
@@ -70,7 +71,6 @@ export class TestClient {
       charter_governance,
       realm_mint_authority,
       realm_mint_bump,
-      realm_sol_deposit_treasury,
     } = await setupGovernance(this.provider, this.program);
     this.realm_mint = vote_mint;
     this.realm = realm;
@@ -85,7 +85,41 @@ export class TestClient {
     this.charter_governance = charter_governance;
     this.realm_mint_authority = realm_mint_authority;
     this.realm_mint_bump = realm_mint_bump;
-    this.realm_sol_deposit_treasury = realm_sol_deposit_treasury;
+  }
+
+  async createMint() {
+    let mint = await createMint(this.program);
+    return mint.publicKey;
+  }
+
+  async createTreasury(
+    mint: anchor.web3.PublicKey,
+    scalar_amount: anchor.BN,
+    scalar_decimals: number
+  ) {
+    let deposit = await createTokenAccount(this.program, mint);
+    let charter = await this.program.account.charter.fetch(this.charter_pda);
+
+    let [treasury_pda, treasury_bump] = await pda.treasury(
+      this.program.programId,
+      this.charter_pda,
+      mint
+    );
+    await this.program.rpc.initCharterTreasury(
+      treasury_bump,
+      scalar_amount,
+      scalar_decimals,
+      {
+        accounts: {
+          treasury: treasury_pda,
+          charter: this.charter_pda,
+          mint: splToken.NATIVE_MINT,
+          deposit: deposit.publicKey,
+          systemProgram: SystemProgram.programId,
+          authority: charter.authority,
+        },
+      }
+    );
   }
 
   async initListing(
@@ -169,7 +203,12 @@ export class TestClient {
     const listing = await this.program.account.listing.fetch(accounts.listing);
     const listingDeposit = await splToken.getAccount(
       this.program.provider.connection,
-      listing.deposit
+      listing.paymentDeposit
+    );
+
+    let purchaseTokenAccount = await splToken.getAssociatedTokenAddress(
+      listingDeposit.mint,
+      accounts.purchaser.publicKey
     );
 
     let [mintAuthorityPda, mintAuthorityBump] =
@@ -213,12 +252,13 @@ export class TestClient {
       new anchor.BN(amount),
       {
         accounts: {
+          purchaseTokenAccount: purchaseTokenAccount,
           listing: accounts.listing,
           cashier: accounts.cashier,
           listingTokenAccount: listingTokenAccount,
           listingMint: listing.mint,
           listingMintAuthority: mintAuthorityPda,
-          listingPaymentDeposit: listing.deposit,
+          listingPaymentDeposit: listing.paymentDeposit,
           listingPaymentDepositMint: listingDeposit.mint,
           receipt: receipt_pda,
           escrow: escrowKeypair.publicKey,
@@ -238,9 +278,16 @@ export class TestClient {
     ]);
     await this.provider.connection.confirmTransaction(sig);
 
+    console.log(
+      "Purchased",
+      receipt_pda.toString(),
+      listingTokenAccount.toString()
+    );
+
     return {
       receipt: receipt_pda,
       listingTokenAccount: listingTokenAccount,
+      escrow: escrowKeypair.publicKey,
     };
   }
 
@@ -355,7 +402,7 @@ export class TestClient {
     const listing = await this.program.account.listing.fetch(receipt.listing);
     const listingDeposit = await splToken.getAccount(
       this.program.provider.connection,
-      listing.deposit
+      listing.paymentDeposit
     );
 
     let [listingMintAuthority, listingMintAuthorityBump] =

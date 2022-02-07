@@ -10,7 +10,7 @@ import { pda } from "../pda";
 import { MAINNET } from "../constants";
 const { SystemProgram } = anchor.web3;
 
-const RECEIPT_SIZE = 171;
+const RECEIPT_SIZE = 203;
 
 describe("no nonce buffer bug", () => {
   const nonce = makeReceiptNonce();
@@ -103,10 +103,6 @@ describe("strangemood", () => {
       client.realm_mint
     );
 
-    let myNefariousPaymentAccount = await createTokenAccount(
-      program,
-      splToken.NATIVE_MINT
-    );
     let myNefariousVoteAccount = await createTokenAccount(
       program,
       client.realm_mint
@@ -185,7 +181,11 @@ describe("strangemood", () => {
 
     const purchaser = anchor.web3.Keypair.generate();
     const cashier = anchor.web3.Keypair.generate();
-    const { receipt, listingTokenAccount } = await client.purchase(
+    const {
+      receipt,
+      listingTokenAccount,
+      escrow: escrowPubkey,
+    } = await client.purchase(
       {
         listing,
         cashier: cashier.publicKey,
@@ -206,20 +206,32 @@ describe("strangemood", () => {
     );
     assert.equal(r.cashier.toString(), cashier.publicKey.toString());
     assert.equal(r.purchaser.toString(), purchaser.publicKey.toString());
+    assert.equal(r.escrow.toString(), escrowPubkey.toString(), "Escrow Pubkey");
 
-    const l = await program.account.listing.fetch(listing);
-    const receiptBalance = await program.provider.connection.getBalance(
-      receipt
+    console.log(
+      (
+        await program.provider.connection.getAccountInfo(r.escrow)
+      ).owner.toString()
     );
 
-    assert.equal(
-      l.price.toNumber() * 10 +
-        (await program.provider.connection.getMinimumBalanceForRentExemption(
-          RECEIPT_SIZE
-        )),
-      receiptBalance,
-      "not enough funds in the receipt"
+    let escrow = await splToken.getAccount(
+      program.provider.connection,
+      r.escrow
     );
+
+    // const l = await program.account.listing.fetch(r.listing);
+    // assert.equal(escrow.amount, l.price.mul(r.quantity).toNumber());
+
+    // const receiptBalance = await program.provider.connection.getBalance(
+    //   receipt
+    // );
+    // assert.equal(
+    //   await program.provider.connection.getMinimumBalanceForRentExemption(
+    //     RECEIPT_SIZE
+    //   ),
+    //   receiptBalance,
+    //   "not enough funds in the receipt"
+    // );
   });
 
   it("can close a receipt", async () => {
