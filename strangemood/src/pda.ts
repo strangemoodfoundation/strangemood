@@ -37,9 +37,9 @@ export const pda = {
     );
   },
 
-  authority: async (strangemoodProgramId: PublicKey, account: PublicKey) => {
+  escrow: async (strangemoodProgramId: PublicKey, account: PublicKey) => {
     return web3.PublicKey.findProgramAddress(
-      [Buffer.from("authority"), account.toBuffer()],
+      [Buffer.from("escrow"), account.toBuffer()],
       strangemoodProgramId
     );
   },

@@ -282,7 +282,7 @@ export class TestClient {
     let escrowKeypair = anchor.web3.Keypair.generate();
     let [escrowAuthority, escrowAuthorityBump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("authority"), escrowKeypair.publicKey.toBuffer()],
+        [Buffer.from("escrow"), escrowKeypair.publicKey.toBuffer()],
         this.program.programId
       );
 
@@ -319,12 +319,6 @@ export class TestClient {
       escrowKeypair,
     ]);
     await this.provider.connection.confirmTransaction(sig);
-
-    console.log(
-      "Purchased",
-      receipt_pda.toString(),
-      listingTokenAccount.toString()
-    );
 
     return {
       receipt: receipt_pda,
@@ -388,7 +382,7 @@ export class TestClient {
 
     let [escrowAuthority, escrowAuthorityBump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("authority"), receipt.escrow.toBuffer()],
+        [Buffer.from("escrow"), receipt.escrow.toBuffer()],
         this.program.programId
       );
 
@@ -455,13 +449,13 @@ export class TestClient {
 
     let [escrowAuthority, escrowAuthorityBump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("authority"), receipt.escrow.toBuffer()],
+        [Buffer.from("escrow"), receipt.escrow.toBuffer()],
         this.program.programId
       );
 
     let [treasury_pda, treasury_bump] = await pda.treasury(
       this.program.programId,
-      receipt.charter,
+      listing.charter,
       listingDeposit.mint
     );
 
@@ -476,6 +470,7 @@ export class TestClient {
       this.program.instruction.cash(
         listingMintAuthorityBump,
         this.realm_mint_bump,
+        escrowAuthorityBump,
         {
           accounts: {
             cashier: accounts.cashier.publicKey,
@@ -500,14 +495,6 @@ export class TestClient {
         }
       )
     );
-
-    let sync_listing_sol_ix = splToken.createSyncNativeInstruction(
-      this.realm_sol_deposit
-    );
-    let sync_realm_sol_ix = splToken.createSyncNativeInstruction(
-      this.realm_sol_deposit
-    );
-    tx.add(sync_listing_sol_ix, sync_realm_sol_ix);
 
     // to pay for fees
     await requestAirdrop(this.program, accounts.cashier.publicKey);

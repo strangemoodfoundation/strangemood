@@ -248,6 +248,7 @@ pub mod strangemood {
         _escrow_authority_bump: u8,
         amount: u64,
     ) -> ProgramResult {
+        msg!("Purchasing");
         let listing = ctx.accounts.listing.clone().into_inner();
 
         if !listing.is_available {
@@ -264,6 +265,8 @@ pub mod strangemood {
             ctx.accounts.user.to_account_info(),
             amount * listing.price,
         )?;
+
+        msg!("Transfered tokens");
 
         // if the listing is refundable, then mint the user the
         // token immediately (it can be burned later).
@@ -337,11 +340,6 @@ pub mod strangemood {
             return Err(StrangemoodError::MintIsNotFoundInCharter.into());
         }
 
-        // Check that the payment deposit is the same as what's found in the mint
-        // if ctx.accounts.charter_payment_deposit.key() != charter.payment_deposit {
-        //     return Err(StrangemoodError::DepositIsNotFoundInCharter.into());
-        // }
-
         // Check that the vote deposit is the same as what's found in the mint
         if ctx.accounts.charter_vote_deposit.key() != charter.vote_deposit {
             return Err(StrangemoodError::DepositIsNotFoundInCharter.into());
@@ -365,7 +363,8 @@ pub mod strangemood {
         let deposit_amount = (deposit_rate * lamports as f64) as u64;
         let contribution_amount = lamports - deposit_amount;
 
-        // Transfer SOL to lister
+        msg!("Transfer payment to lister");
+        // Transfer from escrow to lister
         token_escrow_transfer(
             ctx.accounts.token_program.to_account_info(),
         ctx.accounts.escrow.to_account_info(),
@@ -523,10 +522,10 @@ pub mod strangemood {
         charter.payment_contribution_rate_decimals = sol_contribution_rate_decimals;
         charter.vote_contribution_rate_amount = vote_contribution_rate_amount;
         charter.vote_contribution_rate_decimals = vote_contribution_rate_decimals;
-        // charter.payment_deposit = ctx.accounts.payment_deposit.key();
         charter.vote_deposit = ctx.accounts.vote_deposit.key();
         charter.mint = ctx.accounts.mint.key();
         charter.uri = uri;
+        charter.is_initialized = true;
 
         Ok(())
     }
@@ -651,6 +650,7 @@ pub mod strangemood {
         treasury.mint = ctx.accounts.mint.key();
         treasury.expansion_scalar_amount = expansion_scalar_amount; 
         treasury.expansion_scalar_decimals = expansion_scalar_decimals; 
+        treasury.is_initialized = true;
 
         Ok(())
     }
@@ -677,6 +677,7 @@ pub mod strangemood {
 pub struct Purchase<'info> {
 
     // The user's token account where funds will be transfered from
+    #[account(mut)]
     pub purchase_token_account: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
@@ -736,7 +737,7 @@ pub struct Purchase<'info> {
     pub receipt: Box<Account<'info, Receipt>>,
 
     #[account(
-        init, 
+        init,
         payer=user,
         token::mint = listing_payment_deposit_mint,
         token::authority = escrow_authority,
@@ -744,7 +745,7 @@ pub struct Purchase<'info> {
     pub escrow: Account<'info, TokenAccount>,
 
     #[account(
-        seeds=[b"authority", escrow.key().as_ref()],
+        seeds=[b"escrow", escrow.key().as_ref()],
         bump=escrow_authority_bump,
     )]
     pub escrow_authority: AccountInfo<'info>,
@@ -769,10 +770,10 @@ pub struct Cash<'info> {
     pub escrow: Account<'info, TokenAccount>,
 
     #[account(
-        seeds=[b"authority", escrow.key().as_ref()],
+        seeds=[b"escrow", escrow.key().as_ref()],
         bump=escrow_authority_bump,
     )]
-    pub escrow_authority: Account<'info, TokenAccount>,
+    pub escrow_authority: AccountInfo<'info>,
 
     #[account(mut)]
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
@@ -841,6 +842,7 @@ pub struct Cancel<'info> {
     pub purchaser: Signer<'info>,
 
     // Where we'll return the tokens back to 
+    #[account(mut)]
     pub return_deposit: Account<'info, TokenAccount>,
 
     #[account(mut,
@@ -854,8 +856,9 @@ pub struct Cancel<'info> {
     #[account(mut)]
     pub escrow: Account<'info, TokenAccount>,
 
-    pub escrow_authority: Account<'info, TokenAccount>,
+    pub escrow_authority: AccountInfo<'info>,
 
+    #[account(mut)]
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
@@ -888,6 +891,7 @@ pub struct Consume<'info> {
     )]
     pub mint_authority: AccountInfo<'info>,
 
+    #[account(mut)]
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
 
@@ -1205,6 +1209,8 @@ pub struct Listing {
 
 #[account]
 pub struct Charter {
+    pub is_initialized: bool,
+
     // The amount of voting tokens to give to a user per
     // 1.0 wrapped SOL contributed via community account contributions.
     //
@@ -1245,6 +1251,10 @@ pub struct Charter {
 // An charter-approved deposit account. There is only one treasury per mint and charter.
 #[account]
 pub struct CharterTreasury {
+    /// Set to "true" by the program when InitListing is run
+    /// Contracts should not trust listings that aren't initialized
+    pub is_initialized: bool,
+
     // The charter this is associated with
     pub charter: Pubkey,
 
