@@ -434,7 +434,6 @@ pub mod strangemood {
 
     pub fn cancel(
         ctx: Context<Cancel>,
-        _receipt_bump: u8,
         _listing_bump: u8,
         listing_mint_bump: u8,
         escrow_authority_bump:u8,
@@ -823,6 +822,7 @@ pub struct Cash<'info> {
     #[account(
         has_one=charter,
         constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit.key(),
+        constraint=charter_treasury.mint==listings_payment_deposit.mint,
     )]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
 

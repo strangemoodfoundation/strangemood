@@ -256,7 +256,7 @@ describe("strangemood", () => {
     );
   });
 
-  it("can close a receipt", async () => {
+  it(" close a receipt", async () => {
     // Create a new listing
     const { listing } = await client.initListing(
       {

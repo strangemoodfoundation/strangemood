@@ -294,21 +294,21 @@ export class TestClient {
       new anchor.BN(amount),
       {
         accounts: {
-          purchaseTokenAccount: purchaseTokenAccount,
-          listing: accounts.listing,
           cashier: accounts.cashier,
-          listingTokenAccount: listingTokenAccount,
+          escrow: escrowKeypair.publicKey,
+          escrowAuthority: escrowAuthority,
+          listing: accounts.listing,
           listingMint: listing.mint,
           listingMintAuthority: mintAuthorityPda,
           listingPaymentDeposit: listing.paymentDeposit,
           listingPaymentDepositMint: listingDeposit.mint,
+          listingTokenAccount: listingTokenAccount,
+          purchaseTokenAccount: purchaseTokenAccount,
           receipt: receipt_pda,
-          escrow: escrowKeypair.publicKey,
-          escrowAuthority: escrowAuthority,
-          user: accounts.purchaser.publicKey,
+          rent: SYSVAR_RENT_PUBKEY,
           systemProgram: SystemProgram.programId,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-          rent: SYSVAR_RENT_PUBKEY,
+          user: accounts.purchaser.publicKey,
         },
       }
     );
