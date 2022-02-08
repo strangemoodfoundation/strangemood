@@ -319,7 +319,6 @@ describe("strangemood", () => {
 
     const cashier = anchor.web3.Keypair.generate();
 
-    console.log("purchasing receipt");
     const { receipt } = await client.purchase(
       {
         listing,
@@ -329,18 +328,50 @@ describe("strangemood", () => {
       1
     );
 
+    let r = await program.account.receipt.fetch(receipt);
+
     await client.cash({
       cashier: cashier,
       receipt: receipt,
     });
 
-    console.log("Cashed receipt");
+    let l = await program.account.listing.fetch(listing);
 
-    // let r = await program.account.receipt.fetch(receipt);
-    // let escrowInfo = await program.provider.connection.getAccountInfo(r.escrow);
+    // buyer got the token
+    assert.equal(
+      (
+        await splToken.getAccount(
+          program.provider.connection,
+          r.listingTokenAccount
+        )
+      ).amount,
+      1
+    );
 
-    // assert.equal(escrowInfo.lamports, 0);
-    // console.log(escrowInfo);
+    // Lister got it's payment
+    assert.equal(
+      (await splToken.getAccount(program.provider.connection, l.paymentDeposit))
+        .amount,
+      9
+    );
+
+    // Treasury got it's payment
+    const t = await program.account.charterTreasury.fetch(dummy_treasury);
+    assert.equal(
+      (await splToken.getAccount(program.provider.connection, t.deposit))
+        .amount,
+      1
+    );
+
+    let is_escrow_closed = !(await program.provider.connection.getAccountInfo(
+      r.escrow
+    ));
+    assert.equal(is_escrow_closed, true, "is_escrow_closed");
+
+    let is_receipt_closed = !(await program.provider.connection.getAccountInfo(
+      receipt
+    ));
+    assert.equal(is_receipt_closed, true, "is_receipt_closed");
   });
 
   it("Can update charter deposits", async () => {

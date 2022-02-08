@@ -363,7 +363,6 @@ pub mod strangemood {
         let deposit_amount = (deposit_rate * lamports as f64) as u64;
         let contribution_amount = lamports - deposit_amount;
 
-        msg!("Transfer payment to lister");
         // Transfer from escrow to lister
         token_escrow_transfer(
             ctx.accounts.token_program.to_account_info(),
@@ -374,6 +373,16 @@ pub mod strangemood {
             escrow_authority_bump
         )?;
     
+        // Transfer from escrow to charter
+        token_escrow_transfer(
+            ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.charter_treasury_deposit.to_account_info(),
+            ctx.accounts.escrow_authority.to_account_info(),
+            contribution_amount as u64,
+            escrow_authority_bump
+        )?;
+
         move_lamports(
             &ctx.accounts.receipt.to_account_info(),
             &ctx.accounts.charter_treasury_deposit.to_account_info(),
@@ -404,6 +413,15 @@ pub mod strangemood {
             ctx.accounts.charter_mint_authority.to_account_info(),
             charter_mint_bump,
             contribution_amount,
+        )?;
+
+        // Close the escrow
+        close_token_escrow_account(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.cashier.to_account_info(),
+            ctx.accounts.escrow_authority.to_account_info(),
+            escrow_authority_bump
         )?;
 
         close_native_account(
