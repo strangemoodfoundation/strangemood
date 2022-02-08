@@ -1,5 +1,5 @@
 import * as anchor from "@project-serum/anchor";
-import { Program, splitArgsAndCtx } from "@project-serum/anchor";
+import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
 import * as splToken from "@solana/spl-token";
 import {

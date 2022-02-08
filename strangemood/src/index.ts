@@ -147,7 +147,7 @@ export async function cancel(args: {
   let [escrowAuthority, escrowAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
       [Buffer.from("escrow"), receiptInfo.account.escrow.toBuffer()],
-      this.program.programId
+      args.program.programId
     );
 
   let returnTokenAccount = await splToken.getAssociatedTokenAddress(
@@ -369,7 +369,7 @@ export async function purchase(args: {
 }) {
   let listingInfo = await asListingInfo(args.program, args.listing);
   const listingDeposit = await splToken.getAccount(
-    this.program.provider.connection,
+    args.program.provider.connection,
     listingInfo.account.paymentDeposit
   );
 
@@ -410,7 +410,7 @@ export async function purchase(args: {
   let [escrowAuthority, escrowAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
       [Buffer.from("escrow"), escrowKeypair.publicKey.toBuffer()],
-      this.program.programId
+      args.program.programId
     );
 
   let purchaseTokenAccount = await splToken.getAssociatedTokenAddress(
@@ -510,16 +510,16 @@ export async function cash(args: {
   let [escrowAuthority, escrowAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
       [Buffer.from("escrow"), receiptInfo.account.escrow.toBuffer()],
-      this.program.programId
+      args.program.programId
     );
 
   const listingDeposit = await splToken.getAccount(
-    this.program.provider.connection,
+    args.program.provider.connection,
     listingInfo.account.paymentDeposit
   );
 
   let [treasury_pda, treasury_bump] = await pda.treasury(
-    this.program.programId,
+    args.program.programId,
     listingInfo.account.charter,
     listingDeposit.mint
   );
@@ -704,6 +704,43 @@ export async function setListingAuthority(args: {
       },
     })
   );
+  return { instructions };
+}
+
+export async function initCharterTreasury(args: {
+  program: Program<Strangemood>;
+  charter: PublicKey;
+  authority: PublicKey;
+  deposit: PublicKey;
+  mint: PublicKey;
+  scalarAmount: anchor.BN;
+  scalarDecimals: number;
+}) {
+  let charter = await args.program.account.charter.fetch(args.charter);
+
+  let [treasury_pda, treasury_bump] = await pda.treasury(
+    args.program.programId,
+    args.charter,
+    args.mint
+  );
+
+  const ix = args.program.instruction.initCharterTreasury(
+    treasury_bump,
+    args.scalarAmount,
+    args.scalarDecimals,
+    {
+      accounts: {
+        treasury: treasury_pda,
+        charter: args.charter,
+        mint: args.mint,
+        deposit: args.deposit,
+        systemProgram: SystemProgram.programId,
+        authority: charter.authority,
+      },
+    }
+  );
+
+  let instructions = [ix];
   return { instructions };
 }
 
