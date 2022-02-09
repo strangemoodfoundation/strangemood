@@ -25,4 +25,22 @@ export const pda = {
       strangemoodProgramId
     );
   },
+
+  treasury: async (
+    strangemoodProgramId: PublicKey,
+    charter: PublicKey,
+    mint: PublicKey
+  ) => {
+    return web3.PublicKey.findProgramAddress(
+      [Buffer.from("treasury"), charter.toBuffer(), mint.toBuffer()],
+      strangemoodProgramId
+    );
+  },
+
+  escrow: async (strangemoodProgramId: PublicKey, account: PublicKey) => {
+    return web3.PublicKey.findProgramAddress(
+      [Buffer.from("escrow"), account.toBuffer()],
+      strangemoodProgramId
+    );
+  },
 };

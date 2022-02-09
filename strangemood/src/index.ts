@@ -16,6 +16,7 @@ import { v4 } from "uuid";
 const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
 import { Buffer } from "buffer";
+import * as splToken from "@solana/spl-token";
 
 export const pda = _pda;
 
@@ -143,13 +144,28 @@ export async function cancel(args: {
       args.program.programId
     );
 
+  let [escrowAuthority, escrowAuthorityBump] =
+    await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("escrow"), receiptInfo.account.escrow.toBuffer()],
+      args.program.programId
+    );
+
+  let returnTokenAccount = await splToken.getAssociatedTokenAddress(
+    receiptInfo.account.mint,
+    args.signer
+  );
+
   const ix = args.program.instruction.cancel(
     listingBump,
     listingMintAuthorityBump,
+    escrowAuthorityBump,
     {
       accounts: {
+        returnDeposit: returnTokenAccount,
         purchaser: args.signer,
         receipt: receiptInfo.publicKey,
+        escrow: receiptInfo.account.escrow,
+        escrowAuthority: escrowAuthority,
         listingTokenAccount: receiptInfo.account.listingTokenAccount,
         listing: receiptInfo.account.listing,
         listingMint: listingInfo.account.mint,
@@ -240,6 +256,9 @@ export async function initListing(args: {
   // Can this listing be purchased?
   isAvailable: boolean;
 
+  // the mint to be paid in.
+  payment: PublicKey;
+
   governance?: constants.Government;
 }) {
   const mintKeypair = anchor.web3.Keypair.generate();
@@ -294,6 +313,13 @@ export async function initListing(args: {
       )
     );
   }
+
+  const [treasuryPDA, _] = await pda.treasury(
+    args.program.programId,
+    args.governance.charter,
+    args.payment
+  );
+
   let init_instruction_ix = args.program.instruction.initListing(
     listingMintBump,
     listingBump,
@@ -308,6 +334,7 @@ export async function initListing(args: {
         listing: listingPDA,
         mint: mintKeypair.publicKey,
         mintAuthorityPda: listingMintAuthority,
+        charterTreasury: treasuryPDA,
         rent: SYSVAR_RENT_PUBKEY,
         paymentDeposit: associatedSolAddress,
         voteDeposit: associatedVoteAddress,
@@ -341,6 +368,10 @@ export async function purchase(args: {
   quantity: anchor.BN;
 }) {
   let listingInfo = await asListingInfo(args.program, args.listing);
+  const listingDeposit = await splToken.getAccount(
+    args.program.provider.connection,
+    listingInfo.account.paymentDeposit
+  );
 
   let [listingMintAuthority, listingMintBump] = await pda.mint(
     args.program.programId,
@@ -375,23 +406,41 @@ export async function purchase(args: {
     );
   }
 
+  let escrowKeypair = anchor.web3.Keypair.generate();
+  let [escrowAuthority, escrowAuthorityBump] =
+    await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("escrow"), escrowKeypair.publicKey.toBuffer()],
+      args.program.programId
+    );
+
+  let purchaseTokenAccount = await splToken.getAssociatedTokenAddress(
+    listingDeposit.mint,
+    args.signer
+  );
+
   let purchase_ix = args.program.instruction.purchase(
     nonce,
     receipt_bump,
     listingMintBump,
+    escrowAuthorityBump,
     new anchor.BN(args.quantity),
     {
       accounts: {
-        listing: listingInfo.publicKey,
         cashier: args.cashier,
-        listingTokenAccount: listingTokenAccount,
+        escrow: escrowKeypair.publicKey,
+        escrowAuthority,
+        listing: listingInfo.publicKey,
         listingMint: listingInfo.account.mint,
         listingMintAuthority: listingMintAuthority,
+        listingPaymentDeposit: listingInfo.account.paymentDeposit,
+        listingPaymentDepositMint: listingDeposit.mint,
+        listingTokenAccount: listingTokenAccount,
+        purchaseTokenAccount: purchaseTokenAccount,
         receipt: receipt_pda,
-        user: args.signer,
+        rent: SYSVAR_RENT_PUBKEY,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
-        rent: SYSVAR_RENT_PUBKEY,
+        user: args.signer,
       },
     }
   );
@@ -458,28 +507,56 @@ export async function cash(args: {
       args.program.programId
     );
 
+  let [escrowAuthority, escrowAuthorityBump] =
+    await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("escrow"), receiptInfo.account.escrow.toBuffer()],
+      args.program.programId
+    );
+
+  const listingDeposit = await splToken.getAccount(
+    args.program.provider.connection,
+    listingInfo.account.paymentDeposit
+  );
+
+  let [treasury_pda, treasury_bump] = await pda.treasury(
+    args.program.programId,
+    listingInfo.account.charter,
+    listingDeposit.mint
+  );
+  const treasuryDeposit = await args.program.account.charterTreasury.fetch(
+    treasury_pda
+  );
+
   let instructions = [];
 
   instructions.push(
-    args.program.instruction.cash(listingMintAuthorityBump, realmMintBump, {
-      accounts: {
-        cashier: args.signer,
-        receipt: receiptInfo.publicKey,
-        listing: listingInfo.publicKey,
-        listingTokenAccount: receiptInfo.account.listingTokenAccount,
-        listingsPaymentDeposit: listingInfo.account.paymentDeposit,
-        listingsVoteDeposit: listingInfo.account.voteDeposit,
-        charterPaymentDeposit: gov.sol_account,
-        charterVoteDeposit: gov.vote_account,
-        charterMint: gov.mint,
-        charterMintAuthority: realmMintAuthority,
-        charter: gov.charter,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        listingMint: listingInfo.account.mint,
-        listingMintAuthority: listingMintAuthority,
-      },
-    })
+    args.program.instruction.cash(
+      listingMintAuthorityBump,
+      realmMintBump,
+      escrowAuthorityBump,
+      {
+        accounts: {
+          cashier: args.signer,
+          receipt: receiptInfo.publicKey,
+          escrow: receiptInfo.account.escrow,
+          escrowAuthority,
+          listing: listingInfo.publicKey,
+          listingTokenAccount: receiptInfo.account.listingTokenAccount,
+          listingsPaymentDeposit: listingInfo.account.paymentDeposit,
+          listingsVoteDeposit: listingInfo.account.voteDeposit,
+          charterTreasuryDeposit: treasuryDeposit,
+          charterTreasury: treasury_pda,
+          charterVoteDeposit: gov.vote_account,
+          charterMint: gov.mint,
+          charterMintAuthority: realmMintAuthority,
+          charter: gov.charter,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          listingMint: listingInfo.account.mint,
+          listingMintAuthority: listingMintAuthority,
+        },
+      }
+    )
   );
 
   // Cash moves data into wrapped SOL accounts, which are easier for
@@ -571,7 +648,7 @@ export async function setListingDeposits(args: {
       accounts: {
         user: args.signer,
         listing: listingKey,
-        solDeposit: args.solDeposit,
+        paymentDeposit: args.solDeposit,
         voteDeposit: args.voteDeposit,
         systemProgram: SystemProgram.programId,
       },
@@ -630,13 +707,46 @@ export async function setListingAuthority(args: {
   return { instructions };
 }
 
+export async function initCharterTreasury(args: {
+  program: Program<Strangemood>;
+  charter: PublicKey;
+  authority: PublicKey;
+  deposit: PublicKey;
+  mint: PublicKey;
+  scalarAmount: anchor.BN;
+  scalarDecimals: number;
+}) {
+  let charter = await args.program.account.charter.fetch(args.charter);
+
+  let [treasury_pda, treasury_bump] = await pda.treasury(
+    args.program.programId,
+    args.charter,
+    args.mint
+  );
+
+  const ix = args.program.instruction.initCharterTreasury(
+    treasury_bump,
+    args.scalarAmount,
+    args.scalarDecimals,
+    {
+      accounts: {
+        treasury: treasury_pda,
+        charter: args.charter,
+        mint: args.mint,
+        deposit: args.deposit,
+        systemProgram: SystemProgram.programId,
+        authority: charter.authority,
+      },
+    }
+  );
+
+  let instructions = [ix];
+  return { instructions };
+}
+
 export async function initCharter(args: {
   program: Program<Strangemood>;
-
-  governanceProgramId: PublicKey;
-  realm: PublicKey;
   authority: PublicKey;
-  paymentDeposit: PublicKey;
   voteDeposit: PublicKey;
   mint: PublicKey;
   signer: PublicKey;
@@ -652,11 +762,7 @@ export async function initCharter(args: {
 
   let [charterPDA, charterBump] =
     await anchor.web3.PublicKey.findProgramAddress(
-      [
-        Buffer.from("charter"),
-        args.governanceProgramId.toBuffer(),
-        args.realm.toBuffer(),
-      ],
+      [Buffer.from("charter"), args.mint.toBuffer()],
       args.program.programId
     );
 
@@ -674,7 +780,6 @@ export async function initCharter(args: {
         accounts: {
           charter: charterPDA,
           authority: args.authority,
-          paymentDeposit: args.paymentDeposit,
           voteDeposit: args.voteDeposit,
           mint: args.mint,
           user: args.signer,
