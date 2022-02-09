@@ -194,7 +194,7 @@ pub fn close_token_escrow_account<'a>(
 
 #[program]
 pub mod strangemood {
-    use anchor_lang::prelude::Context;
+    use anchor_lang::{prelude::Context, solana_program::program_option::COption};
 
     use super::*;
 
@@ -531,6 +531,19 @@ pub mod strangemood {
         vote_contribution_rate_decimals: u8,
         uri: String,
     ) -> ProgramResult {
+
+        // Only the mint authority can make a charter.
+        let mint = ctx.accounts.mint.clone().into_inner();
+        if let COption::Some(authority) = mint.mint_authority {
+            if authority != ctx.accounts.user.key() {
+                return Err(StrangemoodError::SignerIsNotMintAuthority.into())
+            }
+        } else {
+            // You can't create a charter with a mint that has a fixed supply of 
+            // tokens, since purchases would fail.
+            return Err(StrangemoodError::SignerIsNotMintAuthority.into())
+        }
+        
         let charter = &mut ctx.accounts.charter;
         charter.authority = ctx.accounts.authority.key();
         charter.expansion_rate_amount = expansion_rate_amount;
@@ -667,7 +680,6 @@ pub mod strangemood {
         treasury.mint = ctx.accounts.mint.key();
         treasury.expansion_scalar_amount = expansion_scalar_amount; 
         treasury.expansion_scalar_decimals = expansion_scalar_decimals; 
-        treasury.is_initialized = true;
 
         Ok(())
     }
@@ -1356,4 +1368,8 @@ pub enum StrangemoodError {
 
     #[msg("Listing is not consumable")]
     ListingIsNotConsumable,
+
+    // Creating a charter requires the signer to be the mint authority
+    #[msg("Signer is not Mint Authority")]
+    SignerIsNotMintAuthority,
 }

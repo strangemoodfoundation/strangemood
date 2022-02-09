@@ -741,7 +741,7 @@ export async function initCharterTreasury(args: {
   );
 
   let instructions = [ix];
-  return { instructions };
+  return { instructions, treasury: treasury_pda };
 }
 
 export async function initCharter(args: {
@@ -752,8 +752,8 @@ export async function initCharter(args: {
   signer: PublicKey;
   expansionAmount: anchor.BN;
   expansionDecimals: number;
-  solContributionAmount: anchor.BN;
-  solContributionDecimals: number;
+  paymentContributionAmount: anchor.BN;
+  paymentContributionDecimals: number;
   voteContributionAmount: anchor.BN;
   voteContributionDecimals: number;
   uri: string;
@@ -771,8 +771,8 @@ export async function initCharter(args: {
       charterBump,
       args.expansionAmount, // Expansion amount
       args.expansionDecimals, // expansion decimals
-      args.solContributionAmount, // sol contribution amount
-      args.solContributionDecimals, // sol contribution decimals
+      args.paymentContributionAmount, // pay contribution amount
+      args.paymentContributionDecimals, // pay contribution decimals
       args.voteContributionAmount, // vote contribution amount
       args.voteContributionDecimals, // vote contribution decimals
       args.uri,
