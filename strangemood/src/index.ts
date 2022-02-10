@@ -99,6 +99,19 @@ async function asListingInfo(
   };
 }
 
+async function asCharterInfo(
+  program: Program<Strangemood>,
+  arg: AccountInfo<Charter> | PublicKey
+): Promise<AccountInfo<Charter>> {
+  if (isAccountInfo(arg)) {
+    return arg;
+  }
+  return {
+    account: await program.account.charter.fetch(arg),
+    publicKey: arg,
+  };
+}
+
 /**
  * Allows a purchase to be cashable, effectively marking
  * it as no-longer refundable.
@@ -200,7 +213,6 @@ export async function consume(args: {
   listing: AccountInfo<Receipt> | PublicKey;
   listingTokenAccount: PublicKey;
   quantity: anchor.BN;
-  government?: constants.Government;
 }) {
   let listingInfo = await asListingInfo(args.program, args.listing);
 
@@ -263,9 +275,10 @@ export async function initListing(args: {
   isAvailable: boolean;
 
   // the mint to be paid in.
-  payment: PublicKey;
+  currency: PublicKey;
 
-  governance?: constants.Government;
+  // The charter this listing is associated with
+  charter: AccountInfo<Charter> | PublicKey;
 }) {
   if (!args.uri || args.uri.length > 128) {
     throw new Error(
@@ -273,9 +286,7 @@ export async function initListing(args: {
     );
   }
 
-
   const mintKeypair = anchor.web3.Keypair.generate();
-  const gov = args.governance || MAINNET.government;
 
   let instructions = [];
 
@@ -287,10 +298,11 @@ export async function initListing(args: {
     args.program.programId,
     mintKeypair.publicKey
   );
+  let charter = await asCharterInfo(args.program, args.charter);
 
   // Find or create an associated vote token account
   let associatedVoteAddress = await getAssociatedTokenAddress(
-    gov.mint,
+    charter.account.mint,
     args.signer
   );
   if (
@@ -303,7 +315,7 @@ export async function initListing(args: {
         args.signer,
         associatedVoteAddress,
         args.signer,
-        gov.mint
+        charter.account.mint
       )
     );
   }
@@ -329,8 +341,8 @@ export async function initListing(args: {
 
   const [treasuryPDA, _] = await pda.treasury(
     args.program.programId,
-    args.governance.charter,
-    args.payment
+    charter.publicKey,
+    args.currency
   );
 
   let init_instruction_ix = args.program.instruction.initListing(
@@ -350,7 +362,7 @@ export async function initListing(args: {
         rent: SYSVAR_RENT_PUBKEY,
         paymentDeposit: associatedSolAddress,
         voteDeposit: associatedVoteAddress,
-        charter: gov.charter,
+        charter: charter.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
         user: args.signer,
         systemProgram: SystemProgram.programId,
@@ -482,10 +494,7 @@ export async function cash(args: {
   signer: anchor.web3.PublicKey;
   receipt: AccountInfo<Receipt> | PublicKey;
   listing?: AccountInfo<Listing> | PublicKey;
-  government?: constants.Government;
 }) {
-  const gov = args.government || MAINNET.government;
-
   let receiptInfo = await asReceiptInfo(args.program, args.receipt);
 
   let listingInfo: AccountInfo<Listing>;
@@ -497,15 +506,9 @@ export async function cash(args: {
       receiptInfo.account.listing
     );
   }
-
-  if (gov.charter.toString() !== listingInfo.account.charter.toString()) {
-    // If you're getting this error, you're probably trying to cash a listing
-    // that does not belong to the default co-op. To fix this, consider
-    // passing a `args.government` of the listing.
-    throw new Error(
-      `The Listing at '${listingInfo.publicKey}' does not belong to the charter '${gov.charter}'.`
-    );
-  }
+  let charter = await args.program.account.charter.fetch(
+    listingInfo.account.charter
+  );
 
   let [listingMintAuthority, listingMintAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
@@ -515,7 +518,7 @@ export async function cash(args: {
 
   let [realmMintAuthority, realmMintBump] =
     await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), gov.mint.toBuffer()],
+      [Buffer.from("mint"), charter.mint.toBuffer()],
       args.program.programId
     );
 
@@ -556,12 +559,12 @@ export async function cash(args: {
           listingTokenAccount: receiptInfo.account.listingTokenAccount,
           listingsPaymentDeposit: listingInfo.account.paymentDeposit,
           listingsVoteDeposit: listingInfo.account.voteDeposit,
-          charterTreasuryDeposit: treasuryDeposit,
+          charterTreasuryDeposit: treasuryDeposit.deposit,
           charterTreasury: treasury_pda,
-          charterVoteDeposit: gov.vote_account,
-          charterMint: gov.mint,
+          charterVoteDeposit: charter.voteDeposit,
+          charterMint: charter.mint,
           charterMintAuthority: realmMintAuthority,
-          charter: gov.charter,
+          charter: listingInfo.account.charter,
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
           listingMint: listingInfo.account.mint,
@@ -570,22 +573,6 @@ export async function cash(args: {
       }
     )
   );
-
-  // Cash moves data into wrapped SOL accounts, which are easier for
-  // other programs to work with. But to make the transaction size smaller,
-  // it's transfering native SOL, not wrapped SOL. So to make it easier on
-  // clients, we run `sync_native` instruction here, which updates the wrapped SOL
-  // value based on the underlying lamport value of the token account.
-  //
-  // Technically, your app doesn't need to sync these accounts; the listings and
-  // the realm could do it themselves. That's quite rude though (basically
-  // like spitting in their soup I hear) and the makers of the protocol
-  // would probably call you a meanie if you took these lines out.
-  let sync_listing_sol_ix = createSyncNativeInstruction(
-    listingInfo.account.paymentDeposit
-  );
-  let sync_realm_sol_ix = createSyncNativeInstruction(gov.sol_account);
-  instructions.push(sync_listing_sol_ix, sync_realm_sol_ix);
 
   return {
     instructions,
