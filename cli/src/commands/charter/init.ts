@@ -17,6 +17,7 @@ import { initCharter, pda } from "@strangemood/strangemood";
 import { toAmountAndDecimals } from "../../numbers";
 import * as anchor from "@project-serum/anchor";
 const { SystemProgram } = anchor.web3;
+import ora from "ora";
 
 export default class CharterInit extends Command {
   static description = "Creates a new charter";
@@ -71,7 +72,8 @@ export default class CharterInit extends Command {
   static args = [];
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(CharterInit);
+    const spinner = ora("Connecting").start();
+    const { flags } = await this.parse(CharterInit);
 
     const expansion = toAmountAndDecimals(flags.expansion);
     const paymentSplit = toAmountAndDecimals(flags.paymentSplit);
@@ -93,7 +95,8 @@ export default class CharterInit extends Command {
       throw new Error("expansionSplit must be between 0.0 and 1.0");
     }
 
-    const program = await getProgram("testnet");
+    spinner.text = "Fetching Program";
+    const program = await getProgram(flags.cluster as any);
 
     let instructions: TransactionInstruction[] = [];
     let signers: Keypair[] = [];
@@ -103,6 +106,7 @@ export default class CharterInit extends Command {
     if (flags.mint) {
       mint = new PublicKey(flags.mint as any);
     } else {
+      spinner.text = "InitMint";
       let { ixs, keypair } = await withMint(program);
       instructions.push(...ixs);
       signers.push(keypair);
@@ -111,6 +115,7 @@ export default class CharterInit extends Command {
 
     // If requested, mint an initial supply of tokens to yourself
     if (flags.supply) {
+      spinner.text = "InitAssociatedTokenAccount";
       const asWithAssAcc = await withAssociatedTokenAccount(
         program,
         mint,
@@ -118,6 +123,7 @@ export default class CharterInit extends Command {
       );
       instructions.push(asWithAssAcc.ix);
 
+      spinner.text = "MintTo";
       let { ix } = await withMintTo(
         program,
         mint,
@@ -128,10 +134,12 @@ export default class CharterInit extends Command {
     }
 
     // Create a deposit for votes to go to
+    spinner.text = "InitTokenAccount";
     const asVoteDeposit = await withTokenAccount(program, mint);
     instructions.push(...asVoteDeposit.ixs);
     signers.push(asVoteDeposit.keypair);
 
+    spinner.text = "InitCharter";
     const asInitCharter = await initCharter({
       program: program,
       authority: program.provider.wallet.publicKey,
@@ -151,7 +159,10 @@ export default class CharterInit extends Command {
     let tx = new Transaction();
     tx.add(...instructions);
 
+    spinner.text = "Sending transaction...";
     await program.provider.send(tx, signers);
+    spinner.stop();
+
     console.log(asInitCharter.charter.toString());
   }
 }

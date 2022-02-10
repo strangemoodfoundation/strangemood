@@ -1,5 +1,5 @@
 import { Command, Flags } from "@oclif/core";
-import * as anchor from "@project-serum/anchor";
+import ora from "ora";
 import { getProgram } from "../../provider";
 
 export default class CharterGet extends Command {
@@ -28,10 +28,15 @@ export default class CharterGet extends Command {
   ];
 
   async run(): Promise<void> {
+    const spinner = ora("Connecting").start();
     const { args, flags } = await this.parse(CharterGet);
 
-    const program = await getProgram("mainnet-beta");
+    spinner.text = "Fetching Program";
+    const program = await getProgram(flags.cluster as any);
+
+    spinner.text = "Fetching Charter";
     const charter = await program.account.charter.fetch(args["charter"]);
+    spinner.stop();
     this.log(JSON.stringify(charter, null, 2));
   }
 }
