@@ -201,7 +201,6 @@ export class TestClient {
     // Create the new account and initialize it with the program.
     await this.program.rpc.initListing(
       listingMintBump,
-      listingBump,
       new anchor.BN(args.decimals),
       args.price,
       args.is_refundable,
@@ -288,7 +287,6 @@ export class TestClient {
 
     let purchase_ix = this.program.instruction.purchase(
       nonce,
-      receipt_bump,
       mintAuthorityBump,
       escrowAuthorityBump,
       new anchor.BN(amount),
@@ -344,21 +342,16 @@ export class TestClient {
         this.program.programId
       );
 
-    await this.program.rpc.consume(
-      listingBump,
-      listingMintAuthorityBump,
-      new anchor.BN(1),
-      {
-        accounts: {
-          listing: accounts.listing,
-          mint: listing.mint,
-          mintAuthority: listingMintAuthority,
-          listingTokenAccount: accounts.listingTokenAccount,
-          tokenProgram: splToken.TOKEN_PROGRAM_ID,
-          authority: listing.authority,
-        },
-      }
-    );
+    await this.program.rpc.consume(listingMintAuthorityBump, new anchor.BN(1), {
+      accounts: {
+        listing: accounts.listing,
+        mint: listing.mint,
+        mintAuthority: listingMintAuthority,
+        listingTokenAccount: accounts.listingTokenAccount,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        authority: listing.authority,
+      },
+    });
   }
 
   async cancel(accounts: {
@@ -386,7 +379,7 @@ export class TestClient {
         this.program.programId
       );
 
-    await this.program.rpc.cancel(listingBump, listingMintAuthorityBump, {
+    await this.program.rpc.cancel(listingMintAuthorityBump, {
       accounts: {
         purchaser: accounts.purchaser,
         returnDeposit: accounts.returnDeposit,

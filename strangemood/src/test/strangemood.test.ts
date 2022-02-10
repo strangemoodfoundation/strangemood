@@ -121,7 +121,6 @@ describe("strangemood", () => {
     let throws = false;
     try {
       await program.rpc.initCharter(
-        charterBump,
         new anchor.BN(30), // Expansion amount
         0, // expansion decimals
         new anchor.BN(6), // sol contribution amount

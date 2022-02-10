@@ -17,6 +17,7 @@ const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
 import { Buffer } from "buffer";
 import * as splToken from "@solana/spl-token";
+import { idlAddress } from "@project-serum/anchor/dist/cjs/idl";
 
 export const pda = _pda;
 
@@ -36,6 +37,13 @@ export async function fetchStrangemoodProgram(
   programId = MAINNET.strangemood_program_id
 ) {
   const idl = await anchor.Program.fetchIdl<Strangemood>(programId, provider);
+  if (!idl) {
+    const address = await idlAddress(programId);
+    throw new Error(
+      `Failed to fetch Strangemood program '${programId.toString()}' at anchor IDL $'{address.toString()}'.`
+    );
+  }
+
   return new anchor.Program(idl, programId, provider);
 }
 
@@ -156,7 +164,6 @@ export async function cancel(args: {
   );
 
   const ix = args.program.instruction.cancel(
-    listingBump,
     listingMintAuthorityBump,
     escrowAuthorityBump,
     {
@@ -209,7 +216,6 @@ export async function consume(args: {
     );
 
   const ix = args.program.instruction.consume(
-    listingBump,
     listingMintAuthorityBump,
     args.quantity,
     {
@@ -322,7 +328,6 @@ export async function initListing(args: {
 
   let init_instruction_ix = args.program.instruction.initListing(
     listingMintBump,
-    listingBump,
     args.decimals,
     args.price,
     args.isRefundable,
@@ -768,7 +773,6 @@ export async function initCharter(args: {
 
   instructions.push(
     args.program.instruction.initCharter(
-      charterBump,
       args.expansionAmount, // Expansion amount
       args.expansionDecimals, // expansion decimals
       args.paymentContributionAmount, // pay contribution amount

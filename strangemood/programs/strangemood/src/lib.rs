@@ -201,7 +201,6 @@ pub mod strangemood {
     pub fn init_listing(
         ctx: Context<InitListing>,
         _mint_bump: u8,
-        _listing_bump: u8,
         _decimals: u8,
         price: u64,
         refundable: bool,
@@ -243,7 +242,6 @@ pub mod strangemood {
     pub fn purchase(
         ctx: Context<Purchase>,
         receipt_nonce: u128,
-        _receipt_bump: u8,
         listing_mint_bump: u8,
         _escrow_authority_bump: u8,
         amount: u64,
@@ -434,7 +432,6 @@ pub mod strangemood {
 
     pub fn cancel(
         ctx: Context<Cancel>,
-        _listing_bump: u8,
         listing_mint_bump: u8,
         escrow_authority_bump:u8,
     ) -> ProgramResult {
@@ -483,7 +480,6 @@ pub mod strangemood {
 
     pub fn consume(
         ctx: Context<Consume>,
-        _receipt_bump: u8,
         listing_mint_bump: u8,
         amount: u64,
     ) -> ProgramResult {
@@ -510,7 +506,7 @@ pub mod strangemood {
     }
 
     pub fn set_receipt_cashable(ctx: Context<SetReceiptCashable>) -> ProgramResult {
-        if ctx.accounts.authority.key() != ctx.accounts.listing.authority.key() {
+        if ctx.accounts.authority.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -522,23 +518,20 @@ pub mod strangemood {
 
     pub fn init_charter(
         ctx: Context<InitCharter>,
-        _charter_bump: u8,
         expansion_rate_amount: u64,
         expansion_rate_decimals: u8,
-        sol_contribution_rate_amount: u64,
-        sol_contribution_rate_decimals: u8,
+        payment_contribution_rate_amount: u64,
+        payment_contribution_rate_decimals: u8,
         vote_contribution_rate_amount: u64,
         vote_contribution_rate_decimals: u8,
         uri: String,
     ) -> ProgramResult {
-
         // Only the mint authority can make a charter.
         let mint = ctx.accounts.mint.clone().into_inner();
         if let COption::Some(authority) = mint.mint_authority {
             if authority != ctx.accounts.user.key() {
                 return Err(StrangemoodError::SignerIsNotMintAuthority.into())
             }
-            
         } else {
             // You can't create a charter with a mint that has a fixed supply of 
             // tokens, since purchases would fail.
@@ -549,8 +542,8 @@ pub mod strangemood {
         charter.authority = ctx.accounts.authority.key();
         charter.expansion_rate_amount = expansion_rate_amount;
         charter.expansion_rate_decimals = expansion_rate_decimals;
-        charter.payment_contribution_rate_amount = sol_contribution_rate_amount;
-        charter.payment_contribution_rate_decimals = sol_contribution_rate_decimals;
+        charter.payment_contribution_rate_amount = payment_contribution_rate_amount;
+        charter.payment_contribution_rate_decimals = payment_contribution_rate_decimals;
         charter.vote_contribution_rate_amount = vote_contribution_rate_amount;
         charter.vote_contribution_rate_decimals = vote_contribution_rate_decimals;
         charter.vote_deposit = ctx.accounts.vote_deposit.key();
@@ -561,7 +554,7 @@ pub mod strangemood {
     }
 
     pub fn set_listing_price(ctx: Context<SetListing>, price: u64) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -570,7 +563,7 @@ pub mod strangemood {
     }
 
     pub fn set_listing_uri(ctx: Context<SetListing>, uri: String) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -582,7 +575,7 @@ pub mod strangemood {
         ctx: Context<SetListing>,
         is_available: bool,
     ) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -591,7 +584,7 @@ pub mod strangemood {
     }
 
     pub fn set_listing_deposits(ctx: Context<SetListingDeposit>) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -601,7 +594,7 @@ pub mod strangemood {
     }
 
     pub fn set_listing_authority(ctx: Context<SetListingAuthority>) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -611,7 +604,7 @@ pub mod strangemood {
 
     // Migrate a listing to a different charter
     pub fn set_listing_charter(ctx: Context<SetListingCharter>) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -624,7 +617,7 @@ pub mod strangemood {
         expansion_rate_amount: u64,
         expansion_rate_decimals: u8,
     ) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.charter.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -640,7 +633,7 @@ pub mod strangemood {
         vote_contribution_rate_amount: u64,
         vote_contribution_rate_decimals: u8,
     ) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.charter.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -655,7 +648,7 @@ pub mod strangemood {
 
     // Migrates the charter to a different authority, like a new governance program
     pub fn set_charter_authority(ctx: Context<SetCharterAuthority>) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.charter.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         } 
 
@@ -664,7 +657,7 @@ pub mod strangemood {
     }
 
     pub fn set_charter_vote_deposit(ctx: Context<SetCharterVoteDeposit>) -> ProgramResult {
-        if ctx.accounts.user.key() != ctx.accounts.charter.authority.key() {
+        if ctx.accounts.user.key() != ctx.accounts.charter.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
@@ -702,7 +695,7 @@ pub mod strangemood {
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, receipt_bump:u8, listing_mint_bump: u8,  escrow_authority_bump:u8)]
+#[instruction(receipt_nonce: u128, listing_mint_bump: u8, escrow_authority_bump:u8)]
 pub struct Purchase<'info> {
 
     // The user's token account where funds will be transfered from
@@ -711,8 +704,8 @@ pub struct Purchase<'info> {
 
     // The listing to purchase
     #[account(
-        constraint=listing_payment_deposit.key()==listing.clone().into_inner().payment_deposit.key(),
-        constraint=listing_mint.key()==listing.clone().into_inner().mint.key(),
+        constraint=listing_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
+        constraint=listing_mint.key()==listing.clone().into_inner().mint,
     )]
     pub listing: Box<Account<'info, Listing>>,
 
@@ -760,7 +753,7 @@ pub struct Purchase<'info> {
     // 16 for the unique nonce
     #[account(init,
         seeds = [b"receipt" as &[u8], &receipt_nonce.to_le_bytes()],
-        bump= receipt_bump,
+        bump,
         payer = user,
         space = 8 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
     pub receipt: Box<Account<'info, Receipt>>,
@@ -815,10 +808,10 @@ pub struct Cash<'info> {
 
     // The listing to purchase
     #[account(
-        constraint=charter.key()==listing.clone().into_inner().charter.key(),
-        constraint=listing_mint.key()==listing.clone().into_inner().mint.key(),
-        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit.key(),
-        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit.key(),
+        constraint=charter.key()==listing.clone().into_inner().charter,
+        constraint=listing_mint.key()==listing.clone().into_inner().mint,
+        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
+        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit,
     )]
     pub listing: Box<Account<'info, Listing>>,
 
@@ -833,7 +826,7 @@ pub struct Cash<'info> {
 
     #[account(
         has_one=charter,
-        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit.key(),
+        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit,
         constraint=charter_treasury.mint==listings_payment_deposit.mint,
     )]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
@@ -867,7 +860,7 @@ pub struct Cash<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(listing_bump: u8, listing_mint_authority_bump: u8)]
+#[instruction(listing_mint_authority_bump: u8)]
 pub struct Cancel<'info> {
     pub purchaser: Signer<'info>,
 
@@ -892,7 +885,7 @@ pub struct Cancel<'info> {
     pub listing_token_account: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
-    #[account(seeds=[b"listing", listing_mint.key().as_ref()], bump=listing_bump)]
+    #[account(constraint=listing.mint==listing_mint.key())]
     pub listing: Box<Account<'info, Listing>>,
 
     pub listing_mint: Box<Account<'info, Mint>>,
@@ -908,9 +901,9 @@ pub struct Cancel<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(listing_bump:u8, listing_mint_authority_bump:u8)]
+#[instruction(listing_mint_authority_bump:u8)]
 pub struct Consume<'info> {
-    #[account(seeds=[b"listing", mint.key().as_ref()], bump=listing_bump, has_one=authority, has_one=mint)]
+    #[account(has_one=authority, has_one=mint)]
     pub listing: Box<Account<'info, Listing>>,
 
     pub mint: Box<Account<'info, Mint>>,
@@ -943,12 +936,12 @@ pub struct SetReceiptCashable<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(mint_bump: u8, listing_bump: u8, listing_mint_decimals: u8)]
+#[instruction(mint_bump: u8, listing_mint_decimals: u8)]
 pub struct InitListing<'info> {
     // 8 for the tag
     // 235 for the size of the listing account itself
     // 128 for metadata URI
-    #[account(init, seeds=[b"listing", mint.key().as_ref()], bump=listing_bump, payer = user, space = 8 + 235 + 128)]
+    #[account(init, seeds=[b"listing", mint.key().as_ref()], bump, payer = user, space = 8 + 235 + 128)]
     pub listing: Box<Account<'info, Listing>>,
 
     #[account(
@@ -1030,12 +1023,12 @@ pub struct SetListingCharter<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(charter_bump: u8)]
+#[instruction()]
 pub struct InitCharter<'info> {
     // 8 for the tag
     // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 for the charter
     // 256 as a buffer for future versions
-    #[account(init, seeds = [b"charter", mint.key().as_ref()], bump=charter_bump, payer = user, space = 8 + 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 + 256)]
+    #[account(init, seeds = [b"charter", mint.key().as_ref()], bump, payer = user, space = 8 + 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 + 256)]
     pub charter: Account<'info, Charter>,
 
     pub mint: Account<'info, Mint>,
@@ -1091,7 +1084,7 @@ pub struct InitCharterTreasury<'info> {
     // 128 as a buffer for future versions
     #[account(init,
         seeds = [b"treasury", charter.key().as_ref(), mint.key().as_ref()],
-        bump = treasury_bump,
+        bump,
         payer = authority,
         space = 8 + 1 + 32 + 32 + 8 + 1 + 128
     )]

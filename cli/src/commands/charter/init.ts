@@ -92,7 +92,7 @@ export default class CharterInit extends Command {
       throw new Error("expansionSplit must be between 0.0 and 1.0");
     }
 
-    const program = await getProgram("mainnet-beta");
+    const program = await getProgram("testnet");
 
     let instructions: TransactionInstruction[] = [];
     let signers: Keypair[] = [];
@@ -132,7 +132,7 @@ export default class CharterInit extends Command {
     signers.push(asVoteDeposit.keypair);
 
     const asInitCharter = await initCharter({
-      program: program as any,
+      program: program,
       authority: program.provider.wallet.publicKey,
       voteDeposit: asVoteDeposit.keypair.publicKey,
       mint: mint,
@@ -147,8 +147,18 @@ export default class CharterInit extends Command {
     });
     instructions.push(...asInitCharter.instructions);
 
+    // 118,74,249,108,200,14,52,223,
+    // 253,
+    // 30,0,0,0,0,0,0,0,
+    // 0,
+    // 2,0,0,0,0,0,0,0,
+    // 2,
+    // 3,0,0,0,0,0,0,0,
+    // 1
+
     let tx = new Transaction();
     tx.add(...instructions);
+
     await program.provider.send(tx, signers);
     console.log(asInitCharter.charter.toString());
   }
