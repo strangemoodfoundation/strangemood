@@ -267,6 +267,13 @@ export async function initListing(args: {
 
   governance?: constants.Government;
 }) {
+  if (!args.uri || args.uri.length > 128) {
+    throw new Error(
+      "Listing's URI field must be a string less than 128 characters."
+    );
+  }
+
+
   const mintKeypair = anchor.web3.Keypair.generate();
   const gov = args.governance || MAINNET.government;
 
@@ -763,13 +770,18 @@ export async function initCharter(args: {
   voteContributionDecimals: number;
   uri: string;
 }) {
+  if (!args.uri || args.uri.length > 128) {
+    throw new Error(
+      "Charter's URI field must be a string less than 128 characters."
+    );
+  }
+
   let instructions = [];
 
-  let [charterPDA, charterBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("charter"), args.mint.toBuffer()],
-      args.program.programId
-    );
+  let [charterPDA, charterBump] = await pda.charter(
+    args.program.programId,
+    args.mint
+  );
 
   instructions.push(
     args.program.instruction.initCharter(

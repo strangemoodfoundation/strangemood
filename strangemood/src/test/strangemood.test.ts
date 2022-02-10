@@ -123,8 +123,8 @@ describe("strangemood", () => {
       await program.rpc.initCharter(
         new anchor.BN(30), // Expansion amount
         0, // expansion decimals
-        new anchor.BN(6), // sol contribution amount
-        3, // sol contribution decimals
+        new anchor.BN(6), // pay contribution amount
+        3, // pay contribution decimals
         new anchor.BN(2), // vote contribution amount
         1, // vote contribution decimals
         "https://strangemood.org",

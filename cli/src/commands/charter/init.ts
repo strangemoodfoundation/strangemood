@@ -1,5 +1,4 @@
 import { Command, Flags } from "@oclif/core";
-import * as anchor from "@project-serum/anchor";
 import { getProgram } from "../../provider";
 import {
   withAssociatedTokenAccount,
@@ -14,8 +13,55 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { initCharter } from "@strangemood/strangemood";
+import { initCharter, pda } from "@strangemood/strangemood";
 import { toAmountAndDecimals } from "../../numbers";
+import * as anchor from "@project-serum/anchor";
+const { SystemProgram } = anchor.web3;
+
+export async function initCharterWhat(args: {
+  program: any;
+  authority: PublicKey;
+  voteDeposit: PublicKey;
+  mint: PublicKey;
+  signer: PublicKey;
+  expansionAmount: anchor.BN;
+  expansionDecimals: number;
+  paymentContributionAmount: anchor.BN;
+  paymentContributionDecimals: number;
+  voteContributionAmount: anchor.BN;
+  voteContributionDecimals: number;
+  uri: string;
+}) {
+  let instructions = [];
+
+  let [charterPDA, charterBump] = await pda.charter(
+    args.program.programId,
+    args.mint
+  );
+
+  instructions.push(
+    args.program.instruction.initCharter(
+      args.expansionAmount, // Expansion amount
+      args.expansionDecimals, // expansion decimals
+      args.paymentContributionAmount, // pay contribution amount
+      args.paymentContributionDecimals, // pay contribution decimals
+      args.voteContributionAmount, // vote contribution amount
+      args.voteContributionDecimals, // vote contribution decimals
+      args.uri,
+      {
+        accounts: {
+          charter: charterPDA,
+          authority: args.authority,
+          voteDeposit: args.voteDeposit,
+          mint: args.mint,
+          user: args.signer,
+          systemProgram: SystemProgram.programId,
+        },
+      }
+    )
+  );
+  return { instructions, charter: charterPDA };
+}
 
 export default class CharterInit extends Command {
   static description = "Creates a new charter";
@@ -137,7 +183,7 @@ export default class CharterInit extends Command {
       voteDeposit: asVoteDeposit.keypair.publicKey,
       mint: mint,
       signer: program.provider.wallet.publicKey,
-      uri: args.uri,
+      uri: flags.uri.toString(),
       expansionAmount: expansion.amount,
       expansionDecimals: expansion.decimals,
       paymentContributionAmount: paymentSplit.amount,
@@ -146,15 +192,6 @@ export default class CharterInit extends Command {
       voteContributionDecimals: voteSplit.decimals,
     });
     instructions.push(...asInitCharter.instructions);
-
-    // 118,74,249,108,200,14,52,223,
-    // 253,
-    // 30,0,0,0,0,0,0,0,
-    // 0,
-    // 2,0,0,0,0,0,0,0,
-    // 2,
-    // 3,0,0,0,0,0,0,0,
-    // 1
 
     let tx = new Transaction();
     tx.add(...instructions);
