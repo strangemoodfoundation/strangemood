@@ -11,11 +11,8 @@ import {
   initListing,
   pda,
 } from "@strangemood/strangemood";
-import { toAmountAndDecimals } from "../../numbers";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
-import { withTokenAccount } from "../../token";
-import chalk from "chalk";
 import * as splToken from "@solana/spl-token";
 
 export default class ListingInit extends Command {

@@ -444,7 +444,6 @@ export async function purchase(args: {
 
   let purchase_ix = args.program.instruction.purchase(
     nonce,
-    receipt_bump,
     listingMintBump,
     escrowAuthorityBump,
     new anchor.BN(args.quantity),
@@ -473,6 +472,7 @@ export async function purchase(args: {
   return {
     instructions,
     receipt: receipt_pda,
+    signers: [escrowKeypair],
   };
 }
 
