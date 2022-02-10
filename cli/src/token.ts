@@ -81,3 +81,18 @@ export async function withAssociatedTokenAccount(
 
   return { ix, address };
 }
+
+export async function withSetMintAuthority(
+  program: Program<any>,
+  mint: PublicKey,
+  newAuthority: PublicKey
+) {
+  let ix = splToken.createSetAuthorityInstruction(
+    mint,
+    program.provider.wallet.publicKey,
+    splToken.AuthorityType.MintTokens,
+    newAuthority
+  );
+
+  return { ix };
+}

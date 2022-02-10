@@ -4,6 +4,7 @@ import {
   withAssociatedTokenAccount,
   withMint,
   withMintTo,
+  withSetMintAuthority,
   withTokenAccount,
 } from "../../token";
 import * as splToken from "@solana/spl-token";
@@ -16,14 +17,13 @@ import {
 import { initCharter, pda } from "@strangemood/strangemood";
 import { toAmountAndDecimals } from "../../numbers";
 import * as anchor from "@project-serum/anchor";
-const { SystemProgram } = anchor.web3;
 import ora from "ora";
 
 export default class CharterInit extends Command {
   static description = "Creates a new charter";
 
   static examples = [
-    `$ strangemood charter init 
+    `$ strangemood charter init --uri https://strangemood.org --expansion 30 --paymentSplit 0.02 --expansionSplit 0.3
 `,
   ];
 
@@ -139,6 +139,7 @@ export default class CharterInit extends Command {
     instructions.push(...asVoteDeposit.ixs);
     signers.push(asVoteDeposit.keypair);
 
+    // Create the charter
     spinner.text = "InitCharter";
     const asInitCharter = await initCharter({
       program: program,
@@ -156,10 +157,19 @@ export default class CharterInit extends Command {
     });
     instructions.push(...asInitCharter.instructions);
 
-    let tx = new Transaction();
-    tx.add(...instructions);
+    // Move the mint authority to a PDA of the program.
+    spinner.text = "SetMintAuthority";
+    const [mintAuthority, _] = await pda.mint(program.programId, mint);
+    const asSetMintAuthority = await withSetMintAuthority(
+      program,
+      mint,
+      mintAuthority
+    );
+    instructions.push(asSetMintAuthority.ix);
 
     spinner.text = "Sending transaction...";
+    let tx = new Transaction();
+    tx.add(...instructions);
     await program.provider.send(tx, signers);
     spinner.stop();
 
