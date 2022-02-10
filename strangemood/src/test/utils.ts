@@ -94,32 +94,6 @@ export async function setupGovernance(
     3000
   );
 
-  // Hand over the mint to the strangemood program, by assigning the
-  // authority to a PDA
-  let [ra, rb] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("mint"), vote_mint.toBuffer()],
-    program.programId
-  );
-  realmMintAuthority = ra;
-  realmMintBump = rb;
-
-  await splToken.setAuthority(
-    program.provider.connection,
-    realmAuthority,
-    vote_mint,
-    realmAuthority,
-    splToken.AuthorityType.MintTokens,
-    realmMintAuthority
-  );
-  await splToken.setAuthority(
-    program.provider.connection,
-    realmAuthority,
-    vote_mint,
-    realmAuthority,
-    splToken.AuthorityType.FreezeAccount,
-    realmMintAuthority
-  );
-
   realm = await createGovernanceRealm(program, realmAuthority, vote_mint);
   realm_vote_deposit = (await createTokenAccount(program, vote_mint)).publicKey;
   realm_sol_deposit = (await createTokenAccount(program, splToken.NATIVE_MINT))
@@ -151,12 +125,39 @@ export async function setupGovernance(
         authority: program.provider.wallet.publicKey,
         voteDeposit: realm_vote_deposit,
         mint: vote_mint,
-        user: provider.wallet.publicKey,
+        user: realmAuthority.publicKey,
         systemProgram: SystemProgram.programId,
       },
+      signers: [realmAuthority],
     }
   );
   charter = (await program.account.charter.fetch(charterPDA)) as any;
+
+  // Hand over the mint to the strangemood program, by assigning the
+  // authority to a PDA
+  let [ra, rb] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("mint"), vote_mint.toBuffer()],
+    program.programId
+  );
+  realmMintAuthority = ra;
+  realmMintBump = rb;
+
+  await splToken.setAuthority(
+    program.provider.connection,
+    realmAuthority,
+    vote_mint,
+    realmAuthority,
+    splToken.AuthorityType.MintTokens,
+    realmMintAuthority
+  );
+  await splToken.setAuthority(
+    program.provider.connection,
+    realmAuthority,
+    vote_mint,
+    realmAuthority,
+    splToken.AuthorityType.FreezeAccount,
+    realmMintAuthority
+  );
 
   let [treasury_pda, treasury_bump] = await pda.treasury(
     program.programId,

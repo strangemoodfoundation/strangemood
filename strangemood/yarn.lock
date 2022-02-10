@@ -182,6 +182,17 @@
     superstruct "^0.14.2"
     tweetnacl "^1.0.0"
 
+"@strangemood/strangemood@^0.0.0-71":
+  version "0.0.0-71"
+  resolved "https://registry.yarnpkg.com/@strangemood/strangemood/-/strangemood-0.0.0-71.tgz#99e58b5a10aef89cf4b905387a7e9ba766277ae4"
+  integrity sha512-HMwC7SRyf4ZvzZIQ2jE/O2yfbLJDDDhUelhvEgupCN1auwpipVQQvZUr7ZBNvKHgJ5A46AUWSp6SB3glOcNXQw==
+  dependencies:
+    "@project-serum/anchor" "^0.20.1"
+    "@solana/buffer-layout" "^4.0.0"
+    "@solana/spl-token" "0.2.0-alpha.2"
+    borsh "^0.7.0"
+    uuid "^8.3.2"
+
 "@types/bn.js@^4.11.5":
   version "4.11.6"
   resolved "https://registry.yarnpkg.com/@types/bn.js/-/bn.js-4.11.6.tgz#c306c70d9358aaea33cd4eda092a742b9505967c"
