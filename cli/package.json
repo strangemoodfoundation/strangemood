@@ -1,5 +1,5 @@
 {
-  "name": "strangemood-cli",
+  "name": "@strangemood/cli",
   "version": "0.0.0",
   "description": "CLI for the Strangemood Protocol",
   "author": "Evan Conrad",
