@@ -82,8 +82,8 @@ export default class ListingInit extends Command {
   static args = [];
 
   async run(): Promise<void> {
-    const spinner = ora("Connecting").start();
     const { flags } = await this.parse(ListingInit);
+    const spinner = ora("Connecting").start();
 
     let instructions = [];
     let signers = [];

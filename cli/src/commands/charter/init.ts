@@ -72,8 +72,8 @@ export default class CharterInit extends Command {
   static args = [];
 
   async run(): Promise<void> {
-    const spinner = ora("Connecting").start();
     const { flags } = await this.parse(CharterInit);
+    const spinner = ora("Connecting").start();
 
     const expansion = toAmountAndDecimals(flags.expansion);
     const paymentSplit = toAmountAndDecimals(flags.paymentSplit);

@@ -6,12 +6,7 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import {
-  initCharterTreasury,
-  initListing,
-  pda,
-  purchase,
-} from "@strangemood/strangemood";
+import { purchase } from "@strangemood/strangemood";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
 import * as splToken from "@solana/spl-token";
@@ -49,16 +44,18 @@ export default class Purchase extends Command {
   ];
 
   async run(): Promise<void> {
-    const spinner = ora("Connecting").start();
     const { flags, args } = await this.parse(Purchase);
+    const spinner = ora("Connecting").start();
 
     let instructions = [];
     let signers = [];
 
+    spinner.text = "Fetching Program";
     const program = await getProgram(flags.cluster as any);
 
     const listing = new PublicKey(args.listing);
 
+    spinner.text = "Purchase";
     const asPurchase = await purchase({
       program,
       cashier: program.provider.wallet.publicKey,

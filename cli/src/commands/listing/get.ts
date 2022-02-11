@@ -28,15 +28,15 @@ export default class ListingGet extends Command {
   ];
 
   async run(): Promise<void> {
-    const spinner = ora("Connecting").start();
     const { args, flags } = await this.parse(ListingGet);
+    const spinner = ora("Connecting").start();
 
     spinner.text = "Fetching Program";
     const program = await getProgram(flags.cluster as any);
 
     spinner.text = "Fetching Listing";
-    const charter = await program.account.listing.fetch(args["listing"]);
+    const listing = await program.account.listing.fetch(args["listing"]);
     spinner.stop();
-    this.log(JSON.stringify(charter, null, 2));
+    this.log(JSON.stringify(listing, null, 2));
   }
 }

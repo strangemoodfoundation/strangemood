@@ -28,8 +28,8 @@ export default class TreasuryGet extends Command {
   ];
 
   async run(): Promise<void> {
-    const spinner = ora("Connecting").start();
     const { args, flags } = await this.parse(TreasuryGet);
+    const spinner = ora("Connecting").start();
 
     spinner.text = "Fetching Program";
     const program = await getProgram(flags.cluster as any);

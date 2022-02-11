@@ -57,8 +57,8 @@ export default class TreasuryInit extends Command {
   static args = [];
 
   async run(): Promise<void> {
-    const spinner = ora("Connecting").start();
     const { flags } = await this.parse(TreasuryInit);
+    const spinner = ora("Connecting").start();
 
     const scale = toAmountAndDecimals(flags.scale);
     let mint: PublicKey = new PublicKey(flags.mint);
