@@ -385,7 +385,6 @@ export async function initListing(args: {
  */
 export async function purchase(args: {
   program: Program<Strangemood>;
-
   cashier: PublicKey;
   signer: PublicKey;
   listing: AccountInfo<Listing> | PublicKey;
@@ -441,6 +440,73 @@ export async function purchase(args: {
     listingDeposit.mint,
     args.signer
   );
+
+  // If the deposit account is wrapped SOL, and the user has SOL,
+  // but DOESN'T have a wrapped SOL token account, then we should
+  // just make an account for them and fund it if they have the funds.
+  if (listingDeposit.mint.toString() === splToken.NATIVE_MINT.toString()) {
+    let nativeBalance = await args.program.provider.connection.getBalance(
+      args.signer
+    );
+    let total = listingInfo.account.price.mul(args.quantity);
+    try {
+      const wrappedSolAccount = await splToken.getAccount(
+        args.program.provider.connection,
+        purchaseTokenAccount
+      );
+
+      // If the user doesn't have enough SOL in their token account,
+      // but has SOL, we should should transfer sol to their account.
+      if (new anchor.BN(wrappedSolAccount.amount.toString()).lt(total)) {
+        // If they don't have enough SOL in their wrapped and system accounts
+        // then we should throw an error.
+        let combinedBalance = new anchor.BN(nativeBalance).add(
+          new anchor.BN(wrappedSolAccount.amount.toString())
+        );
+        if (combinedBalance.lt(total)) {
+          throw new Error(
+            `User cannot afford the purchase. Need=${total.toString()} Have=${combinedBalance.toString()}`
+          );
+        }
+
+        // If they have SOL in two places, we could fix that for them.
+        let remainder = total.sub(
+          new anchor.BN(wrappedSolAccount.amount.toString())
+        );
+        instructions.push(
+          SystemProgram.transfer({
+            fromPubkey: args.signer,
+            toPubkey: purchaseTokenAccount,
+            lamports: remainder.toNumber(),
+          }),
+          splToken.createSyncNativeInstruction(purchaseTokenAccount)
+        );
+      }
+    } catch (err) {
+      // If the user doesn't have an account, we should create one and fund it,
+      // if they actually have the SOL to do so.
+      if (new anchor.BN(nativeBalance).lt(total)) {
+        throw new Error(
+          `User cannot afford the purchase. Need=${total.toString()} Have=${nativeBalance}`
+        );
+      }
+
+      instructions.push(
+        splToken.createAssociatedTokenAccountInstruction(
+          args.signer,
+          purchaseTokenAccount,
+          args.signer,
+          splToken.NATIVE_MINT
+        ),
+        SystemProgram.transfer({
+          fromPubkey: args.signer,
+          toPubkey: purchaseTokenAccount,
+          lamports: total.toNumber(),
+        }),
+        splToken.createSyncNativeInstruction(purchaseTokenAccount)
+      );
+    }
+  }
 
   let purchase_ix = args.program.instruction.purchase(
     nonce,
