@@ -28,6 +28,11 @@ export default class Purchase extends Command {
       default: "testnet",
     }),
 
+    keypair: Flags.string({
+      description: "A path to a keypair file to use instead of the default",
+      required: false,
+    }),
+
     quantity: Flags.integer({
       description: "The amount of the listing token to purchase, in base units",
       required: true,
@@ -51,7 +56,9 @@ export default class Purchase extends Command {
     let signers = [];
 
     spinner.text = "Fetching Program";
-    const program = await getProgram(flags.cluster as any);
+    const program = await getProgram({
+      net: flags.cluster as any,
+    });
 
     const listing = new PublicKey(args.listing);
 
@@ -68,6 +75,8 @@ export default class Purchase extends Command {
 
     let tx = new Transaction();
     tx.add(...instructions);
+
+    console.log(JSON.stringify(tx.instructions, null, 2));
 
     spinner.text = "Sending transaction...";
     await program.provider.send(tx, signers);

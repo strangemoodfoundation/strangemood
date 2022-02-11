@@ -246,7 +246,6 @@ pub mod strangemood {
         _escrow_authority_bump: u8,
         amount: u64,
     ) -> ProgramResult {
-        msg!("Purchasing");
         let listing = ctx.accounts.listing.clone().into_inner();
 
         if !listing.is_available {

@@ -32,7 +32,9 @@ export default class CharterGet extends Command {
     const spinner = ora("Connecting").start();
 
     spinner.text = "Fetching Program";
-    const program = await getProgram(flags.cluster as any);
+    const program = await getProgram({
+      net: flags.cluster as any,
+    });
 
     spinner.text = "Fetching Charter";
     const charter = await program.account.charter.fetch(args["charter"]);

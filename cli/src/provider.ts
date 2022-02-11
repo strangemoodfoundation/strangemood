@@ -19,12 +19,12 @@ export async function getKeypair(filepath?: string) {
   return keypair;
 }
 
-export async function getProvider(net?: solana.Cluster) {
+export async function getProvider(filepath: string, net: solana.Cluster) {
   let conn = new solana.Connection(
     net ? solana.clusterApiUrl(net) : "http://127.0.0.1:8899"
   );
 
-  const keypair = await getKeypair();
+  const keypair = await getKeypair(filepath);
   const wallet = new anchor.Wallet(keypair);
 
   const provider = new anchor.Provider(conn, wallet, {});
@@ -33,12 +33,15 @@ export async function getProvider(net?: solana.Cluster) {
   return provider;
 }
 
-export async function getProgram(
-  net?: solana.Cluster
-): Promise<Program<Strangemood>> {
-  if (net === "devnet")
+export async function getProgram(options?: {
+  filepath?: string;
+  net?: solana.Cluster;
+}): Promise<Program<Strangemood>> {
+  if (options?.net === "devnet")
     throw new Error("Devnet is not supported, use testnet for now");
 
-  const program = await fetchStrangemoodProgram(await getProvider(net));
+  const program = await fetchStrangemoodProgram(
+    await getProvider(options?.filepath, options?.net)
+  );
   return program as any;
 }

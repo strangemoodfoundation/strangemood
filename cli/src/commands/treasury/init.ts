@@ -65,7 +65,9 @@ export default class TreasuryInit extends Command {
     let charter: PublicKey = new PublicKey(flags.charter);
 
     spinner.text = "Fetching Program";
-    const program = await getProgram(flags.cluster as any);
+    const program = await getProgram({
+      net: flags.cluster as any,
+    });
     let instructions: TransactionInstruction[] = [];
     let signers: Keypair[] = [];
 

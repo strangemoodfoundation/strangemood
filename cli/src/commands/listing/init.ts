@@ -88,7 +88,9 @@ export default class ListingInit extends Command {
     let instructions = [];
     let signers = [];
 
-    const program = await getProgram(flags.cluster as any);
+    const program = await getProgram({
+      net: flags.cluster as any,
+    });
 
     const currency = new PublicKey(flags.currency);
     const charter = new PublicKey(flags.charter);

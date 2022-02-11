@@ -32,7 +32,9 @@ export default class ListingGet extends Command {
     const spinner = ora("Connecting").start();
 
     spinner.text = "Fetching Program";
-    const program = await getProgram(flags.cluster as any);
+    const program = await getProgram({
+      net: flags.cluster as any,
+    });
 
     spinner.text = "Fetching Listing";
     const listing = await program.account.listing.fetch(args["listing"]);
