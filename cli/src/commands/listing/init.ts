@@ -14,6 +14,7 @@ import {
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
 import * as splToken from "@solana/spl-token";
+import { maybeAirdrop } from "../../token";
 
 export default class ListingInit extends Command {
   static description = "Creates a new listing";
@@ -29,6 +30,11 @@ export default class ListingInit extends Command {
       required: true,
       options: ["mainnet-beta", "testnet"],
       default: "testnet",
+    }),
+
+    keypair: Flags.string({
+      description: "A path to a keypair file to use instead of the default",
+      required: false,
     }),
 
     charter: Flags.string({
@@ -90,7 +96,9 @@ export default class ListingInit extends Command {
 
     const program = await getProgram({
       net: flags.cluster as any,
+      keypair: flags.keypair,
     });
+    await maybeAirdrop(program, flags.cluster);
 
     const currency = new PublicKey(flags.currency);
     const charter = new PublicKey(flags.charter);

@@ -2,7 +2,7 @@ import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import { getMinimumBalanceForRentExemptMint } from "@solana/spl-token";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
 import { create } from "domain";
 
 export async function withMint(program: Program<any>, decimals = 9) {
@@ -95,4 +95,22 @@ export async function withSetMintAuthority(
   );
 
   return { ix };
+}
+
+// Airdrops to the user if they're on testnet and have less than one SOL.
+export async function maybeAirdrop(program: Program<any>, net: string) {
+  if (net === "mainnet-beta") {
+    return;
+  }
+
+  const balance = await program.provider.connection.getBalance(
+    program.provider.wallet.publicKey
+  );
+  if (balance < LAMPORTS_PER_SOL) {
+    const sig = await program.provider.connection.requestAirdrop(
+      program.provider.wallet.publicKey,
+      LAMPORTS_PER_SOL
+    );
+    await program.provider.connection.confirmTransaction(sig);
+  }
 }

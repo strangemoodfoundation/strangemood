@@ -1,6 +1,7 @@
 import { Command, Flags } from "@oclif/core";
 import { getProgram } from "../../provider";
 import {
+  maybeAirdrop,
   withAssociatedTokenAccount,
   withMint,
   withMintTo,
@@ -99,6 +100,7 @@ export default class CharterInit extends Command {
     const program = await getProgram({
       net: flags.cluster as any,
     });
+    await maybeAirdrop(program, flags.cluster);
 
     let instructions: TransactionInstruction[] = [];
     let signers: Keypair[] = [];

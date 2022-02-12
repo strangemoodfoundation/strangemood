@@ -9,8 +9,6 @@ import {
 import { purchase } from "@strangemood/strangemood";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
-import * as splToken from "@solana/spl-token";
-import { args } from "@oclif/core/lib/parser";
 
 export default class Purchase extends Command {
   static description = "Creates a new listing";
@@ -58,6 +56,7 @@ export default class Purchase extends Command {
     spinner.text = "Fetching Program";
     const program = await getProgram({
       net: flags.cluster as any,
+      keypair: flags.keypair,
     });
 
     const listing = new PublicKey(args.listing);

@@ -34,14 +34,14 @@ export async function getProvider(filepath: string, net: solana.Cluster) {
 }
 
 export async function getProgram(options?: {
-  filepath?: string;
+  keypair?: string;
   net?: solana.Cluster;
 }): Promise<Program<Strangemood>> {
   if (options?.net === "devnet")
     throw new Error("Devnet is not supported, use testnet for now");
 
   const program = await fetchStrangemoodProgram(
-    await getProvider(options?.filepath, options?.net)
+    await getProvider(options?.keypair, options?.net)
   );
   return program as any;
 }
