@@ -75,8 +75,6 @@ export default class Purchase extends Command {
     let tx = new Transaction();
     tx.add(...instructions);
 
-    console.log(JSON.stringify(tx.instructions, null, 2));
-
     spinner.text = "Sending transaction...";
     await program.provider.send(tx, signers);
     spinner.stop();

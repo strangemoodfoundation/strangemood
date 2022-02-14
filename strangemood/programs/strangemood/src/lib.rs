@@ -266,6 +266,7 @@ pub mod strangemood {
         // if the listing is refundable, then mint the user the
         // token immediately (it can be burned later).
         if listing.is_refundable {
+            msg!("Minting tokens");
             mint_to_and_freeze(
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.listing_mint.to_account_info(),
@@ -723,6 +724,7 @@ pub struct Purchase<'info> {
     pub listing_token_account: Account<'info, TokenAccount>,
 
     // The mint associated with the listing
+    #[account(mut)]
     pub listing_mint: Box<Account<'info, Mint>>,
 
     #[account(
@@ -886,6 +888,7 @@ pub struct Cancel<'info> {
     #[account(constraint=listing.mint==listing_mint.key())]
     pub listing: Box<Account<'info, Listing>>,
 
+    #[account(mut)]
     pub listing_mint: Box<Account<'info, Mint>>,
 
     #[account(
@@ -904,6 +907,7 @@ pub struct Consume<'info> {
     #[account(has_one=authority, has_one=mint)]
     pub listing: Box<Account<'info, Listing>>,
 
+    #[account(mut)]
     pub mint: Box<Account<'info, Mint>>,
 
     #[account(
