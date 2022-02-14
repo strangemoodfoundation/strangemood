@@ -17,6 +17,7 @@ const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
 import { Buffer } from "buffer";
 import * as splToken from "@solana/spl-token";
+import { toAmountAndDecimals } from "./numbers";
 import { idlAddress } from "@project-serum/anchor/dist/cjs/idl";
 
 export const pda = _pda;
@@ -344,7 +345,9 @@ export async function initListing(args: {
     charter.publicKey,
     args.currency
   );
-  let treasuryInfo = await args.program.provider.connection.getAccountInfo(treasuryPDA);
+  let treasuryInfo = await args.program.provider.connection.getAccountInfo(
+    treasuryPDA
+  );
   if (!treasuryInfo) {
     throw new Error(
       `The charter "${args.charter.toString()}" has no treasury for the "${args.currency.toString()}" mint.`
@@ -801,8 +804,7 @@ export async function initCharterTreasury(args: {
   authority: PublicKey;
   deposit: PublicKey;
   mint: PublicKey;
-  scalarAmount: anchor.BN;
-  scalarDecimals: number;
+  scalar: number;
 }) {
   let charter = await args.program.account.charter.fetch(args.charter);
 
@@ -812,10 +814,12 @@ export async function initCharterTreasury(args: {
     args.mint
   );
 
+  const scalar = toAmountAndDecimals(args.scalar.toString());
+
   const ix = args.program.instruction.initCharterTreasury(
     treasury_bump,
-    args.scalarAmount,
-    args.scalarDecimals,
+    scalar.amount,
+    scalar.decimals,
     {
       accounts: {
         treasury: treasury_pda,
@@ -838,12 +842,9 @@ export async function initCharter(args: {
   voteDeposit: PublicKey;
   mint: PublicKey;
   signer: PublicKey;
-  expansionAmount: anchor.BN;
-  expansionDecimals: number;
-  paymentContributionAmount: anchor.BN;
-  paymentContributionDecimals: number;
-  voteContributionAmount: anchor.BN;
-  voteContributionDecimals: number;
+  expansion: number;
+  paymentContribution: number;
+  voteContribution: number;
   uri: string;
 }) {
   if (!args.uri || args.uri.length > 128) {
@@ -859,14 +860,22 @@ export async function initCharter(args: {
     args.mint
   );
 
+  const expansion = toAmountAndDecimals(args.expansion.toString());
+  const paymentContribution = toAmountAndDecimals(
+    args.paymentContribution.toString()
+  );
+  const voteContribution = toAmountAndDecimals(
+    args.voteContribution.toString()
+  );
+
   instructions.push(
     args.program.instruction.initCharter(
-      args.expansionAmount, // Expansion amount
-      args.expansionDecimals, // expansion decimals
-      args.paymentContributionAmount, // pay contribution amount
-      args.paymentContributionDecimals, // pay contribution decimals
-      args.voteContributionAmount, // vote contribution amount
-      args.voteContributionDecimals, // vote contribution decimals
+      expansion.amount,
+      expansion.decimals,
+      paymentContribution.amount,
+      paymentContribution.decimals,
+      voteContribution.amount,
+      voteContribution.decimals,
       args.uri,
       {
         accounts: {

@@ -7,7 +7,6 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { cash, purchase } from "@strangemood/strangemood";
-import * as anchor from "@project-serum/anchor";
 import ora from "ora";
 
 export default class Cash extends Command {

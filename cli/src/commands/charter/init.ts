@@ -16,7 +16,6 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { initCharter, pda } from "@strangemood/strangemood";
-import { toAmountAndDecimals } from "../../numbers";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
 
@@ -76,9 +75,9 @@ export default class CharterInit extends Command {
     const { flags } = await this.parse(CharterInit);
     const spinner = ora("Connecting").start();
 
-    const expansion = toAmountAndDecimals(flags.expansion);
-    const paymentSplit = toAmountAndDecimals(flags.paymentSplit);
-    const voteSplit = toAmountAndDecimals(flags.expansionSplit);
+    const expansion = parseFloat(flags.expansion);
+    const paymentContribution = parseFloat(flags.paymentSplit);
+    const voteContribution = parseFloat(flags.expansionSplit);
 
     if (parseFloat(flags.expansion) <= 0.0) {
       throw new Error("expansion must be greater than or equal to 0.0");
@@ -152,12 +151,9 @@ export default class CharterInit extends Command {
       mint: mint,
       signer: program.provider.wallet.publicKey,
       uri: flags.uri.toString(),
-      expansionAmount: expansion.amount,
-      expansionDecimals: expansion.decimals,
-      paymentContributionAmount: paymentSplit.amount,
-      paymentContributionDecimals: paymentSplit.decimals,
-      voteContributionAmount: voteSplit.amount,
-      voteContributionDecimals: voteSplit.decimals,
+      expansion,
+      paymentContribution,
+      voteContribution,
     });
     instructions.push(...asInitCharter.instructions);
 

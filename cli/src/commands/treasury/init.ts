@@ -7,7 +7,6 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { initCharterTreasury, pda } from "@strangemood/strangemood";
-import { toAmountAndDecimals } from "../../numbers";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
 import { withTokenAccount } from "../../token";
@@ -60,7 +59,7 @@ export default class TreasuryInit extends Command {
     const { flags } = await this.parse(TreasuryInit);
     const spinner = ora("Connecting").start();
 
-    const scale = toAmountAndDecimals(flags.scale);
+    const scalar = parseFloat(flags.scale);
     let mint: PublicKey = new PublicKey(flags.mint);
     let charter: PublicKey = new PublicKey(flags.charter);
 
@@ -113,8 +112,7 @@ export default class TreasuryInit extends Command {
       authority: charterAccount.authority,
       deposit,
       mint,
-      scalarAmount: scale.amount,
-      scalarDecimals: scale.decimals,
+      scalar,
     });
     instructions.push(...asCharterTreasury.instructions);
 
