@@ -582,11 +582,28 @@ export async function cash(args: {
       args.program.programId
     );
 
-  let [realmMintAuthority, realmMintBump] =
+  let [charterMintAuthority, charterMintBump] =
     await anchor.web3.PublicKey.findProgramAddress(
       [Buffer.from("mint"), charter.mint.toBuffer()],
       args.program.programId
     );
+
+  // TODO: this error is client-side, because the error that you'd get from the Strangemood program
+  // is fairly unhelpful: "custom program error: 0x4", "Error: owner does not match".
+  //
+  // But this check also makes a network call on every cash instruction, so in the future we can speed
+  // this up by just including a more helpful error or log in the Strangemood program.
+  let charterMint = await splToken.getMint(
+    args.program.provider.connection,
+    charter.mint
+  );
+  if (
+    charterMint.mintAuthority.toString() !== charterMintAuthority.toString()
+  ) {
+    throw new Error(
+      `The Charter's Mint ('${charter.mint.toString()}') has not set it's "MintAuthority" to the Strangemood Program, and so cashing will fail. Set the MintAuthority to '${charterMintAuthority.toString()}'. The current authority is '${charterMint.mintAuthority.toString()}'`
+    );
+  }
 
   let [escrowAuthority, escrowAuthorityBump] =
     await anchor.web3.PublicKey.findProgramAddress(
@@ -613,7 +630,7 @@ export async function cash(args: {
   instructions.push(
     args.program.instruction.cash(
       listingMintAuthorityBump,
-      realmMintBump,
+      charterMintBump,
       escrowAuthorityBump,
       {
         accounts: {
@@ -629,7 +646,7 @@ export async function cash(args: {
           charterTreasury: treasury_pda,
           charterVoteDeposit: charter.voteDeposit,
           charterMint: charter.mint,
-          charterMintAuthority: realmMintAuthority,
+          charterMintAuthority: charterMintAuthority,
           charter: listingInfo.account.charter,
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,

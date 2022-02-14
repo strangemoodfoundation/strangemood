@@ -70,7 +70,7 @@ export default class ListingInit extends Command {
     refundable: Flags.boolean({
       description: "Mark the listing as refundable",
       required: true,
-      default: true,
+      default: false,
     }),
 
     consumable: Flags.boolean({

@@ -6,12 +6,12 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { purchase } from "@strangemood/strangemood";
+import { cash, purchase } from "@strangemood/strangemood";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
 
-export default class Purchase extends Command {
-  static description = "Purchases a listing";
+export default class Cash extends Command {
+  static description = "Finalizes a purchase.";
 
   static examples = [
     `$ strangemood purchase 9o2Ws6EtpMEA7RjeCUKSuwiSvRLjmK5in12BKnXSwFta
@@ -40,14 +40,14 @@ export default class Purchase extends Command {
 
   static args = [
     {
-      name: "listing",
-      description: "The public key of the listing",
+      name: "receipt",
+      description: "The public key of the receipt",
       required: true,
     },
   ];
 
   async run(): Promise<void> {
-    const { flags, args } = await this.parse(Purchase);
+    const { flags, args } = await this.parse(Cash);
     const spinner = ora("Connecting").start();
 
     let instructions = [];
@@ -59,18 +59,29 @@ export default class Purchase extends Command {
       keypair: flags.keypair,
     });
 
-    const listing = new PublicKey(args.listing);
+    const receipt = new PublicKey(args.receipt);
 
-    spinner.text = "Purchase";
-    const asPurchase = await purchase({
+    const info = await program.account.receipt.fetch(receipt);
+    let cashier = info.cashier;
+    if (cashier.toString() !== program.provider.wallet.publicKey.toString()) {
+      throw new Error(
+        `Current user ${program.provider.wallet.publicKey.toString()} is not the cashier of this receipt. Consider using '--keypair mycashier.json'`
+      );
+    }
+
+    if (!info.isCashable) {
+      throw new Error("This receipt is not currently cashable.");
+    }
+
+    spinner.text = "Cashing";
+    const asCash = await cash({
       program,
-      cashier: program.provider.wallet.publicKey,
       signer: program.provider.wallet.publicKey,
-      listing: listing,
-      quantity: new anchor.BN(flags.quantity),
+      receipt: receipt,
     });
-    instructions.push(...asPurchase.instructions);
-    signers.push(...asPurchase.signers);
+    instructions.push(...asCash.instructions);
+
+    console.log(JSON.stringify(instructions, null, 2));
 
     let tx = new Transaction();
     tx.add(...instructions);
@@ -78,7 +89,5 @@ export default class Purchase extends Command {
     spinner.text = "Sending transaction...";
     await program.provider.send(tx, signers);
     spinner.stop();
-
-    console.log(asPurchase.receipt.toString());
   }
 }

@@ -379,12 +379,6 @@ pub mod strangemood {
             escrow_authority_bump
         )?;
 
-        move_lamports(
-            &ctx.accounts.receipt.to_account_info(),
-            &ctx.accounts.charter_treasury_deposit.to_account_info(),
-            contribution_amount as u64,
-        );
-
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
         let votes = contribution_amount as f64 * charter.expansion_rate(treasury.expansion_scalar_amount, treasury.expansion_scalar_decimals);
         let deposit_rate = 1.0 - charter.vote_contribution_rate();
