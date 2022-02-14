@@ -92,7 +92,8 @@ export default class TreasuryInit extends Command {
     }
 
     let [treasuryPDA, _] = await pda.treasury(program.programId, charter, mint);
-    const maybeTreasury = await program.account.charterTreasury.fetch(
+    spinner.text = `Checking if ${treasuryPDA.toString()} exists...`;
+    const maybeTreasury = await program.provider.connection.getAccountInfo(
       treasuryPDA
     );
     if (maybeTreasury) {

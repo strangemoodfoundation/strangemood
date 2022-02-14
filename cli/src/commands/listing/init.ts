@@ -1,16 +1,7 @@
 import { Command, Flags } from "@oclif/core";
 import { getProgram } from "../../provider";
-import {
-  Keypair,
-  PublicKey,
-  Transaction,
-  TransactionInstruction,
-} from "@solana/web3.js";
-import {
-  initCharterTreasury,
-  initListing,
-  pda,
-} from "@strangemood/strangemood";
+import { PublicKey, Transaction } from "@solana/web3.js";
+import { initListing } from "@strangemood/strangemood";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
 import * as splToken from "@solana/spl-token";

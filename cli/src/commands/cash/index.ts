@@ -65,7 +65,7 @@ export default class Cash extends Command {
     let cashier = info.cashier;
     if (cashier.toString() !== program.provider.wallet.publicKey.toString()) {
       throw new Error(
-        `Current user ${program.provider.wallet.publicKey.toString()} is not the cashier of this receipt. Consider using '--keypair mycashier.json'`
+        `Current user ${program.provider.wallet.publicKey.toString()} is not the expected cashier (${cashier.toString()}) of this receipt. Consider using '--keypair dummy.json'`
       );
     }
 
@@ -80,8 +80,6 @@ export default class Cash extends Command {
       receipt: receipt,
     });
     instructions.push(...asCash.instructions);
-
-    console.log(JSON.stringify(instructions, null, 2));
 
     let tx = new Transaction();
     tx.add(...instructions);
