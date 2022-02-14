@@ -263,8 +263,6 @@ pub mod strangemood {
             amount * listing.price,
         )?;
 
-        msg!("Transfered tokens");
-
         // if the listing is refundable, then mint the user the
         // token immediately (it can be burned later).
         if listing.is_refundable {
@@ -721,6 +719,7 @@ pub struct Purchase<'info> {
 
     // A token account of the listing.mint where listing tokens
     // will be deposited at
+    #[account(mut)]
     pub listing_token_account: Account<'info, TokenAccount>,
 
     // The mint associated with the listing
