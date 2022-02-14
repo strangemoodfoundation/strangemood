@@ -27,6 +27,7 @@
     "@solana/spl-governance": "^0.0.19",
     "@solana/spl-token": "0.2.0-alpha.2",
     "@solana/web3.js": "^1.34.0",
+    "@strangemood/strangemood": "^0.0.0-76",
     "chalk": "^4.1.2",
     "ora": "5.4.1"
   },
@@ -58,8 +59,17 @@
     ],
     "topicSeparator": " ",
     "topics": {
-      "hello": {
-        "description": "Say hello to the world and others"
+      "charter": {
+        "description": "Create and manage governances"
+      },
+      "listing": {
+        "description": "Create and manage listings"
+      },
+      "receipt": {
+        "description": "Create and manage in-progress purchases"
+      },
+      "treasury": {
+        "description": "Create and manage currency support"
       }
     }
   },
