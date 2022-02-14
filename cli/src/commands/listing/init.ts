@@ -116,6 +116,8 @@ export default class ListingInit extends Command {
       uri: flags.uri.toString(),
     });
 
+    console.log(JSON.stringify(asInitListing.instructions, null, 2));
+
     instructions.push(...asInitListing.instructions);
     signers.push(...asInitListing.signers);
 

@@ -344,6 +344,12 @@ export async function initListing(args: {
     charter.publicKey,
     args.currency
   );
+  let treasuryInfo = await args.program.provider.connection.getAccountInfo(treasuryPDA);
+  if (!treasuryInfo) {
+    throw new Error(
+      `The charter "${args.charter.toString()}" has no treasury for the "${args.currency.toString()}" mint.`
+    );
+  }
 
   let init_instruction_ix = args.program.instruction.initListing(
     listingMintBump,
