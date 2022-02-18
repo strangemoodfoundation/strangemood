@@ -1,6 +1,7 @@
 use anchor_lang::{solana_program, declare_id, prelude::*, System, account, Accounts};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use anchor_lang::solana_program::system_instruction;
+use std::cmp;
 
 declare_id!("sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW");
 
@@ -66,12 +67,13 @@ pub fn freeze_account<'a>(
 }
 
 // Transfer from one token account to another using the Token Program
-pub fn token_escrow_transfer<'a>(
+pub fn token_transfer_with_seed<'a>(
     token_program: AccountInfo<'a>,
     from: AccountInfo<'a>,
     to: AccountInfo<'a>,
     authority: AccountInfo<'a>,
     amount: u64,
+    seed_label: &[u8],
     bump: u8,
 ) -> ProgramResult {
     let cpi_program = token_program;
@@ -81,7 +83,7 @@ pub fn token_escrow_transfer<'a>(
         to,
         authority,
     };
-    let seeds = &[b"escrow", key.as_ref(), &[bump]];
+    let seeds = &[seed_label, key.as_ref(), &[bump]];
     let signers = &[&seeds[..]];
     let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
     anchor_spl::token::transfer(cpi_ctx, amount)
@@ -360,27 +362,29 @@ pub mod strangemood {
         let contribution_amount = lamports - deposit_amount;
 
         // Transfer from escrow to lister
-        token_escrow_transfer(
+        token_transfer_with_seed(
             ctx.accounts.token_program.to_account_info(),
         ctx.accounts.escrow.to_account_info(),
             ctx.accounts.listings_payment_deposit.to_account_info(),
             ctx.accounts.escrow_authority.to_account_info(),
             deposit_amount as u64,
+            b"escrow",
             escrow_authority_bump
         )?;
     
         // Transfer from escrow to charter
-        token_escrow_transfer(
+        token_transfer_with_seed(
             ctx.accounts.token_program.to_account_info(),
         ctx.accounts.escrow.to_account_info(),
             ctx.accounts.charter_treasury_deposit.to_account_info(),
             ctx.accounts.escrow_authority.to_account_info(),
             contribution_amount as u64,
+            b"escrow",
             escrow_authority_bump
         )?;
 
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
-        let votes = contribution_amount as f64 * charter.expansion_rate(treasury.expansion_scalar_amount, treasury.expansion_scalar_decimals);
+        let votes = contribution_amount as f64 * charter.expansion_rate(treasury.scalar_amount, treasury.scalar_decimals);
         let deposit_rate = 1.0 - charter.vote_contribution_rate();
         let deposit_amount = (deposit_rate * votes as f64) as u64;
         let contribution_amount = (votes as u64) - deposit_amount;
@@ -449,12 +453,13 @@ pub mod strangemood {
         );
 
         // Transfer all the funds in the escrow back to the user 
-        token_escrow_transfer(            
+        token_transfer_with_seed(            
             ctx.accounts.token_program.to_account_info(), 
             ctx.accounts.escrow.to_account_info(), 
             ctx.accounts.return_deposit.to_account_info(), 
             ctx.accounts.escrow_authority.to_account_info(), 
             ctx.accounts.escrow.amount,
+            b"escrow",
             escrow_authority_bump
         )?;
 
@@ -663,8 +668,8 @@ pub mod strangemood {
         treasury.charter = ctx.accounts.charter.key();
         treasury.deposit = ctx.accounts.deposit.key(); 
         treasury.mint = ctx.accounts.mint.key();
-        treasury.expansion_scalar_amount = expansion_scalar_amount; 
-        treasury.expansion_scalar_decimals = expansion_scalar_decimals; 
+        treasury.scalar_amount = expansion_scalar_amount; 
+        treasury.scalar_decimals = expansion_scalar_decimals; 
 
         Ok(())
     }
@@ -672,8 +677,8 @@ pub mod strangemood {
     pub fn set_charter_treasury_expansion_scalar(ctx: Context<SetCharterTreasuryExpansionScalar>, expansion_scalar_amount: u64, expansion_scalar_decimals: u8) -> ProgramResult {
         
         let treasury = &mut ctx.accounts.treasury;
-        treasury.expansion_scalar_amount = expansion_scalar_amount; 
-        treasury.expansion_scalar_decimals = expansion_scalar_decimals; 
+        treasury.scalar_amount = expansion_scalar_amount; 
+        treasury.scalar_decimals = expansion_scalar_decimals; 
 
         Ok(())
     }
@@ -681,6 +686,101 @@ pub mod strangemood {
     pub fn set_charter_treasury_deposit(ctx: Context<SetCharterTreasuryDeposit>) -> ProgramResult {
         let treasury = &mut ctx.accounts.treasury;
         treasury.deposit = ctx.accounts.deposit.key(); 
+
+        Ok(())
+    }
+
+    pub fn init_cashier(ctx: Context<InitCashier>, _stake_bump: u8) -> ProgramResult {
+        let cashier = &mut ctx.accounts.cashier;
+        cashier.is_initialized = true;
+        cashier.charter = ctx.accounts.charter.key();
+        cashier.stake = ctx.accounts.stake.key();
+        cashier.authority = ctx.accounts.authority.key();
+        cashier.last_withdraw_epoch = ctx.accounts.clock.epoch;
+
+        Ok(())
+    }
+
+    pub fn init_cashier_treasury(ctx: Context<InitCashierTreasury>) -> ProgramResult {
+        let treasury = &mut ctx.accounts.treasury; 
+        
+        treasury.is_initialized = true; 
+        treasury.cashier = ctx.accounts.cashier.key();
+        treasury.deposit = ctx.accounts.deposit.key();
+        treasury.mint = ctx.accounts.mint.key();
+        treasury.last_withdraw_epoch = ctx.accounts.clock.epoch;
+
+        Ok(())
+    }
+
+    pub fn burn_cashier_stake(ctx: Context<BurnCashierStake>,  mint_authority_bump: u8, amount: u64) -> ProgramResult {   
+        burn(
+            ctx.accounts.token_program.to_account_info(), 
+            ctx.accounts.mint.to_account_info(),
+             ctx.accounts.stake.to_account_info(),
+              ctx.accounts.mint_authority.to_account_info(),
+               mint_authority_bump,
+                amount)?;
+
+        Ok(())
+    }
+
+    // A decentralized crank that moves money from the the cashier's escrow to their deposit.
+    pub fn withdraw_cashier_treasury(ctx: Context<WithdrawCashierTreasury>, _mint_authority_bump: u8, cashier_escrow_bump: u8) -> ProgramResult {
+        let charter = ctx.accounts.charter.clone().into_inner();
+        let charter_treasury = ctx.accounts.charter_treasury.clone().into_inner();
+        let stake = ctx.accounts.stake.clone().into_inner();
+        let clock = ctx.accounts.clock.clone();
+        let cashier_treasury = &mut ctx.accounts.cashier_treasury;
+
+        // Calculate the amount to transfer
+        let amount_per_period = stake.amount as f64 * amount_as_float(charter_treasury.scalar_amount, charter_treasury.scalar_decimals);
+        let amount_per_epoch = amount_per_period as f64 / charter.withdraw_period as f64;
+        let epochs_passed = clock.epoch - cashier_treasury.last_withdraw_epoch;
+        let amount_to_transfer = amount_per_epoch * epochs_passed as f64;
+
+        // Transfer what we can
+        token_transfer_with_seed(
+            ctx.accounts.token_program.to_account_info(), 
+        ctx.accounts.escrow.to_account_info(),
+         ctx.accounts.deposit.to_account_info(),
+        ctx.accounts.escrow_authority.to_account_info(),
+            cmp::min(amount_to_transfer as u64, ctx.accounts.escrow.amount),
+            b"cashier.escrow", 
+            cashier_escrow_bump
+        )?;
+
+        // Update cashier treasury's last epoch
+        cashier_treasury.last_withdraw_epoch = clock.epoch;
+
+        Ok(())
+    }
+
+    // A decentralized crank that moves money from the the cashier's escrow to their deposit.
+    pub fn withdraw_cashier_stake(ctx: Context<WithdrawCashierStake>, cashier_escrow_bump: u8) -> ProgramResult {
+        let charter = ctx.accounts.charter.clone().into_inner();
+        let clock = ctx.accounts.clock.clone();
+        let cashier = &mut ctx.accounts.cashier;
+
+        // Calculate the amount to transfer
+        let amount_per_period = charter.stake_withdraw_amount;
+        let amount_per_epoch = amount_per_period as f64 / charter.withdraw_period as f64;
+        let epochs_passed = clock.epoch - cashier.last_withdraw_epoch;
+        let amount_to_transfer = amount_per_epoch * epochs_passed as f64;
+
+        // Transfer what we can
+        token_transfer_with_seed(
+            ctx.accounts.token_program.to_account_info(), 
+        ctx.accounts.stake.to_account_info(),
+            ctx.accounts.deposit.to_account_info(),
+        ctx.accounts.stake_authority.to_account_info(),
+            cmp::min(amount_to_transfer as u64, ctx.accounts.stake.amount),
+            b"cashier.stake", 
+            cashier_escrow_bump
+        )?;
+
+        // Update cashier treasury's last epoch
+        cashier.last_withdraw_epoch = clock.epoch;
 
         Ok(())
     }
@@ -1134,6 +1234,222 @@ pub struct SetCharterTreasuryDeposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+#[instruction(stake_bump: u8)]
+pub struct InitCashier<'info> {
+    // 8 for the tag
+    // 1 for is_initalized 
+    // 32 for charter
+    // 32 for stake
+    // 8 for last_withdraw_epoch 
+    // 32 for authority
+    // 128 for future versions
+    #[account(init,
+        payer = authority,
+        space = 8 + 1 + 32 + 32 + 8 + 128
+    )]
+    pub cashier: Account<'info, Cashier>,
+
+    #[account(init,
+        payer=authority,
+        token::mint = charter_mint,
+        token::authority = stake_authority
+    )]
+    pub stake: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds=[b"cashier.stake", stake.key().as_ref()],
+        bump=stake_bump,
+    )]
+    pub stake_authority: AccountInfo<'info>,
+
+    #[account(
+        constraint=charter.mint == charter_mint.key()
+    )]
+    pub charter: Account<'info, Charter>,
+    pub charter_mint: Account<'info, Mint>,
+
+    pub clock: Sysvar<'info, Clock>,
+    pub rent: Sysvar<'info, Rent>,
+    
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>
+}
+
+
+#[derive(Accounts)]
+#[instruction(escrow_bump: u8)]
+pub struct InitCashierTreasury<'info> {
+    // 8 for the tag 
+    // 1 for is_initialized
+    // 32 for cashier
+    // 32 for deposit 
+    // 32 for mint 
+    // 128 for future verisons
+    #[account(
+        init, 
+        payer=authority,
+        space= 8 + 1 + 32 + 32 + 32 + 128
+    )]
+    pub treasury: Account<'info, CashierTreasury>,
+
+    #[account(has_one=authority)]
+    pub cashier: Account<'info, Cashier>, 
+
+    #[account(has_one=mint)]
+    pub deposit: Account<'info, TokenAccount>,
+
+    #[account(
+        init,
+        payer=authority,
+        token::mint = mint,
+        token::authority = escrow_authority
+    )]
+    pub escrow: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds=[b"cashier.escrow", escrow.key().as_ref()],
+        bump=escrow_bump,
+    )]
+    pub escrow_authority: AccountInfo<'info>,
+
+    pub mint: Account<'info, Mint>,
+
+    pub authority: Signer<'info>,
+
+    pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
+
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>
+}
+
+#[derive(Accounts)]
+#[instruction(mint_authority_bump: u8)]
+pub struct BurnCashierStake<'info> {
+    #[account(has_one=authority, has_one=mint)]
+    pub charter: Account<'info, Charter>,
+
+    #[account(has_one=charter, has_one=stake)]
+    pub cashier: Account<'info, Cashier>, 
+
+    #[account(mut, has_one=mint)]
+    pub stake: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds=[b"mint", mint.key().as_ref()],
+        bump=mint_authority_bump,
+    )]
+    pub mint_authority: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+
+    pub authority: Signer<'info>,
+
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>
+}
+
+
+#[derive(Accounts)]
+#[instruction(mint_authority_bump: u8, cashier_escrow_bump: u8)]
+pub struct WithdrawCashierTreasury<'info> {
+    #[account(constraint=charter.mint==vote_mint.key())]
+    pub charter: Account<'info, Charter>,
+
+    // The treasury of the charter
+    #[account(mut, has_one=charter)]
+    pub charter_treasury: Account<'info, CharterTreasury>,
+
+    #[account(has_one=charter, has_one=stake)]
+    pub cashier: Account<'info, Cashier>, 
+
+    // The token account that contains the stake 
+    // the cashier has in the network
+    #[account(constraint=stake.mint==vote_mint.key())]
+    pub stake: Account<'info, TokenAccount>,
+
+    // The treasury that binds the escrow, deposit, and 
+    // cashier together
+    #[account(
+        has_one=cashier,
+        has_one=escrow,
+        has_one=deposit, 
+        constraint=cashier_treasury.mint==payment_mint.key()
+    )]
+    pub cashier_treasury: Account<'info, CashierTreasury>,
+
+    // Where the tokens are right now 
+    #[account(
+        mut,
+        constraint=escrow.mint==payment_mint.key() 
+    )]
+    pub escrow: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds=[b"cashier.escrow", escrow.key().as_ref()],
+        bump=cashier_escrow_bump,
+    )]
+    pub escrow_authority: AccountInfo<'info>,
+
+    // Where the tokens will end up after we withdraw
+    #[account(mut, 
+        constraint=deposit.mint==payment_mint.key() 
+    )]
+    pub deposit: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub payment_mint: Account<'info, Mint>,
+
+    // The governance token mint
+    pub vote_mint: Account<'info, Mint>,
+
+    pub clock: Sysvar<'info, Clock>,
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>
+}
+
+
+#[derive(Accounts)]
+#[instruction(stake_bump: u8)]
+pub struct WithdrawCashierStake<'info> {
+    #[account(mut, constraint=charter.mint==vote_mint.key())]
+    pub charter: Account<'info, Charter>,
+
+    #[account(has_one=charter, has_one=stake)]
+    pub cashier: Account<'info, Cashier>, 
+
+    // The token account that contains the stake 
+    // the cashier has in the network
+    #[account(constraint=stake.mint==vote_mint.key())]
+    pub stake: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds=[b"cashier.stake", stake.key().as_ref()],
+        bump=stake_bump,
+    )]
+    pub stake_authority: AccountInfo<'info>,
+
+    // Where the tokens will end up after we withdraw
+    #[account(mut, 
+        constraint=deposit.mint==vote_mint.key() 
+    )]
+    pub deposit: Account<'info, TokenAccount>,
+
+    // The governance token mint
+    pub vote_mint: Account<'info, Mint>,
+
+    pub clock: Sysvar<'info, Clock>,
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>
+}
+
+
 #[account]
 pub struct Receipt {
     /// Set to "true" by the program when BeginPurchase is run
@@ -1159,9 +1475,7 @@ pub struct Receipt {
     // This user is allowed to refund the purchase.
     pub purchaser: Pubkey,
 
-    // The entity that's allowed to finalize (cash out) this receipt.
-    // Typically the marketplace or
-    // the client application that started the sale.
+    // The cashier 
     pub cashier: Pubkey,
 
     // A token account where payment is held in escrow
@@ -1262,6 +1576,12 @@ pub struct Charter {
     // The community treasury of the native token.
     pub vote_deposit: Pubkey,
 
+    // The number of epochs a withdraw period lasts.
+    pub withdraw_period: u64,
+
+    // The amount of the voting token (stake) that can be withdrawn per period
+    pub stake_withdraw_amount: u64,
+
     // The URL host where off-chain services can be found for this governance.
     // Example: "https://strangemood.org", "http://localhost:3000", "https://api.strangemood.org:4040"
     pub uri: String,
@@ -1277,7 +1597,7 @@ pub struct CharterTreasury {
     // The charter this is associated with
     pub charter: Pubkey,
 
-    // The token account for this charter 
+    // The token account associated with this treasury
     pub deposit: Pubkey,
 
     // The mint of the deposit that this is associated with.
@@ -1287,9 +1607,54 @@ pub struct CharterTreasury {
     // distributed based on this deposit type.
     // amount=1 and decimals=0 is 1.0
     // amount=15 and decimals=1 is 1.5
-    pub expansion_scalar_amount: u64,
-    pub expansion_scalar_decimals: u8,
+    pub scalar_amount: u64,
+    pub scalar_decimals: u8,
 }
+
+// A staked client that can receive a bounty if they initiate a sale. 
+#[account]
+pub struct Cashier {
+    /// Set to "true" by the program when InitListing is run
+    /// Contracts should not trust listings that aren't initialized
+    pub is_initialized: bool,
+
+    // The charter this is associated with
+    pub charter: Pubkey,
+
+    // The token account, in charter voting tokens, where the stake deposit lives
+    pub stake: Pubkey,
+
+    // The last epoch the cashier has withdrawn from their stake account
+    pub last_withdraw_epoch: u64,
+
+    // The authority that's allowed to withdraw from this cashier
+    pub authority: Pubkey,
+}
+
+// A treasury owned by the cashier.
+#[account]
+pub struct CashierTreasury {
+    /// Set to "true" by the program when InitListing is run
+    /// Contracts should not trust listings that aren't initialized
+    pub is_initialized: bool,
+
+    // The charter this is associated with
+    pub cashier: Pubkey,
+
+    // The intermediary account where funds collect 
+    // before being withdrawn
+    pub escrow: Pubkey,
+
+    // The token account associated with this treasury 
+    pub deposit: Pubkey,
+
+    // The mint of the deposit that this is associated with.
+    pub mint: Pubkey,
+
+    // The last epoch the cashier has withdrawn from their deposit.
+    pub last_withdraw_epoch: u64,
+}
+
 
 pub(crate) fn amount_as_float(amount: u64, decimals: u8) -> f64 {
     amount as f64 / i32::pow(10, decimals.into()) as f64
