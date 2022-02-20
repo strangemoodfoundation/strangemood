@@ -1,202 +1,22 @@
-use anchor_lang::{solana_program, declare_id, prelude::*, System, account, Accounts};
+use anchor_lang::{declare_id, prelude::*, System, account, Accounts};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use anchor_lang::solana_program::system_instruction;
+
+use state::{CashierTreasury, Charter, Cashier, CharterTreasury, Listing, Receipt};
 use std::cmp;
+
+pub mod state;
+pub mod error;
+pub mod cpi;
+pub mod util;
 
 declare_id!("sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW");
 
-pub fn mint_to_and_freeze<'a>(
-    token_program: AccountInfo<'a>,
-    mint: AccountInfo<'a>,
-    to: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
-    bump: u8,
-    amount: u64,
-) -> ProgramResult {
-
-    mint_to(
-        token_program.clone(),
-        mint.clone(),
-        to.clone(),
-        authority.clone(),
-        bump,
-        amount,
-    )?;
-    freeze_account(token_program, mint, to, authority, bump)
-}
-
-pub fn mint_to<'a>(
-    token_program: AccountInfo<'a>,
-    mint: AccountInfo<'a>,
-    to: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
-    bump: u8,
-    amount: u64,
-) -> ProgramResult {
-    let cpi_program = token_program;
-    let cloned_mint = mint.key.clone();
-    let cpi_accounts = anchor_spl::token::MintTo {
-        mint: mint,
-        to: to,
-        authority: authority,
-    };
-    let seeds = &[b"mint", cloned_mint.as_ref(), &[bump]];
-    let signers = &[&seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
-    anchor_spl::token::mint_to(cpi_ctx, amount)
-}
-
-pub fn freeze_account<'a>(
-    token_program: AccountInfo<'a>,
-    mint: AccountInfo<'a>,
-    account: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
-    bump: u8,
-) -> ProgramResult {
-    let cpi_program = token_program;
-    let cloned_mint = mint.key.clone();
-    let cpi_accounts = anchor_spl::token::FreezeAccount {
-        mint: mint,
-        account: account,
-        authority: authority,
-    };
-    let seeds = &[b"mint", cloned_mint.as_ref(), &[bump]];
-    let signers = &[&seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
-    anchor_spl::token::freeze_account(cpi_ctx)
-}
-
-// Transfer from one token account to another using the Token Program
-pub fn token_transfer_with_seed<'a>(
-    token_program: AccountInfo<'a>,
-    from: AccountInfo<'a>,
-    to: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
-    amount: u64,
-    seed_label: &[u8],
-    bump: u8,
-) -> ProgramResult {
-    let cpi_program = token_program;
-    let key = from.key.clone();
-    let cpi_accounts = anchor_spl::token::Transfer {
-        from,
-        to,
-        authority,
-    };
-    let seeds = &[seed_label, key.as_ref(), &[bump]];
-    let signers = &[&seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
-    anchor_spl::token::transfer(cpi_ctx, amount)
-}
-
-pub fn token_transfer<'a>(
-    token_program: AccountInfo<'a>,
-    from: AccountInfo<'a>,
-    to: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
-    amount: u64,
-) -> ProgramResult {
-    let cpi_program = token_program;
-    let cpi_accounts = anchor_spl::token::Transfer {
-        from,
-        to,
-        authority,
-    };
-    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-    anchor_spl::token::transfer(cpi_ctx, amount)
-}
-
-pub fn burn<'a>(
-    token_program: AccountInfo<'a>,
-    mint: AccountInfo<'a>,
-    account: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
-    bump: u8,
-    amount: u64,
-) -> ProgramResult {
-    let cpi_program = token_program;
-    let cloned_mint = mint.key.clone();
-    let cpi_accounts = anchor_spl::token::Burn {
-        mint: mint,
-        to: account,
-        authority: authority,
-    };
-    let seeds = &[b"mint", cloned_mint.as_ref(), &[bump]];
-    let signers = &[&seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
-    anchor_spl::token::burn(cpi_ctx, amount)
-}
-
-pub fn sync_native<'a>(token_program: &AccountInfo<'a>, account: AccountInfo<'a>) -> ProgramResult {
-    let ix = spl_token::instruction::sync_native(&token_program.key(), &account.key())?;
-
-    solana_program::program::invoke(&ix, &[account.clone()])
-}
-
-pub fn system_transfer<'a>(
-    system_program: &AccountInfo<'a>,
-    from: &AccountInfo<'a>,
-    to: &AccountInfo<'a>,
-    lamports: u64,
-) -> ProgramResult {
-    let ix = system_instruction::transfer(&from.key(), &to.key(), lamports);
-
-    solana_program::program::invoke(&ix, &[from.clone(), to.clone(), system_program.clone()])
-}
-
-pub fn erase_data<'a>(account: &AccountInfo<'a>) {
-    let mut data = account.data.borrow_mut();
-    data.fill(0);
-}
-
-pub fn move_lamports<'a>(
-    source_account_info: &AccountInfo<'a>,
-    dest_account_info: &AccountInfo<'a>,
-    amount: u64
-) {
-    let dest_starting_lamports = dest_account_info.lamports();
-    **dest_account_info.lamports.borrow_mut() = dest_starting_lamports
-        .checked_add(amount)
-        .unwrap();
-    **source_account_info.lamports.borrow_mut() = source_account_info.lamports().checked_sub(amount).unwrap();
-}
-
-pub fn close_native_account<'a>(
-    source_account_info: &AccountInfo<'a>,
-    dest_account_info: &AccountInfo<'a>,
-){
-    let dest_starting_lamports = dest_account_info.lamports();
-    **dest_account_info.lamports.borrow_mut() = dest_starting_lamports
-        .checked_add(source_account_info.lamports())
-        .unwrap();
-    **source_account_info.lamports.borrow_mut() = 0;
-
-    erase_data(source_account_info);
-}
-
-pub fn close_token_escrow_account<'a>(
-    token_program: AccountInfo<'a>,
-    from: AccountInfo<'a>,
-    to: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
-    bump: u8,
-) -> ProgramResult {
-    let cpi_program = token_program;
-    let key = from.key.clone();
-    let cpi_accounts = anchor_spl::token::CloseAccount {
-        authority,
-        account: from,
-        destination: to,
-    };
-    let seeds = &[b"escrow", key.as_ref(), &[bump]];
-    let signers = &[&seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
-    anchor_spl::token::close_account(cpi_ctx)
-}
 
 #[program]
 pub mod strangemood {
     use anchor_lang::{prelude::Context, solana_program::program_option::COption};
+
+    use crate::{util::amount_as_float, error::StrangemoodError, cpi::{token_transfer, mint_to_and_freeze, token_transfer_with_seed, close_token_escrow_account, close_native_account, burn, mint_to}};
 
     use super::*;
 
@@ -208,6 +28,8 @@ pub mod strangemood {
         refundable: bool,
         consumable: bool,
         available: bool,
+        cashier_split_amount: u64,
+        cashier_split_decimals: u8,
         uri: String,
     ) -> ProgramResult {
 
@@ -225,6 +47,11 @@ pub mod strangemood {
             return Err(StrangemoodError::MintNotSupported.into())
         }
 
+        let split = amount_as_float(cashier_split_amount, cashier_split_decimals);
+        if split < 0.0 || split > 1.0 {
+            return Err(StrangemoodError::InvalidCashierSplit.into())
+        }
+
         let listing = &mut ctx.accounts.listing;
         listing.is_initialized = true;
         listing.price = price;
@@ -237,12 +64,14 @@ pub mod strangemood {
         listing.is_refundable = refundable;
         listing.is_consumable = consumable;
         listing.is_available = available;
+        listing.cashier_split_amount = cashier_split_amount;
+        listing.cashier_split_decimals = cashier_split_decimals;
 
         Ok(())
     }
 
-    pub fn purchase(
-        ctx: Context<Purchase>,
+    pub fn purchase_with_cashier(
+        ctx: Context<PurchaseWithCashier>,
         receipt_nonce: u128,
         listing_mint_bump: u8,
         _escrow_authority_bump: u8,
@@ -268,7 +97,6 @@ pub mod strangemood {
         // if the listing is refundable, then mint the user the
         // token immediately (it can be burned later).
         if listing.is_refundable {
-            msg!("Minting tokens");
             mint_to_and_freeze(
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.listing_mint.to_account_info(),
@@ -286,7 +114,7 @@ pub mod strangemood {
         receipt.purchaser = ctx.accounts.user.key();
         receipt.quantity = amount;
         receipt.listing_token_account = ctx.accounts.listing_token_account.key();
-        receipt.cashier = ctx.accounts.cashier.key();
+        receipt.cashier = Some(ctx.accounts.cashier.key());
         receipt.nonce = receipt_nonce;
         receipt.price = listing.price;
         receipt.escrow = ctx.accounts.escrow.key();
@@ -298,8 +126,8 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn cash(
-        ctx: Context<Cash>,
+    pub fn cash_with_cashier(
+        ctx: Context<CashWithCashier>,
         listing_mint_bump: u8,
         charter_mint_bump: u8,
         escrow_authority_bump: u8
@@ -311,8 +139,8 @@ pub mod strangemood {
         if !receipt.is_cashable {
             return Err(StrangemoodError::ReceiptNotCashable.into());
         }
-        if receipt.cashier != ctx.accounts.cashier.key() {
-            return Err(StrangemoodError::OnlyCashableByTheCashier.into());
+        if receipt.cashier != None {
+            return Err(StrangemoodError::ReceiptDoesNotHaveCashier.into());
         }
         if listing.mint != ctx.accounts.listing_mint.key() {
             return Err(StrangemoodError::UnexpectedListingMint.into());
@@ -356,10 +184,19 @@ pub mod strangemood {
             )?;
         }
 
+        // First split the funds into the a "contribution" pool, which goes to 
+        // the charter governance, and a "deposit" pool.
         let lamports: u64 = receipt.price;
         let deposit_rate = 1.0 - charter.payment_contribution_rate();
         let deposit_amount = (deposit_rate * lamports as f64) as u64;
-        let contribution_amount = lamports - deposit_amount;
+        let to_charter_amount = lamports - deposit_amount;
+
+        // Then split the deposit pool between the lister, and the cashier.
+        // (charter, (lister, cashier))
+        let to_cashier_rate = amount_as_float(listing.cashier_split_amount, listing.cashier_split_decimals);
+        let to_lister_rate = 1.0 - to_cashier_rate;
+        let to_lister_amount = (deposit_amount as f64 * to_lister_rate) as u64;
+        let to_cashier_amount = deposit_amount - to_lister_amount;
 
         // Transfer from escrow to lister
         token_transfer_with_seed(
@@ -367,7 +204,18 @@ pub mod strangemood {
         ctx.accounts.escrow.to_account_info(),
             ctx.accounts.listings_payment_deposit.to_account_info(),
             ctx.accounts.escrow_authority.to_account_info(),
-            deposit_amount as u64,
+            to_lister_amount as u64,
+            b"escrow",
+            escrow_authority_bump
+        )?;
+
+        // Transfer from escrow to cashier
+        token_transfer_with_seed(
+            ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.listings_payment_deposit.to_account_info(),
+            ctx.accounts.escrow_authority.to_account_info(),
+            to_cashier_amount as u64,
             b"escrow",
             escrow_authority_bump
         )?;
@@ -378,13 +226,13 @@ pub mod strangemood {
         ctx.accounts.escrow.to_account_info(),
             ctx.accounts.charter_treasury_deposit.to_account_info(),
             ctx.accounts.escrow_authority.to_account_info(),
-            contribution_amount as u64,
+            to_charter_amount as u64,
             b"escrow",
             escrow_authority_bump
         )?;
 
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
-        let votes = contribution_amount as f64 * charter.expansion_rate(treasury.scalar_amount, treasury.scalar_decimals);
+        let votes = to_charter_amount as f64 * charter.expansion_rate(treasury.scalar_amount, treasury.scalar_decimals);
         let deposit_rate = 1.0 - charter.vote_contribution_rate();
         let deposit_amount = (deposit_rate * votes as f64) as u64;
         let contribution_amount = (votes as u64) - deposit_amount;
@@ -409,18 +257,19 @@ pub mod strangemood {
             contribution_amount,
         )?;
 
-        // Close the escrow
+        // Close the escrow account.
         close_token_escrow_account(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
-            ctx.accounts.cashier.to_account_info(),
+            ctx.accounts.purchaser.to_account_info(),
             ctx.accounts.escrow_authority.to_account_info(),
             escrow_authority_bump
         )?;
 
+        // Close the receipt.
         close_native_account(
             &ctx.accounts.receipt.to_account_info(),
-            &ctx.accounts.cashier.to_account_info(),
+            &ctx.accounts.purchaser.to_account_info(),
         );
 
         Ok(())
@@ -788,7 +637,7 @@ pub mod strangemood {
 
 #[derive(Accounts)]
 #[instruction(receipt_nonce: u128, listing_mint_bump: u8, escrow_authority_bump:u8)]
-pub struct Purchase<'info> {
+pub struct PurchaseWithCashier<'info> {
 
     // The user's token account where funds will be transfered from
     #[account(mut)]
@@ -875,12 +724,28 @@ pub struct Purchase<'info> {
 
 #[derive(Accounts)]
 #[instruction(listing_mint_bump: u8, charter_mint_bump: u8, escrow_authority_bump: u8)]
-pub struct Cash<'info> {
-    pub cashier: Signer<'info>,
+pub struct CashWithCashier<'info> {
+    #[account(has_one=charter)]
+    pub cashier: Account<'info, Cashier>,
+
+    #[account(
+        has_one=cashier,
+        constraint=cashier_treasury.escrow==cashier_treasury_escrow.key(),
+        constraint=cashier_treasury.mint==charter_treasury.mint,
+        constraint=cashier_treasury.mint==listings_payment_deposit.mint,
+    )]
+    pub cashier_treasury: Account<'info, CashierTreasury>,
+
+    #[account(mut)]
+    pub cashier_treasury_escrow: Account<'info, TokenAccount>,
 
     #[account(mut,
-        has_one=listing, has_one=listing_token_account, has_one=cashier, has_one=escrow)]
+        has_one=listing, has_one=listing_token_account, has_one=purchaser, has_one=escrow,
+    constraint=receipt.cashier == Some(cashier.key()))]
     pub receipt: Account<'info, Receipt>,
+
+    // The signer that purchased, who gets their SOL back that they used for the receipt.
+    pub purchaser: AccountInfo<'info>,
 
     #[account(mut)]
     pub escrow: Account<'info, TokenAccount>,
@@ -945,7 +810,9 @@ pub struct Cash<'info> {
     // Not actually sure if this is a good idea, but
     // without the Box, we run out of space?
     #[account(
-        constraint=charter.clone().into_inner().mint==charter_mint.key()
+        constraint=charter.clone().into_inner().mint==charter_mint.key(),
+        constraint=charter.vote_deposit==charter_vote_deposit.key(),
+        constraint=charter.mint==charter_mint.key(),
     )]
     pub charter: Box<Account<'info, Charter>>,
 
@@ -1449,295 +1316,3 @@ pub struct WithdrawCashierStake<'info> {
     pub token_program: Program<'info, Token>
 }
 
-
-#[account]
-pub struct Receipt {
-    /// Set to "true" by the program when BeginPurchase is run
-    /// Contracts should not trust receipts that aren't initialized
-    pub is_initialized: bool,
-
-    // If true, then the listing was refundable at the time it was
-    // purchased, and so this receipt is still refundable.
-    pub is_refundable: bool,
-
-    // If false, this receipt cannot be completed.
-    pub is_cashable: bool,
-
-    // The listing that was purchased
-    pub listing: Pubkey,
-
-    // The token account to send the listing tokens to
-    // It's possible to purchase the game for another person,
-    // So this is not necessarily the purchaser's token account
-    pub listing_token_account: Pubkey,
-
-    // The user that purchased the listing
-    // This user is allowed to refund the purchase.
-    pub purchaser: Pubkey,
-
-    // The cashier 
-    pub cashier: Pubkey,
-
-    // A token account where payment is held in escrow
-    pub escrow: Pubkey,
-
-    // The amount of the listing token to be distributed upon redeem
-    pub quantity: u64,
-
-    // The price when they bought the listing. We store this here
-    // because the price could be updated in between purchase and cash.
-    pub price: u64,
-
-    // A unique series of bytes used to generate the PDA and bump 
-    // for this receipt from `["receipt", listing_pubkey, nonce]`
-    pub nonce: u128,
-}
-
-#[account]
-pub struct Listing {
-    /// Set to "true" by the program when InitListing is run
-    /// Contracts should not trust listings that aren't initialized
-    pub is_initialized: bool,
-
-    // If "false", this listing cannot be bought.
-    pub is_available: bool,
-
-    // The charter that this listing is associated with
-    pub charter: Pubkey,
-
-    /// The entity that's allowed to modify this listing
-    pub authority: Pubkey,
-
-    /// The token account to deposit sol into
-    pub payment_deposit: Pubkey,
-
-    /// The token account to deposit community votes into
-    pub vote_deposit: Pubkey,
-
-    /// Lamports required to purchase 1 listing token amount.
-    pub price: u64,
-
-    /// The mint that represents the token they're purchasing
-    /// The decimals of the listing are always 0.
-    pub mint: Pubkey,
-
-    // The URI for where metadata can be found for this listing.
-    // Example: "ipns://examplehere", "https://example.com/metadata.json"
-    pub uri: String,
-
-    // If true, this listing can be refunded.
-    //
-    // When refundable, a purchase receipt starts with cashable=false
-    // and needs the authority of the listing to run SetCashable
-    // before the purchase can complete.
-    pub is_refundable: bool,
-
-    // If true, this listing can be "consumed" by the authority of
-    // the listing arbitrarily.
-    //
-    // Listers can use this to implement subscriptions, usage-based pricing,
-    // in-app purchases, and so on.
-    pub is_consumable: bool,
-}
-
-#[account]
-pub struct Charter {
-    pub is_initialized: bool,
-
-    // The amount of voting tokens to give to a user per
-    // 1.0 wrapped SOL contributed via community account contributions.
-    //
-    // Note that Borsh doesn't support floats, and so we carry over the pattern
-    // used in the token program of having an "amount" and a "decimals".
-    // So an "amount" of 100 and a "decimals" of 3 would be 0.1
-    pub expansion_rate_amount: u64,
-    pub expansion_rate_decimals: u8,
-
-    // The % of each purchase that goes to the community account.
-    pub payment_contribution_rate_amount: u64,
-    pub payment_contribution_rate_decimals: u8,
-
-    // The % of each vote token minting goes back to the governance to fund
-    // new ecosystem projects
-    pub vote_contribution_rate_amount: u64,
-    pub vote_contribution_rate_decimals: u8,
-
-    // The pubkey of the keypair that can modify this charter. 
-    // If this points to a system account, then this is basically 
-    // a dictatorship. If it points to a PDA of a program, then 
-    // this can be any arbitrary governance.
-    pub authority: Pubkey,
-
-    // The native token of this governance that's issued to listers
-    // upon sale. The authority of this mint must be a PDA with seeds 
-    // ["mint", mint.key()].
-    pub mint: Pubkey,
-
-    // The community treasury of the native token.
-    pub vote_deposit: Pubkey,
-
-    // The number of epochs a withdraw period lasts.
-    pub withdraw_period: u64,
-
-    // The amount of the voting token (stake) that can be withdrawn per period
-    pub stake_withdraw_amount: u64,
-
-    // The URL host where off-chain services can be found for this governance.
-    // Example: "https://strangemood.org", "http://localhost:3000", "https://api.strangemood.org:4040"
-    pub uri: String,
-}
-
-// An charter-approved deposit account. There is only one treasury per mint and charter.
-#[account]
-pub struct CharterTreasury {
-    /// Set to "true" by the program when InitListing is run
-    /// Contracts should not trust listings that aren't initialized
-    pub is_initialized: bool,
-
-    // The charter this is associated with
-    pub charter: Pubkey,
-
-    // The token account associated with this treasury
-    pub deposit: Pubkey,
-
-    // The mint of the deposit that this is associated with.
-    pub mint: Pubkey,
-
-    // Increases or decreases the amount of voting tokens.
-    // distributed based on this deposit type.
-    // amount=1 and decimals=0 is 1.0
-    // amount=15 and decimals=1 is 1.5
-    pub scalar_amount: u64,
-    pub scalar_decimals: u8,
-}
-
-// A staked client that can receive a bounty if they initiate a sale. 
-#[account]
-pub struct Cashier {
-    /// Set to "true" by the program when InitListing is run
-    /// Contracts should not trust listings that aren't initialized
-    pub is_initialized: bool,
-
-    // The charter this is associated with
-    pub charter: Pubkey,
-
-    // The token account, in charter voting tokens, where the stake deposit lives
-    pub stake: Pubkey,
-
-    // The last epoch the cashier has withdrawn from their stake account
-    pub last_withdraw_epoch: u64,
-
-    // The authority that's allowed to withdraw from this cashier
-    pub authority: Pubkey,
-}
-
-// A treasury owned by the cashier.
-#[account]
-pub struct CashierTreasury {
-    /// Set to "true" by the program when InitListing is run
-    /// Contracts should not trust listings that aren't initialized
-    pub is_initialized: bool,
-
-    // The charter this is associated with
-    pub cashier: Pubkey,
-
-    // The intermediary account where funds collect 
-    // before being withdrawn
-    pub escrow: Pubkey,
-
-    // The token account associated with this treasury 
-    pub deposit: Pubkey,
-
-    // The mint of the deposit that this is associated with.
-    pub mint: Pubkey,
-
-    // The last epoch the cashier has withdrawn from their deposit.
-    pub last_withdraw_epoch: u64,
-}
-
-
-pub(crate) fn amount_as_float(amount: u64, decimals: u8) -> f64 {
-    amount as f64 / i32::pow(10, decimals.into()) as f64
-}
-
-impl Charter {
-    pub fn expansion_rate(&self, scalar_amount: u64, scalar_decimals: u8) -> f64 {
-        amount_as_float(self.expansion_rate_amount, self.expansion_rate_decimals) 
-            * amount_as_float(scalar_amount, scalar_decimals)
-    }
-    pub fn payment_contribution_rate(&self) -> f64 {
-        amount_as_float(
-            self.payment_contribution_rate_amount,
-            self.payment_contribution_rate_decimals,
-        )
-    }
-    pub fn vote_contribution_rate(&self) -> f64 {
-        amount_as_float(
-            self.vote_contribution_rate_amount,
-            self.vote_contribution_rate_decimals,
-        )
-    }
-}
-
-#[error]
-pub enum StrangemoodError {
-
-    // custom program error: 0x1770
-    #[msg("MintNotSupported")]
-    MintNotSupported,
-
-    // custom program error: 0x1771
-    #[msg("Unauthorized Charter")]
-    UnauthorizedCharter,
-
-    // custom program error: 0x1772
-    #[msg("Deposit not found in listing")]
-    DepositIsNotFoundInListing,
-
-    // custom program error: 0x1773
-    #[msg("Unexpected Listing Token Account")]
-    UnexpectedListingTokenAccount,
-
-    // custom program error: 0x1774
-    // You attempted to pass in a deposit that is not the one 
-    // found in the charter
-    #[msg("Deposit not found in charter")]
-    DepositIsNotFoundInCharter, 
-
-    // custom program error: 0x1775
-    // You attempted to pass in a mint that is not the one 
-    // found in the charter
-    #[msg("Mint is not found in charter")]
-    MintIsNotFoundInCharter,
-
-    // custom program error: 0x1776
-    // You attempted to pass in an authority that is not the 
-    // authority of a listing or charter
-    #[msg("Provided Authority Account Does Not Have Access")]
-    UnauthorizedAuthority,
-
-    // custom program error: 0x1777
-    #[msg("Receipt is not currently cashable")]
-    ReceiptNotCashable,
-
-    // custom program error: 0x1778
-    #[msg("Only Cashable by the Cashier")]
-    OnlyCashableByTheCashier,
-
-    // custom program error: 0x1779
-    #[msg("Listing is Unavailable")]
-    ListingUnavailable,
-
-    // custom program error: 0x177a
-    #[msg("Mint did not match Listing")]
-    UnexpectedListingMint,
-
-    // custom program error: 0x177b
-    #[msg("Listing is not consumable")]
-    ListingIsNotConsumable,
-    
-    // custom program error: 0x177c
-    // Creating a charter requires the signer to be the mint authority
-    #[msg("Signer is not Mint Authority")]
-    SignerIsNotMintAuthority,
-}
