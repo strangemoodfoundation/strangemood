@@ -310,7 +310,7 @@ pub mod strangemood {
     }
 
     pub fn purchase(ctx: Context<Purchase>,   
-        listing_mint_bump: u8,
+        listing_mint_authority_bump: u8,
         charter_mint_bump: u8,
         amount: u64
     ) -> Result<()> {
@@ -351,9 +351,9 @@ pub mod strangemood {
         mint_to_and_freeze(
 ctx.accounts.token_program.to_account_info(),
         ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.listing_token_account.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
     ctx.accounts.listing_mint_authority.to_account_info(),
-            listing_mint_bump,
+            listing_mint_authority_bump,
             amount, 
         )?;
 
@@ -361,7 +361,7 @@ ctx.accounts.token_program.to_account_info(),
     }
 
     pub fn purchase_with_cashier(ctx: Context<PurchaseWithCashier>,   
-        listing_mint_bump: u8,
+        listing_mint_authority_bump: u8,
         charter_mint_bump: u8,
         amount: u64
     ) -> Result<()> {
@@ -403,9 +403,9 @@ ctx.accounts.token_program.to_account_info(),
         mint_to_and_freeze(
 ctx.accounts.token_program.to_account_info(),
         ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.listing_token_account.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
     ctx.accounts.listing_mint_authority.to_account_info(),
-            listing_mint_bump,
+            listing_mint_authority_bump,
             amount, 
         )?;
 
@@ -415,7 +415,7 @@ ctx.accounts.token_program.to_account_info(),
     pub fn start_trial(
         ctx: Context<StartTrial>,
         receipt_nonce: u128,
-        listing_mint_bump: u8,
+        listing_mint_authority_bump: u8,
         _escrow_authority_bump: u8,
         amount: u64,
     ) -> Result<()> {
@@ -442,9 +442,9 @@ ctx.accounts.token_program.to_account_info(),
         mint_to_and_freeze(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.listing_token_account.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
             ctx.accounts.listing_mint_authority.to_account_info(),
-            listing_mint_bump,
+            listing_mint_authority_bump,
             amount,
         )?;
 
@@ -453,7 +453,7 @@ ctx.accounts.token_program.to_account_info(),
         receipt.listing = ctx.accounts.listing.key();
         receipt.purchaser = ctx.accounts.user.key();
         receipt.quantity = amount;
-        receipt.listing_token_account = ctx.accounts.listing_token_account.key();
+        receipt.inventory = ctx.accounts.inventory.key();
         receipt.cashier = None;
         receipt.nonce = receipt_nonce;
         receipt.price = total;
@@ -465,7 +465,7 @@ ctx.accounts.token_program.to_account_info(),
     pub fn start_trial_with_cashier(
         ctx: Context<StartTrialWithCashier>,
         receipt_nonce: u128,
-        listing_mint_bump: u8,
+        listing_mint_authority_bump: u8,
         _escrow_authority_bump: u8,
         amount: u64,
     ) -> Result<()> {
@@ -492,9 +492,9 @@ ctx.accounts.token_program.to_account_info(),
         mint_to_and_freeze(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.listing_token_account.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
             ctx.accounts.listing_mint_authority.to_account_info(),
-            listing_mint_bump,
+            listing_mint_authority_bump,
             amount,
         )?;
 
@@ -503,7 +503,7 @@ ctx.accounts.token_program.to_account_info(),
         receipt.listing = ctx.accounts.listing.key();
         receipt.purchaser = ctx.accounts.user.key();
         receipt.quantity = amount;
-        receipt.listing_token_account = ctx.accounts.listing_token_account.key();
+        receipt.inventory = ctx.accounts.inventory.key();
         receipt.cashier = Some(ctx.accounts.cashier.key());
         receipt.nonce = receipt_nonce;
         receipt.price = total;
@@ -630,7 +630,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn refund_trial(
         ctx: Context<Refund>,
-        listing_mint_bump: u8,
+        listing_mint_authority_bump: u8,
         escrow_authority_bump:u8,
     ) -> Result<()> {
         let receipt = ctx.accounts.receipt.clone().into_inner();
@@ -638,9 +638,9 @@ ctx.accounts.token_program.to_account_info(),
         burn(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.listing_token_account.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
             ctx.accounts.listing_mint_authority.to_account_info(),
-            listing_mint_bump,
+            listing_mint_authority_bump,
             receipt.quantity,
         )?;
 
@@ -675,7 +675,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn consume(
         ctx: Context<Consume>,
-        listing_mint_bump: u8,
+        listing_mint_authority_bump: u8,
         amount: u64,
     ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
@@ -691,9 +691,9 @@ ctx.accounts.token_program.to_account_info(),
         burn(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.mint.to_account_info(),
-            ctx.accounts.listing_token_account.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
             ctx.accounts.mint_authority.to_account_info(),
-            listing_mint_bump,
+            listing_mint_authority_bump,
             amount,
         )?;
 
@@ -961,7 +961,32 @@ ctx.accounts.token_program.to_account_info(),
 
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, listing_mint_bump: u8, escrow_authority_bump:u8)]
+#[instruction(listing_mint_authority_bump: u8)]
+pub struct MintTo<'info> {
+
+    pub inventory: Box<Account<'info, Listing>>,
+
+    // The listing we can mint from
+    #[account(
+        has_one=mint,
+        has_one=authority
+    )]
+    pub listing: Box<Account<'info, Listing>>,
+
+    // The listing mint
+    pub mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        seeds = [b"mint", mint.key().as_ref()],
+        bump = listing_mint_authority_bump,
+    )]
+    pub mint_authority: AccountInfo<'info>,
+
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(receipt_nonce: u128, listing_mint_authority_bump: u8, escrow_authority_bump:u8)]
 pub struct StartTrial<'info> {
 
     // The user's token account where funds will be transfered from
@@ -986,7 +1011,7 @@ pub struct StartTrial<'info> {
     // A token account of the listing.mint where listing tokens
     // will be deposited at
     #[account(mut)]
-    pub listing_token_account: Account<'info, TokenAccount>,
+    pub inventory: Account<'info, TokenAccount>,
 
     // The mint associated with the listing
     #[account(mut)]
@@ -994,7 +1019,7 @@ pub struct StartTrial<'info> {
 
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
-        bump = listing_mint_bump,
+        bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
 
@@ -1003,7 +1028,7 @@ pub struct StartTrial<'info> {
     // 8 for the tag
     // 1 for is_initialized bool
     // 32 for listing pubkey
-    // 32 for listing_token_account pubkey
+    // 32 for inventory pubkey
     // 32 for purchaser pubkey
     // 32 for cashier pubkey
     // 32 for escrow pubkey
@@ -1039,7 +1064,7 @@ pub struct StartTrial<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, listing_mint_bump: u8, escrow_authority_bump:u8)]
+#[instruction(receipt_nonce: u128, listing_mint_authority_bump: u8, escrow_authority_bump:u8)]
 pub struct StartTrialWithCashier<'info> {
 
     // The user's token account where funds will be transfered from
@@ -1067,7 +1092,7 @@ pub struct StartTrialWithCashier<'info> {
     // A token account of the listing.mint where listing tokens
     // will be deposited at
     #[account(mut)]
-    pub listing_token_account: Account<'info, TokenAccount>,
+    pub inventory: Account<'info, TokenAccount>,
 
     // The mint associated with the listing
     #[account(mut)]
@@ -1075,7 +1100,7 @@ pub struct StartTrialWithCashier<'info> {
 
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
-        bump = listing_mint_bump,
+        bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
 
@@ -1084,7 +1109,7 @@ pub struct StartTrialWithCashier<'info> {
     // 8 for the tag
     // 1 for is_initialized bool
     // 32 for listing pubkey
-    // 32 for listing_token_account pubkey
+    // 32 for inventory pubkey
     // 32 for purchaser pubkey
     // 32 for cashier pubkey
     // 32 for escrow pubkey
@@ -1121,7 +1146,7 @@ pub struct StartTrialWithCashier<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(listing_mint_bump: u8, charter_mint_bump: u8,)]
+#[instruction(listing_mint_authority_bump: u8, charter_mint_bump: u8,)]
 pub struct Purchase<'info> {
     // The user's token account where funds will be transfered from
     #[account(mut)]
@@ -1130,7 +1155,7 @@ pub struct Purchase<'info> {
     // TODO: consider rename? 
     // Where the listing token is deposited when purchase is complete.
     #[account(mut)]
-    pub listing_token_account: Box<Account<'info, TokenAccount>>,
+    pub inventory: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub listings_payment_deposit: Box<Account<'info, TokenAccount>>,
@@ -1152,7 +1177,7 @@ pub struct Purchase<'info> {
 
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
-        bump = listing_mint_bump,
+        bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
 
@@ -1196,7 +1221,7 @@ pub struct Purchase<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(listing_mint_bump: u8, charter_mint_bump: u8,)]
+#[instruction(listing_mint_authority_bump: u8, charter_mint_bump: u8,)]
 pub struct PurchaseWithCashier<'info> {
     // The user's token account where funds will be transfered from
     #[account(mut)]
@@ -1219,7 +1244,7 @@ pub struct PurchaseWithCashier<'info> {
     // TODO: consider rename? 
     // Where the listing token is deposited when purchase is complete.
     #[account(mut)]
-    pub listing_token_account: Box<Account<'info, TokenAccount>>,
+    pub inventory: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub listings_payment_deposit: Box<Account<'info, TokenAccount>>,
@@ -1241,7 +1266,7 @@ pub struct PurchaseWithCashier<'info> {
 
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
-        bump = listing_mint_bump,
+        bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
 
@@ -1457,7 +1482,7 @@ pub struct Refund<'info> {
 
     #[account(mut,
         has_one=listing,
-        has_one=listing_token_account, 
+        has_one=inventory, 
         has_one=purchaser,
         has_one=escrow
     )]
@@ -1469,7 +1494,7 @@ pub struct Refund<'info> {
     pub escrow_authority: AccountInfo<'info>,
 
     #[account(mut)]
-    pub listing_token_account: Box<Account<'info, TokenAccount>>,
+    pub inventory: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
     #[account(constraint=listing.mint==listing_mint.key())]
@@ -1504,21 +1529,8 @@ pub struct Consume<'info> {
     pub mint_authority: AccountInfo<'info>,
 
     #[account(mut)]
-    pub listing_token_account: Box<Account<'info, TokenAccount>>,
+    pub inventory: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
-
-    // The listing authority
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-#[instruction()]
-pub struct SetReceiptCashable<'info> {
-    #[account(has_one=authority)]
-    pub listing: Box<Account<'info, Listing>>,
-
-    #[account(mut, has_one=listing)]
-    pub receipt: Account<'info, Receipt>,
 
     // The listing authority
     pub authority: Signer<'info>,

@@ -12,7 +12,7 @@ pub struct Receipt {
     // The token account to send the listing tokens to
     // It's possible to purchase the game for another person,
     // So this is not necessarily the purchaser's token account
-    pub listing_token_account: Pubkey,
+    pub inventory: Pubkey,
 
     // The user that purchased the listing
     // This user is allowed to refund the purchase.
