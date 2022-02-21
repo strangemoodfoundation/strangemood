@@ -51,7 +51,49 @@ fn distribute_governance_tokens<'a>(
     Ok(())
 }
 
+
 struct Splits { 
+    pub to_charter_amount: u64,
+    pub to_lister_amount: u64,
+
+}
+
+fn transfer_funds<'info>(
+    total: u64,
+    listing: &Listing,
+    charter: &Charter,
+    token_program: Program<'info, Token>,
+    from: Account<'info, TokenAccount>,
+    charter_deposit: Account<'info, TokenAccount>,
+    listing_deposit: Account<'info, TokenAccount>,
+    purchaser: Signer<'info>,
+) -> Result<Splits> {
+    let deposit_rate = 1.0 - charter.payment_contribution;
+    let to_lister_amount = (deposit_rate * total as f64) as u64;
+    let to_charter_amount = total - to_lister_amount;
+
+    // Distribute payment to the charter
+    token_transfer( 
+    token_program.to_account_info(),
+    from.to_account_info(),
+        charter_deposit.to_account_info(),
+        purchaser.to_account_info(),
+        to_charter_amount,
+    )?;
+
+    // Distribute payment to the lister
+    token_transfer(
+    token_program.to_account_info(),
+    from.to_account_info(),
+        listing_deposit.to_account_info(),
+        purchaser.to_account_info(),
+        to_lister_amount,
+    )?;
+    
+    Ok(Splits { to_charter_amount, to_lister_amount })
+}
+
+struct SplitsWithCashier { 
     pub to_charter_amount: u64,
     pub to_lister_amount: u64,
     pub to_cashier_amount: u64,
@@ -67,7 +109,7 @@ fn transfer_funds_with_cashier<'info>(
     listing_deposit: Account<'info, TokenAccount>,
     cashier_deposit: Account<'info, TokenAccount>,
     purchaser: Signer<'info>,
-) -> Result<Splits> {
+) -> Result<SplitsWithCashier> {
     let deposit_rate = 1.0 - charter.payment_contribution;
     let deposit_amount = (deposit_rate * total as f64) as u64;
     let to_charter_amount = total - deposit_amount;
@@ -107,7 +149,7 @@ fn transfer_funds_with_cashier<'info>(
     )?;
     
 
-    Ok(Splits { to_charter_amount, to_lister_amount, to_cashier_amount })
+    Ok(SplitsWithCashier { to_charter_amount, to_lister_amount, to_cashier_amount })
 }
 
 
@@ -162,6 +204,57 @@ pub mod strangemood {
         listing.is_consumable = consumable;
         listing.is_available = available;
         listing.cashier_split = cashier_split;
+
+        Ok(())
+    }
+
+    pub fn purchase(ctx: Context<Purchase>,   
+        listing_mint_bump: u8,
+        charter_mint_bump: u8,
+        amount: u64
+    ) -> Result<()> {
+        let listing = ctx.accounts.listing.clone().into_inner();
+        let charter = ctx.accounts.charter.clone().into_inner();
+
+        if !listing.is_available {
+            return Err(StrangemoodError::ListingUnavailable.into());
+        }
+
+        // Distribute payment
+        let total: u64 = listing.price * amount;
+        let splits = transfer_funds(total,
+            &listing,
+            &charter,
+            ctx.accounts.token_program.clone(),
+            *ctx.accounts.purchase_token_account.clone(),
+            *ctx.accounts.charter_treasury_deposit.clone(),
+            *ctx.accounts.listings_payment_deposit.clone(),
+            ctx.accounts.purchaser.clone()
+        )?;
+
+        // Distribute votes 
+        let charter_treasury = ctx.accounts.charter_treasury.clone().into_inner();
+        distribute_governance_tokens(
+            splits.to_charter_amount,
+            charter.expansion_rate * charter_treasury.scalar,
+            charter.vote_contribution,
+             ctx.accounts.token_program.to_account_info(),
+             ctx.accounts.charter_mint.to_account_info(),
+             ctx.accounts.charter_mint_authority.to_account_info(),
+             charter_mint_bump,
+             ctx.accounts.listings_vote_deposit.to_account_info(),
+             ctx.accounts.charter_vote_deposit.to_account_info(),
+        )?;
+
+        // Distribute listing token 
+        mint_to_and_freeze(
+ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts.listing_token_account.to_account_info(),
+    ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_bump,
+            amount, 
+        )?;
 
         Ok(())
     }
@@ -818,6 +911,81 @@ pub struct StartTrailWithCashier<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(listing_mint_bump: u8, charter_mint_bump: u8,)]
+pub struct Purchase<'info> {
+    // The user's token account where funds will be transfered from
+    #[account(mut)]
+    pub purchase_token_account: Box<Account<'info, TokenAccount>>,
+
+    // TODO: consider rename? 
+    // Where the listing token is deposited when purchase is complete.
+    #[account(mut)]
+    pub listing_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub listings_payment_deposit: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub listings_vote_deposit: Box<Account<'info, TokenAccount>>,
+
+    // The listing to purchase
+    #[account(
+        has_one=charter,
+        constraint=listing_mint.key()==listing.clone().into_inner().mint,
+        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
+        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit,
+    )]
+    pub listing: Box<Account<'info, Listing>>,
+
+    #[account(mut)]
+    pub listing_mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        seeds = [b"mint", listing_mint.key().as_ref()],
+        bump = listing_mint_bump,
+    )]
+    pub listing_mint_authority: AccountInfo<'info>,
+
+    #[account(
+        has_one=charter,
+        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit,
+        constraint=charter_treasury.mint==listings_payment_deposit.mint,
+    )]
+    pub charter_treasury: Box<Account<'info, CharterTreasury>>,
+
+    #[account(mut)]
+    pub charter_treasury_deposit: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub charter_vote_deposit: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub charter_mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        seeds = [b"mint", charter_mint.key().as_ref()],
+        bump = charter_mint_bump,
+    )]
+    pub charter_mint_authority: AccountInfo<'info>,
+
+    // Box'd to move the charter (which is fairly hefty)
+    // to the heap instead of the stack.
+    // Not actually sure if this is a good idea, but
+    // without the Box, we run out of space?
+    #[account(
+        constraint=charter.clone().into_inner().mint==charter_mint.key(),
+        constraint=charter.vote_deposit==charter_vote_deposit.key(),
+        constraint=charter.mint==charter_mint.key(),
+    )]
+    pub charter: Box<Account<'info, Charter>>,
+
+    pub purchaser: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 
