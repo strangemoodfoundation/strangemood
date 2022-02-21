@@ -628,54 +628,50 @@ ctx.accounts.token_program.to_account_info(),
         Ok(())
     }
 
-    // pub fn cancel(
-    //     ctx: Context<Cancel>,
-    //     listing_mint_bump: u8,
-    //     escrow_authority_bump:u8,
-    // ) -> Result<()> {
-    //     let receipt = ctx.accounts.receipt.clone().into_inner();
+    pub fn refund_trial(
+        ctx: Context<Refund>,
+        listing_mint_bump: u8,
+        escrow_authority_bump:u8,
+    ) -> Result<()> {
+        let receipt = ctx.accounts.receipt.clone().into_inner();
 
-    //     // If the receipt is refundable, then we've already issued tokens
-    //     // and so we need to burn them in order to refund.
-    //     if receipt.is_refundable {
-    //         burn(
-    //             ctx.accounts.token_program.to_account_info(),
-    //             ctx.accounts.listing_mint.to_account_info(),
-    //             ctx.accounts.listing_token_account.to_account_info(),
-    //             ctx.accounts.listing_mint_authority.to_account_info(),
-    //             listing_mint_bump,
-    //             receipt.quantity,
-    //         )?;
-    //     }
+        burn(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts.listing_token_account.to_account_info(),
+            ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_bump,
+            receipt.quantity,
+        )?;
 
-    //     // Close the receipt account
-    //     close_native_account(
-    //         &ctx.accounts.receipt.to_account_info(),
-    //         &ctx.accounts.purchaser.to_account_info(),
-    //     );
+        // Close the receipt account
+        close_native_account(
+            &ctx.accounts.receipt.to_account_info(),
+            &ctx.accounts.purchaser.to_account_info(),
+        );
 
-    //     // Transfer all the funds in the escrow back to the user 
-    //     token_transfer_with_seed(            
-    //         ctx.accounts.token_program.to_account_info(), 
-    //         ctx.accounts.escrow.to_account_info(), 
-    //         ctx.accounts.return_deposit.to_account_info(), 
-    //         ctx.accounts.escrow_authority.to_account_info(), 
-    //         ctx.accounts.escrow.amount,
-    //         b"escrow",
-    //         escrow_authority_bump
-    //     )?;
+        // Transfer all the funds in the escrow back to the user 
+        token_transfer_with_seed(            
+            ctx.accounts.token_program.to_account_info(), 
+            ctx.accounts.escrow.to_account_info(), 
+            ctx.accounts.return_deposit.to_account_info(), 
+            ctx.accounts.escrow_authority.to_account_info(), 
+            ctx.accounts.escrow.amount,
+            b"escrow",
+            escrow_authority_bump
+        )?;
 
-    //     // Close the escrow
-    //     close_token_escrow_account(
-    //         ctx.accounts.token_program.to_account_info(),
-    //         ctx.accounts.escrow.to_account_info(),
-    //         ctx.accounts.purchaser.to_account_info(),
-    //         ctx.accounts.escrow_authority.to_account_info(),
-    //         escrow_authority_bump
-    //     )?;
+        // Close the escrow
+        close_token_escrow_account(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.purchaser.to_account_info(),
+            ctx.accounts.escrow_authority.to_account_info(),
+            escrow_authority_bump
+        )?;
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub fn consume(
         ctx: Context<Consume>,
@@ -1452,7 +1448,7 @@ pub struct FinishTrialWithCashier<'info> {
 
 #[derive(Accounts)]
 #[instruction(listing_mint_authority_bump: u8)]
-pub struct Cancel<'info> {
+pub struct Refund<'info> {
     pub purchaser: Signer<'info>,
 
     // Where we'll return the tokens back to 
