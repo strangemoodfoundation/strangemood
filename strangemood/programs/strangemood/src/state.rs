@@ -12,9 +12,6 @@ pub struct Receipt {
     // purchased, and so this receipt is still refundable.
     pub is_refundable: bool,
 
-    // If false, this receipt cannot be completed.
-    pub is_cashable: bool,
-
     // The listing that was purchased
     pub listing: Pubkey,
 
@@ -185,6 +182,10 @@ pub struct Cashier {
 
     // The authority that's allowed to withdraw from this cashier
     pub authority: Pubkey,
+
+    // The URI for where metadata can be found for this charter.
+    // Example: "ipns://examplehere", "https://example.com/metadata.json"
+    pub uri: String,
 }
 
 // A treasury owned by the cashier.

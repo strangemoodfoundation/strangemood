@@ -160,10 +160,6 @@ pub mod strangemood {
         receipt.price = listing.price;
         receipt.escrow = ctx.accounts.escrow.key();
 
-        // If the listing is refundable, then you can't immediately
-        // cash out the receipt.
-        receipt.is_cashable = !listing.is_refundable;
-
         Ok(())
     }
 
@@ -177,9 +173,6 @@ pub mod strangemood {
         let charter = ctx.accounts.charter.clone().into_inner();
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
-        if !receipt.is_cashable {
-            return Err(StrangemoodError::ReceiptNotCashable.into());
-        }
         if receipt.cashier != None {
             return Err(StrangemoodError::ReceiptDoesNotHaveCashier.into());
         }
@@ -404,17 +397,6 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_receipt_cashable(ctx: Context<SetReceiptCashable>) -> ProgramResult {
-        if ctx.accounts.authority.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
-        }
-
-        let receipt = &mut ctx.accounts.receipt;
-        receipt.is_cashable = true;
-
-        Ok(())
-    }
-
     pub fn init_charter(
         ctx: Context<InitCharter>,
         expansion_rate_amount: u64,
@@ -592,13 +574,14 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn init_cashier(ctx: Context<InitCashier>, _stake_bump: u8) -> ProgramResult {
+    pub fn init_cashier(ctx: Context<InitCashier>, _stake_bump: u8, uri: String) -> ProgramResult {
         let cashier = &mut ctx.accounts.cashier;
         cashier.is_initialized = true;
         cashier.charter = ctx.accounts.charter.key();
         cashier.stake = ctx.accounts.stake.key();
         cashier.authority = ctx.accounts.authority.key();
         cashier.last_withdraw_epoch = ctx.accounts.clock.epoch;
+        cashier.uri = uri;
 
         Ok(())
     }
@@ -729,11 +712,7 @@ pub struct PurchaseWithCashier<'info> {
     )]
     pub listing_mint_authority: AccountInfo<'info>,
 
-    // A receipt that the RedeemPurchase can use to pay everyone
-    //
-    // SOL is held in the receipt account, as an escrow,
-    // and then distributed back to the purchaser upon "refund"
-    // or to the realm & lister upon "cash".
+    // A receipt that lets you refund something later.
     //
     // 8 for the tag
     // 1 for is_initialized bool
@@ -751,7 +730,7 @@ pub struct PurchaseWithCashier<'info> {
         seeds = [b"receipt" as &[u8], &receipt_nonce.to_le_bytes()],
         bump,
         payer = user,
-        space = 8 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
+        space = 8 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
     pub receipt: Box<Account<'info, Receipt>>,
 
     #[account(
@@ -1163,10 +1142,11 @@ pub struct InitCashier<'info> {
     // 32 for stake
     // 8 for last_withdraw_epoch 
     // 32 for authority
+    // 128 for URI
     // 128 for future versions
     #[account(init,
         payer = authority,
-        space = 8 + 1 + 32 + 32 + 8 + 128
+        space = 8 + 1 + 32 + 32 + 8 + 128 +  128
     )]
     pub cashier: Account<'info, Cashier>,
 
