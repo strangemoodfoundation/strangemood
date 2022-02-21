@@ -6,10 +6,6 @@ pub struct Receipt {
     /// Contracts should not trust receipts that aren't initialized
     pub is_initialized: bool,
 
-    // If true, then the listing was refundable at the time it was
-    // purchased, and so this receipt is still refundable.
-    pub is_refundable: bool,
-
     // The listing that was purchased
     pub listing: Pubkey,
 
