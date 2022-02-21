@@ -33,6 +33,7 @@ pub struct Receipt {
 
     // A unique series of bytes used to generate the PDA and bump
     // for this receipt from `["receipt", listing_pubkey, nonce]`
+    // By convention, this is a uuid.
     pub nonce: u128,
 }
 

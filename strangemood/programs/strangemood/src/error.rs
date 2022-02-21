@@ -3,12 +3,12 @@ use anchor_lang::prelude::*;
 #[error_code]
 pub enum StrangemoodError {
     // custom program error: 0x1770
-    #[msg("MintNotSupported")]
-    MintNotSupported,
+    #[msg("MintIsNotSupported")]
+    MintIsNotSupported,
 
     // custom program error: 0x1771
     #[msg("Unauthorized Charter")]
-    UnauthorizedCharter,
+    CharterIsUnauthorized,
 
     // custom program error: 0x1772
     #[msg("Deposit not found in listing")]
@@ -16,7 +16,7 @@ pub enum StrangemoodError {
 
     // custom program error: 0x1773
     #[msg("Unexpected Listing Token Account")]
-    UnexpectedListingTokenAccount,
+    ListingTokenAccountIsUnexpected,
 
     // custom program error: 0x1774
     // You attempted to pass in a deposit that is not the one
@@ -34,7 +34,7 @@ pub enum StrangemoodError {
     // You attempted to pass in an authority that is not the
     // authority of a listing or charter
     #[msg("Provided Authority Account Does Not Have Access")]
-    UnauthorizedAuthority,
+    AuthorityIsUnauthorized,
 
     // custom program error: 0x1777
     #[msg("Listing Is Not Refundable")]
@@ -48,11 +48,11 @@ pub enum StrangemoodError {
 
     // custom program error: 0x1779
     #[msg("Listing is Unavailable")]
-    ListingUnavailable,
+    ListingIsUnavailable,
 
     // custom program error: 0x177a
-    #[msg("Mint did not match Listing")]
-    UnexpectedListingMint,
+    #[msg("Listing Mint Does Not Match Listing")]
+    ListingMintDoesNotMatchListing,
 
     // custom program error: 0x177b
     #[msg("Listing is not consumable")]
@@ -66,5 +66,5 @@ pub enum StrangemoodError {
     // custom program error: 0x177d
     // The cashier's split must be 1.0 to 0.0.
     #[msg("Invalid Cashier Split")]
-    InvalidCashierSplit,
+    CashierSplitIsInvalid,
 }

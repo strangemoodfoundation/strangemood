@@ -157,7 +157,7 @@ fn transfer_funds_with_cashier<'info>(
 pub mod strangemood {
     use anchor_lang::{prelude::Context, solana_program::{program_option::COption}};
 
-    use crate::{error::StrangemoodError, cpi::{token_transfer, mint_to_and_freeze, token_transfer_with_seed, close_token_escrow_account, close_native_account, burn, mint_to}};
+    use crate::{error::StrangemoodError, cpi::{token_transfer, mint_to_and_freeze, token_transfer_with_seed, burn}};
 
     use super::*;
 
@@ -178,17 +178,17 @@ pub mod strangemood {
         // Check that the payment deposit is wrapped sol
         let payment_deposit = ctx.accounts.payment_deposit.clone().into_inner();
         if payment_deposit.mint != ctx.accounts.charter_treasury.clone().into_inner().mint {
-            return Err(error!(StrangemoodError::MintNotSupported));
+            return Err(error!(StrangemoodError::MintIsNotSupported));
         }
 
         // Check that the vote_deposit is the charter's mint
         let vote_deposit = ctx.accounts.vote_deposit.clone().into_inner();
         if vote_deposit.mint != charter.mint {
-            return Err(error!(StrangemoodError::MintNotSupported));
+            return Err(error!(StrangemoodError::MintIsNotSupported));
         }
 
         if cashier_split < 0.0 || cashier_split > 1.0 {
-            return Err(error!(StrangemoodError::InvalidCashierSplit));
+            return Err(error!(StrangemoodError::CashierSplitIsInvalid));
         }
 
         let listing = &mut ctx.accounts.listing;
@@ -217,7 +217,7 @@ pub mod strangemood {
         let charter = ctx.accounts.charter.clone().into_inner();
 
         if !listing.is_available {
-            return Err(StrangemoodError::ListingUnavailable.into());
+            return Err(StrangemoodError::ListingIsUnavailable.into());
         }
 
         // Distribute payment
@@ -268,7 +268,7 @@ ctx.accounts.token_program.to_account_info(),
         let charter = ctx.accounts.charter.clone().into_inner();
 
         if !listing.is_available {
-            return Err(StrangemoodError::ListingUnavailable.into());
+            return Err(StrangemoodError::ListingIsUnavailable.into());
         }
 
         // Distribute payment
@@ -311,7 +311,6 @@ ctx.accounts.token_program.to_account_info(),
         Ok(())
     }
 
-    // TODO: not working
     pub fn start_trial_with_cashier(
         ctx: Context<StartTrailWithCashier>,
         receipt_nonce: u128,
@@ -322,12 +321,13 @@ ctx.accounts.token_program.to_account_info(),
         let listing = ctx.accounts.listing.clone().into_inner();
 
         if !listing.is_available {
-            return Err(error!(StrangemoodError::ListingUnavailable));
+            return Err(error!(StrangemoodError::ListingIsUnavailable));
         }
-        if listing.mint != ctx.accounts.listing_mint.key() {
-            return Err(error!(StrangemoodError::UnexpectedListingMint));
+        if !listing.is_refundable {
+            return Err(error!(StrangemoodError::ListingIsNotRefundable));
         }
 
+        // Move funds into an escrow, rather than the lister's deposit.
         token_transfer(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.purchase_token_account.to_account_info(),
@@ -336,18 +336,15 @@ ctx.accounts.token_program.to_account_info(),
             amount * listing.price,
         )?;
 
-        // if the listing is refundable, then mint the user the
-        // token immediately (it can be burned later).
-        if listing.is_refundable {
-            mint_to_and_freeze(
-                ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.listing_mint.to_account_info(),
-                ctx.accounts.listing_token_account.to_account_info(),
-                ctx.accounts.listing_mint_authority.to_account_info(),
-                listing_mint_bump,
-                amount,
-            )?;
-        }
+        // Mint the token, which can be burned later upon refund.
+        mint_to_and_freeze(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts.listing_token_account.to_account_info(),
+            ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_bump,
+            amount,
+        )?;
 
         let receipt = &mut ctx.accounts.receipt;
         receipt.is_initialized = true;
@@ -554,7 +551,7 @@ ctx.accounts.token_program.to_account_info(),
         let listing = ctx.accounts.listing.clone().into_inner();
 
         if ctx.accounts.authority.key() != listing.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         if !listing.is_consumable {
@@ -606,7 +603,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn set_listing_price(ctx: Context<SetListing>, price: u64) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         ctx.accounts.listing.price = price;
@@ -615,7 +612,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn set_listing_uri(ctx: Context<SetListing>, uri: String) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         ctx.accounts.listing.uri = uri;
@@ -627,7 +624,7 @@ ctx.accounts.token_program.to_account_info(),
         is_available: bool,
     ) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         ctx.accounts.listing.is_available = is_available;
@@ -636,7 +633,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn set_listing_deposits(ctx: Context<SetListingDeposit>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         ctx.accounts.listing.vote_deposit = ctx.accounts.vote_deposit.key();
@@ -646,7 +643,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn set_listing_authority(ctx: Context<SetListingAuthority>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         ctx.accounts.listing.authority = ctx.accounts.authority.key();
@@ -656,7 +653,7 @@ ctx.accounts.token_program.to_account_info(),
     // Migrate a listing to a different charter
     pub fn set_listing_charter(ctx: Context<SetListingCharter>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         ctx.accounts.listing.charter = ctx.accounts.charter.key();
@@ -668,7 +665,7 @@ ctx.accounts.token_program.to_account_info(),
         expansion_rate: f64,
     ) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         ctx.accounts.charter.expansion_rate = expansion_rate;
@@ -681,7 +678,7 @@ ctx.accounts.token_program.to_account_info(),
         vote_contribution: f64,
     ) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         ctx.accounts.charter.payment_contribution = payment_contribution;
@@ -693,7 +690,7 @@ ctx.accounts.token_program.to_account_info(),
     // Migrates the charter to a different authority, like a new governance program
     pub fn set_charter_authority(ctx: Context<SetCharterAuthority>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         } 
 
         ctx.accounts.charter.authority = ctx.accounts.authority.key();
@@ -702,7 +699,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn set_charter_vote_deposit(ctx: Context<SetCharterVoteDeposit>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority {
-            return Err(StrangemoodError::UnauthorizedAuthority.into());
+            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
         ctx.accounts.charter.vote_deposit = ctx.accounts.vote_deposit.key();
