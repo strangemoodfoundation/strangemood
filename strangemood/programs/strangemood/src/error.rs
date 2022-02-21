@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-#[error]
+#[error_code]
 pub enum StrangemoodError {
     // custom program error: 0x1770
     #[msg("MintNotSupported")]

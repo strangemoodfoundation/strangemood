@@ -7,7 +7,7 @@
   "license": "MIT",
   "types": "dist/cjs/src/index.d.ts",
   "dependencies": {
-    "@project-serum/anchor": "0.21.0",
+    "@project-serum/anchor": "0.22.0",
     "@solana/buffer-layout": "^4.0.0",
     "@solana/spl-token": "0.2.0-alpha.2",
     "borsh": "^0.7.0",

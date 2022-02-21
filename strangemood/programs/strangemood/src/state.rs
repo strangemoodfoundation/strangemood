@@ -1,7 +1,5 @@
 use anchor_lang::{account, prelude::*};
 
-use crate::util::amount_as_float;
-
 #[account]
 pub struct Receipt {
     /// Set to "true" by the program when BeginPurchase is run
@@ -85,8 +83,7 @@ pub struct Listing {
     pub is_consumable: bool,
 
     // A % of the sale that gets split between cashier and the lister
-    pub cashier_split_amount: u64,
-    pub cashier_split_decimals: u8,
+    pub cashier_split: f64,
 
     // The URI for where metadata can be found for this listing.
     // Example: "ipns://examplehere", "https://example.com/metadata.json"
@@ -103,17 +100,14 @@ pub struct Charter {
     // Note that Borsh doesn't support floats, and so we carry over the pattern
     // used in the token program of having an "amount" and a "decimals".
     // So an "amount" of 100 and a "decimals" of 3 would be 0.1
-    pub expansion_rate_amount: u64,
-    pub expansion_rate_decimals: u8,
+    pub expansion_rate: f64,
 
     // The % of each purchase that goes to the community account.
-    pub payment_contribution_rate_amount: u64,
-    pub payment_contribution_rate_decimals: u8,
+    pub payment_contribution: f64,
 
     // The % of each vote token minting goes back to the governance to fund
     // new ecosystem projects
-    pub vote_contribution_rate_amount: u64,
-    pub vote_contribution_rate_decimals: u8,
+    pub vote_contribution: f64,
 
     // The pubkey of the keypair that can modify this charter.
     // If this points to a system account, then this is basically
@@ -158,10 +152,7 @@ pub struct CharterTreasury {
 
     // Increases or decreases the amount of voting tokens.
     // distributed based on this deposit type.
-    // amount=1 and decimals=0 is 1.0
-    // amount=15 and decimals=1 is 1.5
-    pub scalar_amount: u64,
-    pub scalar_decimals: u8,
+    pub scalar: f64,
 }
 
 // A staked client that can receive a bounty if they initiate a sale.
@@ -210,23 +201,4 @@ pub struct CashierTreasury {
 
     // The last epoch the cashier has withdrawn from their deposit.
     pub last_withdraw_epoch: u64,
-}
-
-impl Charter {
-    pub fn expansion_rate(&self, scalar_amount: u64, scalar_decimals: u8) -> f64 {
-        amount_as_float(self.expansion_rate_amount, self.expansion_rate_decimals)
-            * amount_as_float(scalar_amount, scalar_decimals)
-    }
-    pub fn payment_contribution_rate(&self) -> f64 {
-        amount_as_float(
-            self.payment_contribution_rate_amount,
-            self.payment_contribution_rate_decimals,
-        )
-    }
-    pub fn vote_contribution_rate(&self) -> f64 {
-        amount_as_float(
-            self.vote_contribution_rate_amount,
-            self.vote_contribution_rate_decimals,
-        )
-    }
 }

@@ -1,6 +1,5 @@
-use crate::state::{Cashier, CashierTreasury, Charter, CharterTreasury, Listing, Receipt};
 use anchor_lang::solana_program::system_instruction;
-use anchor_lang::{account, declare_id, prelude::*, solana_program, Accounts, System};
+use anchor_lang::{prelude::*, solana_program};
 
 pub fn mint_to_and_freeze<'a>(
     token_program: AccountInfo<'a>,
@@ -9,7 +8,7 @@ pub fn mint_to_and_freeze<'a>(
     authority: AccountInfo<'a>,
     bump: u8,
     amount: u64,
-) -> ProgramResult {
+) -> Result<()> {
     mint_to(
         token_program.clone(),
         mint.clone(),
@@ -28,7 +27,7 @@ pub fn mint_to<'a>(
     authority: AccountInfo<'a>,
     bump: u8,
     amount: u64,
-) -> ProgramResult {
+) -> Result<()> {
     let cpi_program = token_program;
     let cloned_mint = mint.key.clone();
     let cpi_accounts = anchor_spl::token::MintTo {
@@ -48,7 +47,7 @@ pub fn freeze_account<'a>(
     account: AccountInfo<'a>,
     authority: AccountInfo<'a>,
     bump: u8,
-) -> ProgramResult {
+) -> Result<()> {
     let cpi_program = token_program;
     let cloned_mint = mint.key.clone();
     let cpi_accounts = anchor_spl::token::FreezeAccount {
@@ -71,7 +70,7 @@ pub fn token_transfer_with_seed<'a>(
     amount: u64,
     seed_label: &[u8],
     bump: u8,
-) -> ProgramResult {
+) -> Result<()> {
     let cpi_program = token_program;
     let key = from.key.clone();
     let cpi_accounts = anchor_spl::token::Transfer {
@@ -91,7 +90,7 @@ pub fn token_transfer<'a>(
     to: AccountInfo<'a>,
     authority: AccountInfo<'a>,
     amount: u64,
-) -> ProgramResult {
+) -> Result<()> {
     let cpi_program = token_program;
     let cpi_accounts = anchor_spl::token::Transfer {
         from,
@@ -109,7 +108,7 @@ pub fn burn<'a>(
     authority: AccountInfo<'a>,
     bump: u8,
     amount: u64,
-) -> ProgramResult {
+) -> Result<()> {
     let cpi_program = token_program;
     let cloned_mint = mint.key.clone();
     let cpi_accounts = anchor_spl::token::Burn {
@@ -123,10 +122,10 @@ pub fn burn<'a>(
     anchor_spl::token::burn(cpi_ctx, amount)
 }
 
-pub fn sync_native<'a>(token_program: &AccountInfo<'a>, account: AccountInfo<'a>) -> ProgramResult {
+pub fn sync_native<'a>(token_program: &AccountInfo<'a>, account: AccountInfo<'a>) -> Result<()> {
     let ix = spl_token::instruction::sync_native(&token_program.key(), &account.key())?;
 
-    solana_program::program::invoke(&ix, &[account.clone()])
+    solana_program::program::invoke(&ix, &[account.clone()]).map_err(Into::into)
 }
 
 pub fn system_transfer<'a>(
@@ -134,10 +133,11 @@ pub fn system_transfer<'a>(
     from: &AccountInfo<'a>,
     to: &AccountInfo<'a>,
     lamports: u64,
-) -> ProgramResult {
+) -> Result<()> {
     let ix = system_instruction::transfer(&from.key(), &to.key(), lamports);
 
     solana_program::program::invoke(&ix, &[from.clone(), to.clone(), system_program.clone()])
+        .map_err(Into::into)
 }
 
 pub fn erase_data<'a>(account: &AccountInfo<'a>) {
@@ -175,7 +175,7 @@ pub fn close_token_escrow_account<'a>(
     to: AccountInfo<'a>,
     authority: AccountInfo<'a>,
     bump: u8,
-) -> ProgramResult {
+) -> Result<()> {
     let cpi_program = token_program;
     let key = from.key.clone();
     let cpi_accounts = anchor_spl::token::CloseAccount {

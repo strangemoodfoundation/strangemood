@@ -8,7 +8,6 @@ use std::cmp;
 pub mod state;
 pub mod error;
 pub mod cpi;
-pub mod util;
 
 declare_id!("sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW");
 
@@ -23,7 +22,7 @@ fn distribute_governance_tokens<'a>(
     charter_mint_bump: u8,
     listing_deposit: AccountInfo<'a>,
     charter_deposit: AccountInfo<'a>,
-) -> ProgramResult {
+) -> Result<()> {
     let votes = contributed as f64 * scalar;
     let deposit_rate = 1.0 - contribution_rate;
     let deposit_amount = (deposit_rate * votes as f64) as u64;
@@ -55,9 +54,9 @@ fn distribute_governance_tokens<'a>(
 
 #[program]
 pub mod strangemood {
-    use anchor_lang::{prelude::Context, solana_program::program_option::COption};
+    use anchor_lang::{prelude::Context, solana_program::{program_option::COption}};
 
-    use crate::{util::amount_as_float, error::StrangemoodError, cpi::{token_transfer, mint_to_and_freeze, token_transfer_with_seed, close_token_escrow_account, close_native_account, burn, mint_to}};
+    use crate::{error::StrangemoodError, cpi::{token_transfer, mint_to_and_freeze, token_transfer_with_seed, close_token_escrow_account, close_native_account, burn, mint_to}};
 
     use super::*;
 
@@ -69,28 +68,26 @@ pub mod strangemood {
         refundable: bool,
         consumable: bool,
         available: bool,
-        cashier_split_amount: u64,
-        cashier_split_decimals: u8,
+        cashier_split: f64,
         uri: String,
-    ) -> ProgramResult {
+    ) -> Result<()> {
 
         let charter = ctx.accounts.charter.clone().into_inner();
 
         // Check that the payment deposit is wrapped sol
         let payment_deposit = ctx.accounts.payment_deposit.clone().into_inner();
         if payment_deposit.mint != ctx.accounts.charter_treasury.clone().into_inner().mint {
-            return Err(StrangemoodError::MintNotSupported.into());
+            return Err(error!(StrangemoodError::MintNotSupported));
         }
 
         // Check that the vote_deposit is the charter's mint
         let vote_deposit = ctx.accounts.vote_deposit.clone().into_inner();
         if vote_deposit.mint != charter.mint {
-            return Err(StrangemoodError::MintNotSupported.into())
+            return Err(error!(StrangemoodError::MintNotSupported));
         }
 
-        let split = amount_as_float(cashier_split_amount, cashier_split_decimals);
-        if split < 0.0 || split > 1.0 {
-            return Err(StrangemoodError::InvalidCashierSplit.into())
+        if cashier_split < 0.0 || cashier_split > 1.0 {
+            return Err(error!(StrangemoodError::InvalidCashierSplit));
         }
 
         let listing = &mut ctx.accounts.listing;
@@ -105,8 +102,7 @@ pub mod strangemood {
         listing.is_refundable = refundable;
         listing.is_consumable = consumable;
         listing.is_available = available;
-        listing.cashier_split_amount = cashier_split_amount;
-        listing.cashier_split_decimals = cashier_split_decimals;
+        listing.cashier_split = cashier_split;
 
         Ok(())
     }
@@ -116,7 +112,7 @@ pub mod strangemood {
     //     charter_mint_bump: u8,
     //     escrow_authority_bump: u8,
     //     amount: u64
-    // ) -> ProgramResult {
+    // ) -> Result<()> {
     //     let listing = ctx.accounts.listing.clone().into_inner();
     //     let charter = ctx.accounts.charter.clone().into_inner();
 
@@ -158,14 +154,14 @@ pub mod strangemood {
         listing_mint_bump: u8,
         _escrow_authority_bump: u8,
         amount: u64,
-    ) -> ProgramResult {
+    ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
 
         if !listing.is_available {
-            return Err(StrangemoodError::ListingUnavailable.into());
+            return Err(error!(StrangemoodError::ListingUnavailable));
         }
         if listing.mint != ctx.accounts.listing_mint.key() {
-            return Err(StrangemoodError::UnexpectedListingMint.into());
+            return Err(error!(StrangemoodError::UnexpectedListingMint));
         }
 
         token_transfer(
@@ -209,7 +205,7 @@ pub mod strangemood {
         listing_mint_bump: u8,
         charter_mint_bump: u8,
         escrow_authority_bump: u8
-    ) -> ProgramResult {
+    ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
         let charter = ctx.accounts.charter.clone().into_inner();
         let receipt = ctx.accounts.receipt.clone().into_inner();
@@ -262,13 +258,13 @@ pub mod strangemood {
         // First split the funds into the a "contribution" pool, which goes to 
         // the charter governance, and a "deposit" pool.
         let lamports: u64 = receipt.price;
-        let deposit_rate = 1.0 - charter.payment_contribution_rate();
+        let deposit_rate = 1.0 - charter.payment_contribution;
         let deposit_amount = (deposit_rate * lamports as f64) as u64;
         let to_charter_amount = lamports - deposit_amount;
 
         // Then split the deposit pool between the lister, and the cashier.
         // (charter, (lister, cashier))
-        let to_cashier_rate = amount_as_float(listing.cashier_split_amount, listing.cashier_split_decimals);
+        let to_cashier_rate = listing.cashier_split;
         let to_lister_rate = 1.0 - to_cashier_rate;
         let to_lister_amount = (deposit_amount as f64 * to_lister_rate) as u64;
         let to_cashier_amount = deposit_amount - to_lister_amount;
@@ -307,35 +303,11 @@ pub mod strangemood {
         )?;
 
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
-        let votes = to_charter_amount as f64 * charter.expansion_rate(treasury.scalar_amount, treasury.scalar_decimals);
-        let deposit_rate = 1.0 - charter.vote_contribution_rate();
-        let deposit_amount = (deposit_rate * votes as f64) as u64;
-        let contribution_amount = (votes as u64) - deposit_amount;
-
-        // Mint votes to lister
-        mint_to(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.charter_mint.to_account_info(),
-            ctx.accounts.listings_vote_deposit.to_account_info(),
-            ctx.accounts.charter_mint_authority.to_account_info(),
-            charter_mint_bump,
-            deposit_amount,
-        )?;
-
-        // Mint votes to charter
-        mint_to(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.charter_mint.to_account_info(),
-            ctx.accounts.charter_vote_deposit.to_account_info(),
-            ctx.accounts.charter_mint_authority.to_account_info(),
-            charter_mint_bump,
-            contribution_amount,
-        )?;
 
         distribute_governance_tokens(
             to_charter_amount,
-             charter.expansion_rate(treasury.scalar_amount, treasury.scalar_decimals),
-             charter.vote_contribution_rate(),
+            charter.expansion_rate * treasury.scalar,
+            charter.vote_contribution,
              ctx.accounts.token_program.to_account_info(),
              ctx.accounts.charter_mint.to_account_info(),
              ctx.accounts.charter_mint_authority.to_account_info(),
@@ -366,7 +338,7 @@ pub mod strangemood {
         ctx: Context<Cancel>,
         listing_mint_bump: u8,
         escrow_authority_bump:u8,
-    ) -> ProgramResult {
+    ) -> Result<()> {
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
         // If the receipt is refundable, then we've already issued tokens
@@ -415,7 +387,7 @@ pub mod strangemood {
         ctx: Context<Consume>,
         listing_mint_bump: u8,
         amount: u64,
-    ) -> ProgramResult {
+    ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
 
         if ctx.accounts.authority.key() != listing.authority {
@@ -440,14 +412,11 @@ pub mod strangemood {
 
     pub fn init_charter(
         ctx: Context<InitCharter>,
-        expansion_rate_amount: u64,
-        expansion_rate_decimals: u8,
-        payment_contribution_rate_amount: u64,
-        payment_contribution_rate_decimals: u8,
-        vote_contribution_rate_amount: u64,
-        vote_contribution_rate_decimals: u8,
+        expansion_rate: f64,
+        payment_contribution: f64,
+        vote_contribution: f64,
         uri: String,
-    ) -> ProgramResult {
+    ) -> Result<()> {
         // Only the mint authority can make a charter.
         let mint = ctx.accounts.mint.clone().into_inner();
         if let COption::Some(authority) = mint.mint_authority {
@@ -462,12 +431,9 @@ pub mod strangemood {
         
         let charter = &mut ctx.accounts.charter;
         charter.authority = ctx.accounts.authority.key();
-        charter.expansion_rate_amount = expansion_rate_amount;
-        charter.expansion_rate_decimals = expansion_rate_decimals;
-        charter.payment_contribution_rate_amount = payment_contribution_rate_amount;
-        charter.payment_contribution_rate_decimals = payment_contribution_rate_decimals;
-        charter.vote_contribution_rate_amount = vote_contribution_rate_amount;
-        charter.vote_contribution_rate_decimals = vote_contribution_rate_decimals;
+        charter.expansion_rate = expansion_rate;
+        charter.payment_contribution = payment_contribution;
+        charter.vote_contribution = vote_contribution;
         charter.vote_deposit = ctx.accounts.vote_deposit.key();
         charter.mint = ctx.accounts.mint.key();
         charter.uri = uri;
@@ -475,7 +441,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_price(ctx: Context<SetListing>, price: u64) -> ProgramResult {
+    pub fn set_listing_price(ctx: Context<SetListing>, price: u64) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -484,7 +450,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_uri(ctx: Context<SetListing>, uri: String) -> ProgramResult {
+    pub fn set_listing_uri(ctx: Context<SetListing>, uri: String) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -496,7 +462,7 @@ pub mod strangemood {
     pub fn set_listing_availability(
         ctx: Context<SetListing>,
         is_available: bool,
-    ) -> ProgramResult {
+    ) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -505,7 +471,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_deposits(ctx: Context<SetListingDeposit>) -> ProgramResult {
+    pub fn set_listing_deposits(ctx: Context<SetListingDeposit>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -515,7 +481,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_listing_authority(ctx: Context<SetListingAuthority>) -> ProgramResult {
+    pub fn set_listing_authority(ctx: Context<SetListingAuthority>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -525,7 +491,7 @@ pub mod strangemood {
     }
 
     // Migrate a listing to a different charter
-    pub fn set_listing_charter(ctx: Context<SetListingCharter>) -> ProgramResult {
+    pub fn set_listing_charter(ctx: Context<SetListingCharter>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.listing.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -536,40 +502,33 @@ pub mod strangemood {
 
     pub fn set_charter_expansion_rate(
         ctx: Context<SetCharter>,
-        expansion_rate_amount: u64,
-        expansion_rate_decimals: u8,
-    ) -> ProgramResult {
+        expansion_rate: f64,
+    ) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
-        ctx.accounts.charter.expansion_rate_amount = expansion_rate_amount;
-        ctx.accounts.charter.expansion_rate_decimals = expansion_rate_decimals;
+        ctx.accounts.charter.expansion_rate = expansion_rate;
         Ok(())
     }
 
     pub fn set_charter_contribution_rate(
         ctx: Context<SetCharter>,
-        sol_contribution_rate_amount: u64,
-        sol_contribution_rate_decimals: u8,
-        vote_contribution_rate_amount: u64,
-        vote_contribution_rate_decimals: u8,
-    ) -> ProgramResult {
+        payment_contribution: f64,
+        vote_contribution: f64,
+    ) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
 
-        ctx.accounts.charter.payment_contribution_rate_amount = sol_contribution_rate_amount;
-        ctx.accounts.charter.payment_contribution_rate_decimals = sol_contribution_rate_decimals;
-
-        ctx.accounts.charter.vote_contribution_rate_amount = vote_contribution_rate_amount;
-        ctx.accounts.charter.vote_contribution_rate_decimals = vote_contribution_rate_decimals;
+        ctx.accounts.charter.payment_contribution = payment_contribution;
+        ctx.accounts.charter.vote_contribution = vote_contribution;
 
         Ok(())
     }
 
     // Migrates the charter to a different authority, like a new governance program
-    pub fn set_charter_authority(ctx: Context<SetCharterAuthority>) -> ProgramResult {
+    pub fn set_charter_authority(ctx: Context<SetCharterAuthority>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         } 
@@ -578,7 +537,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn set_charter_vote_deposit(ctx: Context<SetCharterVoteDeposit>) -> ProgramResult {
+    pub fn set_charter_vote_deposit(ctx: Context<SetCharterVoteDeposit>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority {
             return Err(StrangemoodError::UnauthorizedAuthority.into());
         }
@@ -587,35 +546,33 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn init_charter_treasury(ctx: Context<InitCharterTreasury>, _treasury_bump: u8, expansion_scalar_amount: u64, expansion_scalar_decimals: u8) -> ProgramResult {
+    pub fn init_charter_treasury(ctx: Context<InitCharterTreasury>, _treasury_bump: u8, scalar: f64) -> Result<()> {
         
         let treasury = &mut ctx.accounts.treasury;
         treasury.charter = ctx.accounts.charter.key();
         treasury.deposit = ctx.accounts.deposit.key(); 
         treasury.mint = ctx.accounts.mint.key();
-        treasury.scalar_amount = expansion_scalar_amount; 
-        treasury.scalar_decimals = expansion_scalar_decimals; 
+        treasury.scalar = scalar; 
 
         Ok(())
     }
 
-    pub fn set_charter_treasury_expansion_scalar(ctx: Context<SetCharterTreasuryExpansionScalar>, expansion_scalar_amount: u64, expansion_scalar_decimals: u8) -> ProgramResult {
+    pub fn set_charter_treasury_scalar(ctx: Context<SetCharterTreasuryExpansionScalar>, scalar: f64) -> Result<()> {
         
         let treasury = &mut ctx.accounts.treasury;
-        treasury.scalar_amount = expansion_scalar_amount; 
-        treasury.scalar_decimals = expansion_scalar_decimals; 
+        treasury.scalar = scalar; 
 
         Ok(())
     }
 
-    pub fn set_charter_treasury_deposit(ctx: Context<SetCharterTreasuryDeposit>) -> ProgramResult {
+    pub fn set_charter_treasury_deposit(ctx: Context<SetCharterTreasuryDeposit>) -> Result<()> {
         let treasury = &mut ctx.accounts.treasury;
         treasury.deposit = ctx.accounts.deposit.key(); 
 
         Ok(())
     }
 
-    pub fn init_cashier(ctx: Context<InitCashier>, _stake_bump: u8, uri: String) -> ProgramResult {
+    pub fn init_cashier(ctx: Context<InitCashier>, _stake_bump: u8, uri: String) -> Result<()> {
         let cashier = &mut ctx.accounts.cashier;
         cashier.is_initialized = true;
         cashier.charter = ctx.accounts.charter.key();
@@ -627,7 +584,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn init_cashier_treasury(ctx: Context<InitCashierTreasury>) -> ProgramResult {
+    pub fn init_cashier_treasury(ctx: Context<InitCashierTreasury>) -> Result<()> {
         let treasury = &mut ctx.accounts.treasury; 
         
         treasury.is_initialized = true; 
@@ -639,7 +596,7 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn burn_cashier_stake(ctx: Context<BurnCashierStake>,  mint_authority_bump: u8, amount: u64) -> ProgramResult {   
+    pub fn burn_cashier_stake(ctx: Context<BurnCashierStake>,  mint_authority_bump: u8, amount: u64) -> Result<()> {   
         burn(
             ctx.accounts.token_program.to_account_info(), 
             ctx.accounts.mint.to_account_info(),
@@ -652,7 +609,7 @@ pub mod strangemood {
     }
 
     // A decentralized crank that moves money from the the cashier's escrow to their deposit.
-    pub fn withdraw_cashier_treasury(ctx: Context<WithdrawCashierTreasury>, _mint_authority_bump: u8, cashier_escrow_bump: u8) -> ProgramResult {
+    pub fn withdraw_cashier_treasury(ctx: Context<WithdrawCashierTreasury>, _mint_authority_bump: u8, cashier_escrow_bump: u8) -> Result<()> {
         let charter = ctx.accounts.charter.clone().into_inner();
         let charter_treasury = ctx.accounts.charter_treasury.clone().into_inner();
         let stake = ctx.accounts.stake.clone().into_inner();
@@ -660,7 +617,7 @@ pub mod strangemood {
         let cashier_treasury = &mut ctx.accounts.cashier_treasury;
 
         // Calculate the amount to transfer
-        let amount_per_period = stake.amount as f64 * amount_as_float(charter_treasury.scalar_amount, charter_treasury.scalar_decimals);
+        let amount_per_period = stake.amount as f64 * charter_treasury.scalar;
         let amount_per_epoch = amount_per_period as f64 / charter.withdraw_period as f64;
         let epochs_passed = clock.epoch - cashier_treasury.last_withdraw_epoch;
         let amount_to_transfer = amount_per_epoch * epochs_passed as f64;
@@ -683,7 +640,7 @@ pub mod strangemood {
     }
 
     // A decentralized crank that moves money from the the cashier's escrow to their deposit.
-    pub fn withdraw_cashier_stake(ctx: Context<WithdrawCashierStake>, cashier_escrow_bump: u8) -> ProgramResult {
+    pub fn withdraw_cashier_stake(ctx: Context<WithdrawCashierStake>, cashier_escrow_bump: u8) -> Result<()> {
         let charter = ctx.accounts.charter.clone().into_inner();
         let clock = ctx.accounts.clock.clone();
         let cashier = &mut ctx.accounts.cashier;
@@ -1302,6 +1259,7 @@ pub struct InitCashier<'info> {
     pub clock: Sysvar<'info, Clock>,
     pub rent: Sysvar<'info, Rent>,
     
+    #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>
@@ -1346,6 +1304,7 @@ pub struct InitCashierTreasury<'info> {
 
     pub mint: Account<'info, Mint>,
 
+    #[account(mut)]
     pub authority: Signer<'info>,
 
     pub rent: Sysvar<'info, Rent>,
