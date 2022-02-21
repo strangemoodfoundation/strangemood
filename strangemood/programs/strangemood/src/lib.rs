@@ -311,8 +311,57 @@ ctx.accounts.token_program.to_account_info(),
         Ok(())
     }
 
+    pub fn start_trial(
+        ctx: Context<StartTrial>,
+        receipt_nonce: u128,
+        listing_mint_bump: u8,
+        _escrow_authority_bump: u8,
+        amount: u64,
+    ) -> Result<()> {
+        let listing = ctx.accounts.listing.clone().into_inner();
+
+        if !listing.is_available {
+            return Err(error!(StrangemoodError::ListingIsUnavailable));
+        }
+        if !listing.is_refundable {
+            return Err(error!(StrangemoodError::ListingIsNotRefundable));
+        }
+
+        // Move funds into an escrow, rather than the lister's deposit.
+        token_transfer(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.purchase_token_account.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.user.to_account_info(),
+            amount * listing.price,
+        )?;
+
+        // Mint the token, which can be burned later upon refund.
+        mint_to_and_freeze(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts.listing_token_account.to_account_info(),
+            ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_bump,
+            amount,
+        )?;
+
+        let receipt = &mut ctx.accounts.receipt;
+        receipt.is_initialized = true;
+        receipt.listing = ctx.accounts.listing.key();
+        receipt.purchaser = ctx.accounts.user.key();
+        receipt.quantity = amount;
+        receipt.listing_token_account = ctx.accounts.listing_token_account.key();
+        receipt.cashier = None;
+        receipt.nonce = receipt_nonce;
+        receipt.price = listing.price;
+        receipt.escrow = ctx.accounts.escrow.key();
+
+        Ok(())
+    }
+
     pub fn start_trial_with_cashier(
-        ctx: Context<StartTrailWithCashier>,
+        ctx: Context<StartTrialWithCashier>,
         receipt_nonce: u128,
         listing_mint_bump: u8,
         _escrow_authority_bump: u8,
@@ -829,9 +878,88 @@ ctx.accounts.token_program.to_account_info(),
     }
 }
 
+
 #[derive(Accounts)]
 #[instruction(receipt_nonce: u128, listing_mint_bump: u8, escrow_authority_bump:u8)]
-pub struct StartTrailWithCashier<'info> {
+pub struct StartTrial<'info> {
+
+    // The user's token account where funds will be transfered from
+    #[account(mut)]
+    pub purchase_token_account: Box<Account<'info, TokenAccount>>,
+
+    // The listing to purchase
+    #[account(
+        constraint=listing_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
+        constraint=listing_mint.key()==listing.clone().into_inner().mint,
+    )]
+    pub listing: Box<Account<'info, Listing>>,
+
+    #[account(
+        constraint=listing_payment_deposit.mint==listing_payment_deposit_mint.key()
+    )]
+    pub listing_payment_deposit: Box<Account<'info, TokenAccount>>,
+
+    // The type of funds that this 
+    pub listing_payment_deposit_mint: Account<'info, Mint>,
+
+    // A token account of the listing.mint where listing tokens
+    // will be deposited at
+    #[account(mut)]
+    pub listing_token_account: Account<'info, TokenAccount>,
+
+    // The mint associated with the listing
+    #[account(mut)]
+    pub listing_mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        seeds = [b"mint", listing_mint.key().as_ref()],
+        bump = listing_mint_bump,
+    )]
+    pub listing_mint_authority: AccountInfo<'info>,
+
+    // A receipt that lets you refund something later.
+    //
+    // 8 for the tag
+    // 1 for is_initialized bool
+    // 32 for listing pubkey
+    // 32 for listing_token_account pubkey
+    // 32 for purchaser pubkey
+    // 32 for cashier pubkey
+    // 32 for escrow pubkey
+    // 8 for quantity u64
+    // 8 for price u64
+    // 16 for the unique nonce
+    #[account(init,
+        seeds = [b"receipt" as &[u8], &receipt_nonce.to_le_bytes()],
+        bump,
+        payer = user,
+        space = 8 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
+    pub receipt: Box<Account<'info, Receipt>>,
+
+    #[account(
+        init,
+        payer=user,
+        token::mint = listing_payment_deposit_mint,
+        token::authority = escrow_authority,
+    )]
+    pub escrow: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds=[b"escrow", escrow.key().as_ref()],
+        bump=escrow_authority_bump,
+    )]
+    pub escrow_authority: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+#[instruction(receipt_nonce: u128, listing_mint_bump: u8, escrow_authority_bump:u8)]
+pub struct StartTrialWithCashier<'info> {
 
     // The user's token account where funds will be transfered from
     #[account(mut)]
@@ -853,7 +981,7 @@ pub struct StartTrailWithCashier<'info> {
     pub listing_payment_deposit_mint: Account<'info, Mint>,
 
     // The person who's allowed to cash out the listing
-    pub cashier: AccountInfo<'info>,
+    pub cashier: Account<'info, Cashier>,
 
     // A token account of the listing.mint where listing tokens
     // will be deposited at
