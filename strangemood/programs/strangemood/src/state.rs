@@ -1,4 +1,4 @@
-use anchor_lang::{account, declare_id, prelude::*, solana_program, Accounts, System};
+use anchor_lang::{account, prelude::*};
 
 use crate::util::amount_as_float;
 

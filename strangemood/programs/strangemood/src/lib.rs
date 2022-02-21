@@ -1,6 +1,7 @@
 use anchor_lang::{declare_id, prelude::*, System, account, Accounts};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
+use cpi::mint_to;
 use state::{CashierTreasury, Charter, Cashier, CharterTreasury, Listing, Receipt};
 use std::cmp;
 
@@ -10,6 +11,46 @@ pub mod cpi;
 pub mod util;
 
 declare_id!("sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW");
+
+
+fn distribute_governance_tokens<'a>(
+    contributed: u64, 
+    scalar: f64, 
+    contribution_rate: f64, 
+    token_program: AccountInfo<'a>, 
+    charter_mint: AccountInfo<'a>,
+    charter_mint_authority: AccountInfo<'a>,
+    charter_mint_bump: u8,
+    listing_deposit: AccountInfo<'a>,
+    charter_deposit: AccountInfo<'a>,
+) -> ProgramResult {
+    let votes = contributed as f64 * scalar;
+    let deposit_rate = 1.0 - contribution_rate;
+    let deposit_amount = (deposit_rate * votes as f64) as u64;
+    let contribution_amount = (votes as u64) - deposit_amount;
+
+    // Mint votes to lister
+    mint_to(
+        token_program.clone(),
+        charter_mint.clone(),
+       listing_deposit,
+        charter_mint_authority.clone(),
+        charter_mint_bump,
+        deposit_amount,
+    )?;
+
+    // Mint votes to charter
+    mint_to(
+        token_program,
+        charter_mint,
+        charter_deposit,
+        charter_mint_authority,
+        charter_mint_bump,
+        contribution_amount,
+    )?;
+
+    Ok(())
+}
 
 
 #[program]
@@ -255,6 +296,18 @@ pub mod strangemood {
             ctx.accounts.charter_mint_authority.to_account_info(),
             charter_mint_bump,
             contribution_amount,
+        )?;
+
+        distribute_governance_tokens(
+            to_charter_amount,
+             charter.expansion_rate(treasury.scalar_amount, treasury.scalar_decimals),
+             charter.vote_contribution_rate(),
+             ctx.accounts.token_program.to_account_info(),
+             ctx.accounts.charter_mint.to_account_info(),
+             ctx.accounts.charter_mint_authority.to_account_info(),
+             charter_mint_bump,
+             ctx.accounts.listings_vote_deposit.to_account_info(),
+             ctx.accounts.charter_vote_deposit.to_account_info(),
         )?;
 
         // Close the escrow account.
