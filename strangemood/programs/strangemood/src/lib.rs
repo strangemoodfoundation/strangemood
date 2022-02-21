@@ -213,6 +213,47 @@ fn transfer_funds_from_escrow_with_cashier<'info>(
 }
 
 
+fn transfer_funds_from_escrow<'info>(
+    total: u64,
+    listing: &Listing,
+    charter: &Charter,
+    token_program: Program<'info, Token>,
+    from: Account<'info, TokenAccount>,
+    charter_deposit: Account<'info, TokenAccount>,
+    listing_deposit: Account<'info, TokenAccount>,
+    authority: AccountInfo<'info>,
+    bump: u8,
+) -> Result<Splits> {
+    let deposit_rate = 1.0 - charter.payment_contribution;
+    let to_lister_amount = (deposit_rate * total as f64) as u64;
+    let to_charter_amount = total - to_lister_amount;
+
+    // Distribute payment to the charter
+    token_transfer_with_seed( 
+    token_program.to_account_info(),
+    from.to_account_info(),
+        charter_deposit.to_account_info(),
+        authority.to_account_info(),
+        to_charter_amount,
+        b"escrow",
+        bump
+    )?;
+
+    // Distribute payment to the lister
+    token_transfer_with_seed(
+    token_program.to_account_info(),
+    from.to_account_info(),
+        listing_deposit.to_account_info(),
+        authority.to_account_info(),
+        to_lister_amount,
+        b"escrow",
+        bump
+    )?;
+
+    Ok(Splits { to_charter_amount, to_lister_amount })
+}
+
+
 #[program]
 pub mod strangemood {
     use anchor_lang::{prelude::Context, solana_program::{program_option::COption}};
@@ -471,7 +512,7 @@ ctx.accounts.token_program.to_account_info(),
         Ok(())
     }
 
-    pub fn finish_trial_with_cashier(
+    pub fn finish_trial(
         ctx: Context<FinishTrialWithCashier>,
         charter_mint_bump: u8,
         receipt_escrow_authority_bump: u8
@@ -481,11 +522,69 @@ ctx.accounts.token_program.to_account_info(),
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
         if receipt.cashier != None {
-            return Err(StrangemoodError::ReceiptDoesNotHaveCashier.into());
+            return Err(error!(StrangemoodError::ReceiptHasCashier));
         }
 
         let total: u64 = receipt.price;
-        let splits = transfer_funds_from_escrow_with_cashier(  total, 
+        let splits = transfer_funds_from_escrow(
+            total, 
+            &listing,
+            &charter,
+            ctx.accounts.token_program.clone(),
+            *ctx.accounts.receipt_escrow.clone(),
+            *ctx.accounts.charter_treasury_deposit.clone(),
+            *ctx.accounts.listings_payment_deposit.clone(),
+            ctx.accounts.receipt_escrow_authority.clone(),  
+            receipt_escrow_authority_bump
+        )?;
+        
+        let treasury = ctx.accounts.charter_treasury.clone().into_inner();
+        distribute_governance_tokens(
+            splits.to_charter_amount,
+            charter.expansion_rate * treasury.scalar,
+            charter.vote_contribution,
+             ctx.accounts.token_program.to_account_info(),
+             ctx.accounts.charter_mint.to_account_info(),
+             ctx.accounts.charter_mint_authority.to_account_info(),
+             charter_mint_bump,
+             ctx.accounts.listings_vote_deposit.to_account_info(),
+             ctx.accounts.charter_vote_deposit.to_account_info(),
+        )?;
+
+        // Close the escrow account.
+        close_token_escrow_account(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.receipt_escrow.to_account_info(),
+            ctx.accounts.purchaser.to_account_info(),
+            ctx.accounts.receipt_escrow_authority.to_account_info(),
+            receipt_escrow_authority_bump
+        )?;
+
+        // Close the receipt.
+        close_native_account(
+            &ctx.accounts.receipt.to_account_info(),
+            &ctx.accounts.purchaser.to_account_info(),
+        );
+
+        Ok(())
+    }
+
+    pub fn finish_trial_with_cashier(
+        ctx: Context<FinishTrialWithCashier>,
+        charter_mint_bump: u8,
+        receipt_escrow_authority_bump: u8
+    ) -> Result<()> {
+        let listing = ctx.accounts.listing.clone().into_inner();
+        let charter = ctx.accounts.charter.clone().into_inner();
+        let receipt = ctx.accounts.receipt.clone().into_inner();
+
+        if receipt.cashier == None {
+            return Err(error!(StrangemoodError::ReceiptDoesNotHaveCashier));
+        }
+
+        let total: u64 = receipt.price;
+        let splits = transfer_funds_from_escrow_with_cashier(
+            total, 
             &listing,
             &charter,
             ctx.accounts.token_program.clone(),
@@ -494,7 +593,8 @@ ctx.accounts.token_program.to_account_info(),
             *ctx.accounts.listings_payment_deposit.clone(),
             *ctx.accounts.cashier_treasury_escrow.clone(),
             ctx.accounts.receipt_escrow_authority.clone(),  
-            receipt_escrow_authority_bump)?;
+            receipt_escrow_authority_bump
+        )?;
         
 
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
@@ -1183,6 +1283,81 @@ pub struct PurchaseWithCashier<'info> {
     pub charter: Box<Account<'info, Charter>>,
 
     pub purchaser: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(charter_mint_bump: u8, receipt_escrow_authority_bump: u8)]
+pub struct FinishTrial<'info> {
+
+    #[account(mut,
+        has_one=listing, 
+        has_one=purchaser,
+        constraint=receipt.escrow==receipt_escrow.key()
+    )]
+    pub receipt: Box<Account<'info, Receipt>>,
+
+    // The signer that purchased, who gets their SOL back that they used for the receipt.
+    pub purchaser: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub receipt_escrow: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        seeds=[b"escrow", receipt_escrow.key().as_ref()],
+        bump=receipt_escrow_authority_bump,
+    )]
+    pub receipt_escrow_authority: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub listings_payment_deposit: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub listings_vote_deposit: Box<Account<'info, TokenAccount>>,
+
+    // The listing to purchase
+    #[account(
+        constraint=charter.key()==listing.clone().into_inner().charter,
+        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
+        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit,
+    )]
+    pub listing: Box<Account<'info, Listing>>,
+
+    #[account(
+        has_one=charter,
+        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit,
+        constraint=charter_treasury.mint==listings_payment_deposit.mint,
+    )]
+    pub charter_treasury: Box<Account<'info, CharterTreasury>>,
+
+    #[account(mut)]
+    pub charter_treasury_deposit: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub charter_vote_deposit: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub charter_mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        seeds = [b"mint", charter_mint.key().as_ref()],
+        bump = charter_mint_bump,
+    )]
+    pub charter_mint_authority: AccountInfo<'info>,
+
+    // Box'd to move the charter (which is fairly hefty)
+    // to the heap instead of the stack.
+    // Not actually sure if this is a good idea, but
+    // without the Box, we run out of space?
+    #[account(
+        constraint=charter.clone().into_inner().mint==charter_mint.key(),
+        constraint=charter.vote_deposit==charter_vote_deposit.key(),
+        constraint=charter.mint==charter_mint.key(),
+    )]
+    pub charter: Box<Account<'info, Charter>>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }

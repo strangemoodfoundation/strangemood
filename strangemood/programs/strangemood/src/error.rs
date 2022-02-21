@@ -46,24 +46,30 @@ pub enum StrangemoodError {
     #[msg("Receipt Does Not Have Cashier")]
     ReceiptDoesNotHaveCashier,
 
+    // You tried to complete a receipt without a cashier, but
+    // the receipt has a cashier.
     // custom program error: 0x1779
+    #[msg("Receipt Has Cashier")]
+    ReceiptHasCashier,
+
+    // custom program error: 0x177a
     #[msg("Listing is Unavailable")]
     ListingIsUnavailable,
 
-    // custom program error: 0x177a
+    // custom program error: 0x177b
     #[msg("Listing Mint Does Not Match Listing")]
     ListingMintDoesNotMatchListing,
 
-    // custom program error: 0x177b
+    // custom program error: 0x177c
     #[msg("Listing is not consumable")]
     ListingIsNotConsumable,
 
-    // custom program error: 0x177c
+    // custom program error: 0x177d
     // Creating a charter requires the signer to be the mint authority
     #[msg("Signer is not Mint Authority")]
     SignerIsNotMintAuthority,
 
-    // custom program error: 0x177d
+    // custom program error: 0x177e
     // The cashier's split must be 1.0 to 0.0.
     #[msg("Invalid Cashier Split")]
     CashierSplitIsInvalid,
