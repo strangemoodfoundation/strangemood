@@ -37,8 +37,8 @@ pub enum StrangemoodError {
     UnauthorizedAuthority,
 
     // custom program error: 0x1777
-    #[msg("Receipt is not currently cashable")]
-    ReceiptNotCashable,
+    #[msg("Listing Is Not Refundable")]
+    ListingIsNotRefundable,
 
     // You tried to complete a receipt with a cashier, but
     // the receipt did not have a cashier.

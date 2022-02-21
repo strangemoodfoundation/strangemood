@@ -111,8 +111,49 @@ pub mod strangemood {
         Ok(())
     }
 
-    pub fn purchase_with_cashier(
-        ctx: Context<PurchaseWithCashier>,
+    // pub fn purchase_with_cashier(ctx: Context<PurchaseWithCashier>,   
+    //     listing_mint_bump: u8,
+    //     charter_mint_bump: u8,
+    //     escrow_authority_bump: u8,
+    //     amount: u64
+    // ) -> ProgramResult {
+    //     let listing = ctx.accounts.listing.clone().into_inner();
+    //     let charter = ctx.accounts.charter.clone().into_inner();
+
+    //     if !listing.is_available {
+    //         return Err(StrangemoodError::ListingUnavailable.into());
+    //     }
+
+    //     // First split the funds into the a "contribution" pool, which goes to 
+    //     // the charter governance, and a "deposit" pool.
+    //     let total: u64 = listing.price * amount;
+    //     let deposit_rate = 1.0 - charter.payment_contribution_rate();
+    //     let deposit_amount = (deposit_rate * total as f64) as u64;
+    //     let to_charter_amount = total - deposit_amount;
+
+    //     // Then split the deposit pool between the lister, and the cashier.
+    //     // (charter, (lister, cashier))
+    //     let to_cashier_rate = amount_as_float(listing.cashier_split_amount, listing.cashier_split_decimals);
+    //     let to_lister_rate = 1.0 - to_cashier_rate;
+    //     let to_lister_amount = (deposit_amount as f64 * to_lister_rate) as u64;
+    //     let to_cashier_amount = deposit_amount - to_lister_amount;
+
+
+    //     token_transfer(
+    //         ctx.accounts.token_program.to_account_info(),
+    //         ctx.accounts.purchase_token_account.to_account_info(),
+    //         ctx.accounts.escrow.to_account_info(),
+    //         ctx.accounts.purchaser.to_account_info(),
+    //         amount * listing.price,
+    //     )?;
+
+    
+    //     Ok(())
+    // }
+
+    // TODO: not working
+    pub fn start_trial_with_cashier(
+        ctx: Context<StartTrailWithCashier>,
         receipt_nonce: u128,
         listing_mint_bump: u8,
         _escrow_authority_bump: u8,
@@ -673,7 +714,7 @@ pub mod strangemood {
 
 #[derive(Accounts)]
 #[instruction(receipt_nonce: u128, listing_mint_bump: u8, escrow_authority_bump:u8)]
-pub struct PurchaseWithCashier<'info> {
+pub struct StartTrailWithCashier<'info> {
 
     // The user's token account where funds will be transfered from
     #[account(mut)]
@@ -753,6 +794,95 @@ pub struct PurchaseWithCashier<'info> {
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
 }
+
+
+// #[derive(Accounts)]
+// #[instruction(listing_mint_bump: u8, charter_mint_bump: u8, escrow_authority_bump: u8)]
+// pub struct PurchaseWithCashier<'info> {
+//     // The user's token account where funds will be transfered from
+//     #[account(mut)]
+//     pub purchase_token_account: Box<Account<'info, TokenAccount>>,
+
+//     #[account(has_one=charter)]
+//     pub cashier: Account<'info, Cashier>,
+
+//     #[account(
+//         has_one=cashier,
+//         constraint=cashier_treasury.escrow==cashier_treasury_escrow.key(),
+//         constraint=cashier_treasury.mint==charter_treasury.mint,
+//         constraint=cashier_treasury.mint==listings_payment_deposit.mint,
+//     )]
+//     pub cashier_treasury: Account<'info, CashierTreasury>,
+
+//     #[account(mut)]
+//     pub cashier_treasury_escrow: Account<'info, TokenAccount>,
+
+//     // TODO: consider rename? 
+//     // Where the listing token is deposited when purchase is complete.
+//     #[account(mut)]
+//     pub listing_token_account: Box<Account<'info, TokenAccount>>,
+
+//     #[account(mut)]
+//     pub listings_payment_deposit: Box<Account<'info, TokenAccount>>,
+
+//     #[account(mut)]
+//     pub listings_vote_deposit: Box<Account<'info, TokenAccount>>,
+
+//     // The listing to purchase
+//     #[account(
+//         has_one=charter,
+//         constraint=listing_mint.key()==listing.clone().into_inner().mint,
+//         constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
+//         constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit,
+//     )]
+//     pub listing: Box<Account<'info, Listing>>,
+
+//     #[account(mut)]
+//     pub listing_mint: Box<Account<'info, Mint>>,
+
+//     #[account(
+//         seeds = [b"mint", listing_mint.key().as_ref()],
+//         bump = listing_mint_bump,
+//     )]
+//     pub listing_mint_authority: AccountInfo<'info>,
+
+//     #[account(
+//         has_one=charter,
+//         constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit,
+//         constraint=charter_treasury.mint==listings_payment_deposit.mint,
+//     )]
+//     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
+
+//     #[account(mut)]
+//     pub charter_treasury_deposit: Box<Account<'info, TokenAccount>>,
+
+//     #[account(mut)]
+//     pub charter_vote_deposit: Box<Account<'info, TokenAccount>>,
+
+//     #[account(mut)]
+//     pub charter_mint: Box<Account<'info, Mint>>,
+
+//     #[account(
+//         seeds = [b"mint", charter_mint.key().as_ref()],
+//         bump = charter_mint_bump,
+//     )]
+//     pub charter_mint_authority: AccountInfo<'info>,
+
+//     // Box'd to move the charter (which is fairly hefty)
+//     // to the heap instead of the stack.
+//     // Not actually sure if this is a good idea, but
+//     // without the Box, we run out of space?
+//     #[account(
+//         constraint=charter.clone().into_inner().mint==charter_mint.key(),
+//         constraint=charter.vote_deposit==charter_vote_deposit.key(),
+//         constraint=charter.mint==charter_mint.key(),
+//     )]
+//     pub charter: Box<Account<'info, Charter>>,
+
+//     pub purchaser: Signer<'info>,
+//     pub token_program: Program<'info, Token>,
+//     pub system_program: Program<'info, System>,
+// }
 
 #[derive(Accounts)]
 #[instruction(listing_mint_bump: u8, charter_mint_bump: u8, escrow_authority_bump: u8)]
