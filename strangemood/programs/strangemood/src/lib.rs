@@ -9,6 +9,8 @@ pub mod state;
 pub mod error;
 pub mod cpi;
 
+use crate::error::StrangemoodError;
+
 declare_id!("sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW");
 
 fn distribute_governance_tokens<'a>(
@@ -271,20 +273,6 @@ pub mod strangemood {
         cashier_split: f64,
         uri: String,
     ) -> Result<()> {
-
-        let charter = ctx.accounts.charter.clone().into_inner();
-
-        // Check that the payment deposit is wrapped sol
-        let payment_deposit = ctx.accounts.payment_deposit.clone().into_inner();
-        if payment_deposit.mint != ctx.accounts.charter_treasury.clone().into_inner().mint {
-            return Err(error!(StrangemoodError::MintIsNotSupported));
-        }
-
-        // Check that the vote_deposit is the charter's mint
-        let vote_deposit = ctx.accounts.vote_deposit.clone().into_inner();
-        if vote_deposit.mint != charter.mint {
-            return Err(error!(StrangemoodError::MintIsNotSupported));
-        }
 
         if cashier_split < 0.0 || cashier_split > 1.0 {
             return Err(error!(StrangemoodError::CashierSplitIsInvalid));
@@ -678,12 +666,8 @@ ctx.accounts.token_program.to_account_info(),
     ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
 
-        if ctx.accounts.authority.key() != listing.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
-
         if !listing.is_consumable {
-            return Err(StrangemoodError::ListingIsNotConsumable.into());
+            return Err(error!(StrangemoodError::ListingIsNotConsumable));
         }
 
         burn(
@@ -734,19 +718,11 @@ ctx.accounts.token_program.to_account_info(),
     }
 
     pub fn set_listing_price(ctx: Context<SetListing>, price: u64) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
-
         ctx.accounts.listing.price = price;
         Ok(())
     }
 
     pub fn set_listing_uri(ctx: Context<SetListing>, uri: String) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
-
         ctx.accounts.listing.uri = uri;
         Ok(())
     }
@@ -755,39 +731,24 @@ ctx.accounts.token_program.to_account_info(),
         ctx: Context<SetListing>,
         is_available: bool,
     ) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
 
         ctx.accounts.listing.is_available = is_available;
         Ok(())
     }
 
     pub fn set_listing_deposits(ctx: Context<SetListingDeposit>) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
-
         ctx.accounts.listing.vote_deposit = ctx.accounts.vote_deposit.key();
         ctx.accounts.listing.payment_deposit = ctx.accounts.payment_deposit.key();
         Ok(())
     }
 
     pub fn set_listing_authority(ctx: Context<SetListingAuthority>) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
-
-        ctx.accounts.listing.authority = ctx.accounts.authority.key();
+        ctx.accounts.listing.authority = ctx.accounts.new_authority.key();
         Ok(())
     }
 
     // Migrate a listing to a different charter
     pub fn set_listing_charter(ctx: Context<SetListingCharter>) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.listing.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
-
         ctx.accounts.listing.charter = ctx.accounts.charter.key();
         Ok(())
     }
@@ -796,10 +757,6 @@ ctx.accounts.token_program.to_account_info(),
         ctx: Context<SetCharter>,
         expansion_rate: f64,
     ) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.charter.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
-
         ctx.accounts.charter.expansion_rate = expansion_rate;
         Ok(())
     }
@@ -809,10 +766,6 @@ ctx.accounts.token_program.to_account_info(),
         payment_contribution: f64,
         vote_contribution: f64,
     ) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.charter.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
-
         ctx.accounts.charter.payment_contribution = payment_contribution;
         ctx.accounts.charter.vote_contribution = vote_contribution;
 
@@ -821,25 +774,16 @@ ctx.accounts.token_program.to_account_info(),
 
     // Migrates the charter to a different authority, like a new governance program
     pub fn set_charter_authority(ctx: Context<SetCharterAuthority>) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.charter.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        } 
-
-        ctx.accounts.charter.authority = ctx.accounts.authority.key();
+        ctx.accounts.charter.authority = ctx.accounts.new_authority.key();
         Ok(())
     }
 
     pub fn set_charter_vote_deposit(ctx: Context<SetCharterReserve>) -> Result<()> {
-        if ctx.accounts.user.key() != ctx.accounts.charter.authority {
-            return Err(StrangemoodError::AuthorityIsUnauthorized.into());
-        }
-
         ctx.accounts.charter.reserve = ctx.accounts.reserve.key();
         Ok(())
     }
 
     pub fn init_charter_treasury(ctx: Context<InitCharterTreasury>, scalar: f64) -> Result<()> {
-        
         let treasury = &mut ctx.accounts.treasury;
         treasury.charter = ctx.accounts.charter.key();
         treasury.deposit = ctx.accounts.deposit.key(); 
@@ -970,8 +914,8 @@ pub struct MintTo<'info> {
 
     // The listing we can mint from
     #[account(
-        has_one=mint,
-        has_one=authority
+        has_one=mint @ StrangemoodError::ListingHasUnexpectedMint,
+        has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority
     )]
     pub listing: Box<Account<'info, Listing>>,
 
@@ -998,13 +942,13 @@ pub struct StartTrial<'info> {
 
     // The listing to purchase
     #[account(
-        constraint=listing_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
-        constraint=listing_mint.key()==listing.clone().into_inner().mint,
+        constraint=listing_payment_deposit.key()==listing.clone().into_inner().payment_deposit @ StrangemoodError::ListingHasUnexpectedDeposit,
+        constraint=listing_mint.key()==listing.clone().into_inner().mint @ StrangemoodError::ListingHasUnexpectedMint,
     )]
     pub listing: Box<Account<'info, Listing>>,
 
     #[account(
-        constraint=listing_payment_deposit.mint==listing_payment_deposit_mint.key()
+        constraint=listing_payment_deposit.mint==listing_payment_deposit_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint
     )]
     pub listing_payment_deposit: Box<Account<'info, TokenAccount>>,
 
@@ -1078,13 +1022,13 @@ pub struct StartTrialWithCashier<'info> {
 
     // The listing to purchase
     #[account(
-        constraint=listing_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
-        constraint=listing_mint.key()==listing.clone().into_inner().mint,
+        constraint=listing_payment_deposit.key()==listing.clone().into_inner().payment_deposit @ StrangemoodError::ListingHasUnexpectedDeposit,
+        constraint=listing_mint.key()==listing.clone().into_inner().mint @ StrangemoodError::ListingHasUnexpectedMint,
     )]
     pub listing: Box<Account<'info, Listing>>,
 
     #[account(
-        constraint=listing_payment_deposit.mint==listing_payment_deposit_mint.key()
+        constraint=listing_payment_deposit.mint==listing_payment_deposit_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint
     )]
     pub listing_payment_deposit: Box<Account<'info, TokenAccount>>,
 
@@ -1173,9 +1117,9 @@ pub struct Purchase<'info> {
     // The listing to purchase
     #[account(
         has_one=charter,
-        constraint=listing_mint.key()==listing.clone().into_inner().mint,
-        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
-        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit,
+        constraint=listing_mint.key()==listing.clone().into_inner().mint @ StrangemoodError::ListingHasUnexpectedMint,
+        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit @ StrangemoodError::ListingHasUnexpectedDeposit,
+        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit @ StrangemoodError::ListingHasUnexpectedDeposit,
     )]
     pub listing: Box<Account<'info, Listing>>,
 
@@ -1191,8 +1135,8 @@ pub struct Purchase<'info> {
 
     #[account(
         has_one=charter,
-        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit,
-        constraint=charter_treasury.mint==listings_payment_deposit.mint,
+        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit @ StrangemoodError::CharterTreasuryHasUnexpectedDeposit,
+        constraint=charter_treasury.mint==listings_payment_deposit.mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint, 
     )]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
 
@@ -1217,9 +1161,9 @@ pub struct Purchase<'info> {
     // Not actually sure if this is a good idea, but
     // without the Box, we run out of space?
     #[account(
-        constraint=charter.clone().into_inner().mint==charter_mint.key(),
-        constraint=charter.reserve==charter_vote_deposit.key(),
-        constraint=charter.mint==charter_mint.key(),
+        constraint=charter.clone().into_inner().mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
+        constraint=charter.reserve==charter_vote_deposit.key() @ StrangemoodError::CharterHasUnexpectedReserve,
+        constraint=charter.mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
     )]
     pub charter: Box<Account<'info, Charter>>,
 
@@ -1240,10 +1184,10 @@ pub struct PurchaseWithCashier<'info> {
     pub cashier: Box<Account<'info, Cashier>>,
 
     #[account(
-        has_one=cashier,
-        constraint=cashier_treasury.escrow==cashier_treasury_escrow.key(),
-        constraint=cashier_treasury.mint==charter_treasury.mint,
-        constraint=cashier_treasury.mint==listings_payment_deposit.mint,
+        has_one=cashier @ StrangemoodError::CashierTreasuryHasUnexpectedCashier,
+        constraint=cashier_treasury.escrow==cashier_treasury_escrow.key() @ StrangemoodError::CashierTreasuryHasUnexpectedEscrow,
+        constraint=cashier_treasury.mint==charter_treasury.mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint,
+        constraint=cashier_treasury.mint==listings_payment_deposit.mint @StrangemoodError::CashierTreasuryHasUnexpectedMint,
     )]
     pub cashier_treasury: Box<Account<'info, CashierTreasury>>,
 
@@ -1263,10 +1207,10 @@ pub struct PurchaseWithCashier<'info> {
 
     // The listing to purchase
     #[account(
-        has_one=charter,
-        constraint=listing_mint.key()==listing.clone().into_inner().mint,
-        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
-        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit,
+        has_one=charter @ StrangemoodError::ListingHasUnexpectedCharter,
+        constraint=listing_mint.key()==listing.clone().into_inner().mint @ StrangemoodError::ListingHasUnexpectedMint,
+        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit @ StrangemoodError::ListingHasUnexpectedDeposit,
+        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit @ StrangemoodError::ListingHasUnexpectedDeposit, 
     )]
     pub listing: Box<Account<'info, Listing>>,
 
@@ -1281,9 +1225,9 @@ pub struct PurchaseWithCashier<'info> {
     pub listing_mint_authority: AccountInfo<'info>,
 
     #[account(
-        has_one=charter,
-        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit,
-        constraint=charter_treasury.mint==listings_payment_deposit.mint,
+        has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter,
+        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit @ StrangemoodError::CharterTreasuryHasUnexpectedDeposit,
+        constraint=charter_treasury.mint==listings_payment_deposit.mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint,
     )]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
 
@@ -1303,14 +1247,9 @@ pub struct PurchaseWithCashier<'info> {
     )]
     pub charter_mint_authority: AccountInfo<'info>,
 
-    // Box'd to move the charter (which is fairly hefty)
-    // to the heap instead of the stack.
-    // Not actually sure if this is a good idea, but
-    // without the Box, we run out of space?
     #[account(
-        constraint=charter.clone().into_inner().mint==charter_mint.key(),
-        constraint=charter.reserve==charter_vote_deposit.key(),
-        constraint=charter.mint==charter_mint.key(),
+        constraint=charter.mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
+        constraint=charter.reserve==charter_vote_deposit.key() @ StrangemoodError::CharterHasUnexpectedReserve,
     )]
     pub charter: Box<Account<'info, Charter>>,
 
@@ -1325,9 +1264,9 @@ pub struct PurchaseWithCashier<'info> {
 pub struct FinishTrial<'info> {
 
     #[account(mut,
-        has_one=listing, 
-        has_one=purchaser,
-        constraint=receipt.escrow==receipt_escrow.key()
+        has_one=listing @ StrangemoodError::ReceiptHasUnexpectedListing, 
+        has_one=purchaser @ StrangemoodError::ReceiptHasUnexpectedPurchaser,
+        constraint=receipt.escrow==receipt_escrow.key() @ StrangemoodError::ReceiptHasUnexpectedEscrow
     )]
     pub receipt: Box<Account<'info, Receipt>>,
 
@@ -1354,16 +1293,16 @@ pub struct FinishTrial<'info> {
 
     // The listing to purchase
     #[account(
-        constraint=charter.key()==listing.clone().into_inner().charter,
-        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
-        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit,
+        constraint=charter.key()==listing.clone().into_inner().charter @ StrangemoodError::ListingHasUnexpectedCharter,
+        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit @ StrangemoodError::ListingHasUnexpectedDeposit,
+        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit @ StrangemoodError::ListingHasUnexpectedDeposit,
     )]
     pub listing: Box<Account<'info, Listing>>,
 
     #[account(
-        has_one=charter,
-        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit,
-        constraint=charter_treasury.mint==listings_payment_deposit.mint,
+        has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter,
+        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit @ StrangemoodError::CharterTreasuryHasUnexpectedDeposit,
+        constraint=charter_treasury.mint==listings_payment_deposit.mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint,
     )]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
 
@@ -1388,9 +1327,8 @@ pub struct FinishTrial<'info> {
     // Not actually sure if this is a good idea, but
     // without the Box, we run out of space?
     #[account(
-        constraint=charter.clone().into_inner().mint==charter_mint.key(),
-        constraint=charter.reserve==charter_vote_deposit.key(),
-        constraint=charter.mint==charter_mint.key(),
+        constraint=charter.mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
+        constraint=charter.reserve==charter_vote_deposit.key() @ StrangemoodError::CharterHasUnexpectedReserve,
     )]
     pub charter: Box<Account<'info, Charter>>,
 
@@ -1405,10 +1343,10 @@ pub struct FinishTrialWithCashier<'info> {
     pub cashier: Box<Account<'info, Cashier>>,
 
     #[account(
-        has_one=cashier,
-        constraint=cashier_treasury.escrow==cashier_treasury_escrow.key(),
-        constraint=cashier_treasury.mint==charter_treasury.mint,
-        constraint=cashier_treasury.mint==listings_payment_deposit.mint,
+        has_one=cashier @ StrangemoodError::CashierTreasuryHasUnexpectedCashier,
+        constraint=cashier_treasury.escrow==cashier_treasury_escrow.key() @ StrangemoodError::CashierTreasuryHasUnexpectedEscrow,
+        constraint=cashier_treasury.mint==charter_treasury.mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint,
+        constraint=cashier_treasury.mint==listings_payment_deposit.mint @ StrangemoodError::CashierTreasuryHasUnexpectedMint,
     )]
     pub cashier_treasury: Box<Account<'info, CashierTreasury>>,
 
@@ -1416,10 +1354,10 @@ pub struct FinishTrialWithCashier<'info> {
     pub cashier_treasury_escrow: Box<Account<'info, TokenAccount>>,
 
     #[account(mut,
-        has_one=listing, 
-        has_one=purchaser,
-        constraint=receipt.escrow==receipt_escrow.key(),
-        constraint=receipt.cashier == Some(cashier.key()))
+        has_one=listing @ StrangemoodError::ReceiptHasUnexpectedListing, 
+        has_one=purchaser @ StrangemoodError::ReceiptHasUnexpectedPurchaser,
+        constraint=receipt.escrow==receipt_escrow.key() @ StrangemoodError::ReceiptHasUnexpectedEscrow,
+        constraint=receipt.cashier == Some(cashier.key()) @ StrangemoodError::ReceiptHasUnexpectedCashier,)
     ]
     pub receipt: Box<Account<'info, Receipt>>,
 
@@ -1446,16 +1384,16 @@ pub struct FinishTrialWithCashier<'info> {
 
     // The listing to purchase
     #[account(
-        constraint=charter.key()==listing.clone().into_inner().charter,
-        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit,
-        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit,
+        constraint=charter.key()==listing.clone().into_inner().charter @ StrangemoodError::ListingHasUnexpectedCharter,
+        constraint=listings_payment_deposit.key()==listing.clone().into_inner().payment_deposit @ StrangemoodError::ListingHasUnexpectedDeposit,
+        constraint=listings_vote_deposit.key()==listing.clone().into_inner().vote_deposit @ StrangemoodError::ListingHasUnexpectedDeposit,
     )]
     pub listing: Box<Account<'info, Listing>>,
 
     #[account(
-        has_one=charter,
-        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit,
-        constraint=charter_treasury.mint==listings_payment_deposit.mint,
+        has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter,
+        constraint=charter_treasury_deposit.key()==charter_treasury.clone().into_inner().deposit @ StrangemoodError::CharterTreasuryHasUnexpectedDeposit,
+        constraint=charter_treasury.mint==listings_payment_deposit.mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint,
     )]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
 
@@ -1475,14 +1413,9 @@ pub struct FinishTrialWithCashier<'info> {
     )]
     pub charter_mint_authority: AccountInfo<'info>,
 
-    // Box'd to move the charter (which is fairly hefty)
-    // to the heap instead of the stack.
-    // Not actually sure if this is a good idea, but
-    // without the Box, we run out of space?
     #[account(
-        constraint=charter.clone().into_inner().mint==charter_mint.key(),
-        constraint=charter.reserve==charter_vote_deposit.key(),
-        constraint=charter.mint==charter_mint.key(),
+        constraint=charter.mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
+        constraint=charter.reserve==charter_vote_deposit.key() @ StrangemoodError::CharterHasUnexpectedReserve,
     )]
     pub charter: Box<Account<'info, Charter>>,
 
@@ -1500,10 +1433,10 @@ pub struct Refund<'info> {
     pub return_deposit: Account<'info, TokenAccount>,
 
     #[account(mut,
-        has_one=listing,
-        has_one=inventory, 
-        has_one=purchaser,
-        has_one=escrow
+        has_one=listing @ StrangemoodError::ReceiptHasUnexpectedListing, 
+        has_one=inventory @ StrangemoodError::ReceiptHasUnexpectedInventory, 
+        has_one=purchaser @ StrangemoodError::ReceiptHasUnexpectedPurchaser,
+        has_one=escrow @ StrangemoodError::ReceiptHasUnexpectedEscrow,
     )]
     pub receipt: Account<'info, Receipt>,
 
@@ -1517,7 +1450,7 @@ pub struct Refund<'info> {
     pub inventory: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
-    #[account(constraint=listing.mint==listing_mint.key())]
+    #[account(constraint=listing.mint==listing_mint.key() @ StrangemoodError::ListingHasUnexpectedMint)]
     pub listing: Box<Account<'info, Listing>>,
 
     #[account(mut)]
@@ -1537,7 +1470,9 @@ pub struct Refund<'info> {
 #[derive(Accounts)]
 #[instruction(listing_mint_authority_bump:u8)]
 pub struct Consume<'info> {
-    #[account(has_one=authority, has_one=mint)]
+    #[account(
+        has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority,
+        has_one=mint @ StrangemoodError::ListingHasUnexpectedMint)]
     pub listing: Box<Account<'info, Listing>>,
 
     #[account(mut)]
@@ -1593,11 +1528,13 @@ pub struct InitListing<'info> {
 
     // The charter treasury that proves that this governance supports the payment method
     // that this charter is using.
-    #[account(has_one=charter)]
+    #[account(has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter)]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
 
-    #[account(constraint=payment_deposit.mint==charter_treasury.mint)]
+    #[account(constraint=payment_deposit.mint==charter_treasury.mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment_deposit: Box<Account<'info, TokenAccount>>,
+
+    #[account(constraint=vote_deposit.mint==charter.mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub vote_deposit: Box<Account<'info, TokenAccount>>,
 
     pub rent: Sysvar<'info, Rent>,
@@ -1611,58 +1548,58 @@ pub struct InitListing<'info> {
 
 #[derive(Accounts)]
 pub struct SetListing<'info> {
-    #[account(mut)]
+    #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority)]
     pub listing: Account<'info, Listing>,
 
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct SetListingDeposit<'info> {
-    #[account(mut, has_one=charter)]
+    #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority, has_one=charter @ StrangemoodError::ListingHasUnexpectedCharter)]
     pub listing: Account<'info, Listing>,
 
-    #[account(constraint=charter_treasury.mint==payment_deposit.mint)]
+    #[account(constraint=charter_treasury.mint==payment_deposit.mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment_deposit: Account<'info, TokenAccount>,
 
-    #[account(constraint=vote_deposit.mint==charter.mint)]
+    #[account(constraint=vote_deposit.mint==charter.mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub vote_deposit: Account<'info, TokenAccount>,
 
     pub charter: Account<'info, TokenAccount>,
 
-    #[account(has_one=charter)]
+    #[account(has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter)]
     pub charter_treasury: Account<'info, CharterTreasury>,
 
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct SetListingAuthority<'info> {
-    #[account(mut)]
+    #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority)]
     pub listing: Account<'info, Listing>,
 
     /// CHECK: This is an authority, and we're not reading or writing from it.
-    pub authority: AccountInfo<'info>,
+    pub new_authority: AccountInfo<'info>,
 
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 
 #[derive(Accounts)]
 pub struct SetListingCharter<'info> {
-    #[account(mut)]
+    #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority)]
     pub listing: Account<'info, Listing>,
 
     pub charter: Account<'info, Charter>,
 
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -1689,35 +1626,35 @@ pub struct InitCharter<'info> {
 
 #[derive(Accounts)]
 pub struct SetCharter<'info> {
-    #[account(mut)]
+    #[account(mut, has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority)]
     pub charter: Account<'info, Charter>,
 
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct SetCharterReserve<'info> {
-    #[account(mut)]
+    #[account(mut, has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority)]
     pub charter: Account<'info, Charter>,
 
     pub reserve: Account<'info, TokenAccount>,
 
-    pub user: Signer<'info>,
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct SetCharterAuthority<'info> {
-    #[account(mut)]
+    #[account(mut, has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority)]
     pub charter: Account<'info, Charter>,
 
     /// CHECK: This is an authority, and we're not reading or writing from it.
-    pub authority: AccountInfo<'info>,
+    pub new_authority: AccountInfo<'info>,
 
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -1740,12 +1677,12 @@ pub struct InitCharterTreasury<'info> {
     pub treasury: Account<'info, CharterTreasury>,
 
     #[account(
-        has_one=authority
+        has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority,
     )]
     pub charter: Account<'info, Charter>,
 
     #[account(
-        has_one=mint
+        has_one=mint @ StrangemoodError::TokenAccountHasUnexpectedMint
     )]
     pub deposit: Account<'info, TokenAccount>,
 
@@ -1759,10 +1696,10 @@ pub struct InitCharterTreasury<'info> {
 
 #[derive(Accounts)]
 pub struct SetCharterTreasuryExpansionScalar<'info> {
-    #[account(mut, has_one=charter)]
+    #[account(mut, has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter)]
     pub treasury: Account<'info, CharterTreasury>,
 
-    #[account(has_one=authority)]
+    #[account(has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority)]
     pub charter: Account<'info, Charter>,
 
     #[account(mut)]
@@ -1772,13 +1709,13 @@ pub struct SetCharterTreasuryExpansionScalar<'info> {
 
 #[derive(Accounts)]
 pub struct SetCharterTreasuryDeposit<'info> {
-    #[account(mut, has_one=charter, has_one=mint)]
+    #[account(mut, has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter, has_one=mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint)]
     pub treasury: Account<'info, CharterTreasury>,
 
-    #[account(has_one=authority)]
+    #[account(has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority)]
     pub charter: Account<'info, Charter>,
 
-    #[account(has_one=mint)]
+    #[account(has_one=mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub deposit: Account<'info, TokenAccount>,
     pub mint: Account<'info, Mint>,
 
@@ -1821,7 +1758,7 @@ pub struct InitCashier<'info> {
     pub stake_authority: AccountInfo<'info>,
 
     #[account(
-        constraint=charter.mint == charter_mint.key()
+        constraint=charter.mint == charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint
     )]
     pub charter: Account<'info, Charter>,
     pub charter_mint: Account<'info, Mint>,
@@ -1856,17 +1793,18 @@ pub struct InitCashierTreasury<'info> {
     )]
     pub cashier_treasury: Box<Account<'info, CashierTreasury>>,
 
-    #[account(has_one=authority, has_one=charter)]
+    #[account(has_one=authority @ StrangemoodError::CashierHasUnexpectedAuthority,
+        has_one=charter @ StrangemoodError::CashierHasUnexpectedCharter)]
     pub cashier: Box<Account<'info, Cashier>>, 
 
     #[account(
-        has_one=charter,
-        constraint=charter_treasury.mint==cashier_treasury.mint
+        has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter,
+        constraint=charter_treasury.mint==cashier_treasury.mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint
     )]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
     pub charter: Box<Account<'info, Charter>>,
 
-    #[account(has_one=mint)]
+    #[account(has_one=mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(
@@ -1899,13 +1837,19 @@ pub struct InitCashierTreasury<'info> {
 #[derive(Accounts)]
 #[instruction(mint_authority_bump: u8)]
 pub struct BurnCashierStake<'info> {
-    #[account(has_one=authority, has_one=mint)]
+    #[account(
+        has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority,
+        has_one=mint @ StrangemoodError::CharterHasUnexpectedMint
+    )]
     pub charter: Account<'info, Charter>,
 
-    #[account(has_one=charter, has_one=stake)]
+    #[account(
+        has_one=charter @ StrangemoodError::CashierHasUnexpectedCharter, 
+        has_one=stake @ StrangemoodError::CashierHasUnexpectedStake
+    )]
     pub cashier: Account<'info, Cashier>, 
 
-    #[account(mut, has_one=mint)]
+    #[account(mut, has_one=mint @ StrangemoodError::CharterHasUnexpectedMint)]
     pub stake: Account<'info, TokenAccount>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -1929,35 +1873,36 @@ pub struct BurnCashierStake<'info> {
 #[derive(Accounts)]
 #[instruction(mint_authority_bump: u8, cashier_escrow_bump: u8)]
 pub struct WithdrawCashierTreasury<'info> {
-    #[account(constraint=charter.mint==vote_mint.key())]
+    #[account(constraint=charter.mint==vote_mint.key() @ StrangemoodError::CharterHasUnexpectedMint)]
     pub charter: Box<Account<'info, Charter>>,
 
     // The treasury of the charter
-    #[account(mut, has_one=charter)]
+    #[account(mut, has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter)]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
 
-    #[account(has_one=charter, has_one=stake)]
+    #[account(has_one=charter @ StrangemoodError::CashierHasUnexpectedCharter, 
+        has_one=stake @ StrangemoodError::CashierHasUnexpectedStake)]
     pub cashier: Box<Account<'info, Cashier>>, 
 
     // The token account that contains the stake 
     // the cashier has in the network
-    #[account(constraint=stake.mint==vote_mint.key())]
+    #[account(constraint=stake.mint==vote_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub stake: Box<Account<'info, TokenAccount>>,
 
     // The treasury that binds the escrow, deposit, and 
     // cashier together
     #[account(
-        has_one=cashier,
-        has_one=escrow,
-        has_one=deposit, 
-        constraint=cashier_treasury.mint==payment_mint.key()
+        has_one=cashier @ StrangemoodError::CashierTreasuryHasUnexpectedCashier,
+        has_one=escrow @ StrangemoodError::CashierTreasuryHasUnexpectedEscrow,
+        has_one=deposit @ StrangemoodError::CashierTreasuryHasUnexpectedDeposit,
+        constraint=cashier_treasury.mint==payment_mint.key() @ StrangemoodError::CashierTreasuryHasUnexpectedMint
     )]
     pub cashier_treasury: Box<Account<'info, CashierTreasury>>,
 
     // Where the tokens are right now 
     #[account(
         mut,
-        constraint=escrow.mint==payment_mint.key() 
+        constraint=escrow.mint==payment_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint
     )]
     pub escrow: Box<Account<'info, TokenAccount>>,
 
@@ -1970,7 +1915,7 @@ pub struct WithdrawCashierTreasury<'info> {
 
     // Where the tokens will end up after we withdraw
     #[account(mut, 
-        constraint=deposit.mint==payment_mint.key() 
+        constraint=deposit.mint==payment_mint.key()  @ StrangemoodError::TokenAccountHasUnexpectedMint
     )]
     pub deposit: Box<Account<'info, TokenAccount>>,
 
@@ -1990,15 +1935,18 @@ pub struct WithdrawCashierTreasury<'info> {
 #[derive(Accounts)]
 #[instruction(stake_bump: u8)]
 pub struct WithdrawCashierStake<'info> {
-    #[account(mut, constraint=charter.mint==vote_mint.key())]
+    #[account(mut, constraint=charter.mint==vote_mint.key() @ StrangemoodError::CharterHasUnexpectedMint)]
     pub charter: Box<Account<'info, Charter>>,
 
-    #[account(has_one=charter, has_one=stake)]
+    #[account(
+        has_one=charter @ StrangemoodError::CashierHasUnexpectedCharter, 
+        has_one=stake @ StrangemoodError::CashierHasUnexpectedStake
+    )]
     pub cashier: Box<Account<'info, Cashier>>, 
 
     // The token account that contains the stake 
     // the cashier has in the network
-    #[account(constraint=stake.mint==vote_mint.key())]
+    #[account(constraint=stake.mint==vote_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub stake: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -2010,7 +1958,7 @@ pub struct WithdrawCashierStake<'info> {
 
     // Where the tokens will end up after we withdraw
     #[account(mut, 
-        constraint=deposit.mint==vote_mint.key() 
+        constraint=deposit.mint==vote_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint
     )]
     pub deposit: Box<Account<'info, TokenAccount>>,
 

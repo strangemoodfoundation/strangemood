@@ -3,7 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@project-serum/anchor";
 import { Program, splitArgsAndCtx } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
-import { makeReceiptNonce } from "..";
+import { cash, makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
 import { MAINNET } from "../constants";
@@ -12,6 +12,7 @@ import {
   createCharterTreasury,
   initCashier,
 } from "./instructions";
+import { transfer } from "@solana/spl-token";
 const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY } = anchor.web3;
 
 describe("no nonce buffer bug", () => {
@@ -324,6 +325,7 @@ describe("Strangemood", () => {
         clock: SYSVAR_CLOCK_PUBKEY,
         authority: program.provider.wallet.publicKey,
       })
+      .signers([escrow])
       .rpc();
 
     const cashierTreasury = await program.account.cashierTreasury.fetch(
@@ -334,5 +336,19 @@ describe("Strangemood", () => {
       cashierTreasury.authority.toString(),
       program.provider.wallet.publicKey.toString()
     );
+    // assert.equal(
+    //   cashierTreasury.cashier.toString(),
+    //   cashier.publicKey.toString()
+    // );
+    // assert.equal(
+    //   cashierTreasury.deposit.toString(),
+    //   deposit.publicKey.toString()
+    // );
+    // assert.equal(
+    //   cashierTreasury.escrow.toString(),
+    //   escrow.publicKey.toString()
+    // );
+    // assert.equal(cashierTreasury.mint.toString(), mint.publicKey.toString());
+    // assert.equal(cashierTreasury.lastWithdrawAt, 0);
   });
 });
