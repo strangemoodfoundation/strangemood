@@ -55,7 +55,6 @@ fn distribute_governance_tokens<'a>(
 struct Splits { 
     pub to_charter_amount: u64,
     pub to_lister_amount: u64,
-
 }
 
 fn transfer_funds<'info>(
@@ -705,6 +704,8 @@ ctx.accounts.token_program.to_account_info(),
         expansion_rate: f64,
         payment_contribution: f64,
         vote_contribution: f64,
+        withdraw_period: u64,
+        stake_withdraw_amount: u64,
         uri: String,
     ) -> Result<()> {
         // Only the mint authority can make a charter.
@@ -724,7 +725,9 @@ ctx.accounts.token_program.to_account_info(),
         charter.expansion_rate = expansion_rate;
         charter.payment_contribution = payment_contribution;
         charter.vote_contribution = vote_contribution;
-        charter.vote_deposit = ctx.accounts.vote_deposit.key();
+        charter.withdraw_period = withdraw_period;
+        charter.stake_withdraw_amount = stake_withdraw_amount;
+        charter.reserve = ctx.accounts.reserve.key();
         charter.mint = ctx.accounts.mint.key();
         charter.uri = uri;
 
@@ -832,7 +835,7 @@ ctx.accounts.token_program.to_account_info(),
             return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
-        ctx.accounts.charter.vote_deposit = ctx.accounts.vote_deposit.key();
+        ctx.accounts.charter.reserve = ctx.accounts.vote_deposit.key();
         Ok(())
     }
 
@@ -976,6 +979,7 @@ pub struct MintTo<'info> {
     // The listing mint
     pub mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", mint.key().as_ref()],
         bump = listing_mint_authority_bump,
@@ -1017,6 +1021,7 @@ pub struct StartTrial<'info> {
     #[account(mut)]
     pub listing_mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
@@ -1050,6 +1055,7 @@ pub struct StartTrial<'info> {
     )]
     pub escrow: Account<'info, TokenAccount>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"escrow", escrow.key().as_ref()],
         bump=escrow_authority_bump,
@@ -1098,6 +1104,7 @@ pub struct StartTrialWithCashier<'info> {
     #[account(mut)]
     pub listing_mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
@@ -1131,6 +1138,7 @@ pub struct StartTrialWithCashier<'info> {
     )]
     pub escrow: Account<'info, TokenAccount>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"escrow", escrow.key().as_ref()],
         bump=escrow_authority_bump,
@@ -1175,6 +1183,7 @@ pub struct Purchase<'info> {
     #[account(mut)]
     pub listing_mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
@@ -1197,6 +1206,7 @@ pub struct Purchase<'info> {
     #[account(mut)]
     pub charter_mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", charter_mint.key().as_ref()],
         bump = charter_mint_bump,
@@ -1209,7 +1219,7 @@ pub struct Purchase<'info> {
     // without the Box, we run out of space?
     #[account(
         constraint=charter.clone().into_inner().mint==charter_mint.key(),
-        constraint=charter.vote_deposit==charter_vote_deposit.key(),
+        constraint=charter.reserve==charter_vote_deposit.key(),
         constraint=charter.mint==charter_mint.key(),
     )]
     pub charter: Box<Account<'info, Charter>>,
@@ -1264,6 +1274,7 @@ pub struct PurchaseWithCashier<'info> {
     #[account(mut)]
     pub listing_mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
@@ -1286,6 +1297,7 @@ pub struct PurchaseWithCashier<'info> {
     #[account(mut)]
     pub charter_mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", charter_mint.key().as_ref()],
         bump = charter_mint_bump,
@@ -1298,7 +1310,7 @@ pub struct PurchaseWithCashier<'info> {
     // without the Box, we run out of space?
     #[account(
         constraint=charter.clone().into_inner().mint==charter_mint.key(),
-        constraint=charter.vote_deposit==charter_vote_deposit.key(),
+        constraint=charter.reserve==charter_vote_deposit.key(),
         constraint=charter.mint==charter_mint.key(),
     )]
     pub charter: Box<Account<'info, Charter>>,
@@ -1320,12 +1332,15 @@ pub struct FinishTrial<'info> {
     )]
     pub receipt: Box<Account<'info, Receipt>>,
 
-    // The signer that purchased, who gets their SOL back that they used for the receipt.
+    /// CHECK: A purchaser is just a signer; we're not reading 
+    /// or writing from it.
+    /// The signer that purchased, who gets their SOL back that they used for the receipt.
     pub purchaser: AccountInfo<'info>,
 
     #[account(mut)]
     pub receipt_escrow: Box<Account<'info, TokenAccount>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"escrow", receipt_escrow.key().as_ref()],
         bump=receipt_escrow_authority_bump,
@@ -1362,6 +1377,7 @@ pub struct FinishTrial<'info> {
     #[account(mut)]
     pub charter_mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", charter_mint.key().as_ref()],
         bump = charter_mint_bump,
@@ -1374,7 +1390,7 @@ pub struct FinishTrial<'info> {
     // without the Box, we run out of space?
     #[account(
         constraint=charter.clone().into_inner().mint==charter_mint.key(),
-        constraint=charter.vote_deposit==charter_vote_deposit.key(),
+        constraint=charter.reserve==charter_vote_deposit.key(),
         constraint=charter.mint==charter_mint.key(),
     )]
     pub charter: Box<Account<'info, Charter>>,
@@ -1408,12 +1424,15 @@ pub struct FinishTrialWithCashier<'info> {
     ]
     pub receipt: Box<Account<'info, Receipt>>,
 
+    /// CHECK: A purchaser is just a signer; we're not reading 
+    /// or writing from it.
     // The signer that purchased, who gets their SOL back that they used for the receipt.
     pub purchaser: AccountInfo<'info>,
 
     #[account(mut)]
     pub receipt_escrow: Box<Account<'info, TokenAccount>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"escrow", receipt_escrow.key().as_ref()],
         bump=receipt_escrow_authority_bump,
@@ -1450,6 +1469,7 @@ pub struct FinishTrialWithCashier<'info> {
     #[account(mut)]
     pub charter_mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", charter_mint.key().as_ref()],
         bump = charter_mint_bump,
@@ -1462,7 +1482,7 @@ pub struct FinishTrialWithCashier<'info> {
     // without the Box, we run out of space?
     #[account(
         constraint=charter.clone().into_inner().mint==charter_mint.key(),
-        constraint=charter.vote_deposit==charter_vote_deposit.key(),
+        constraint=charter.reserve==charter_vote_deposit.key(),
         constraint=charter.mint==charter_mint.key(),
     )]
     pub charter: Box<Account<'info, Charter>>,
@@ -1491,6 +1511,7 @@ pub struct Refund<'info> {
     #[account(mut)]
     pub escrow: Account<'info, TokenAccount>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     pub escrow_authority: AccountInfo<'info>,
 
     #[account(mut)]
@@ -1503,6 +1524,7 @@ pub struct Refund<'info> {
     #[account(mut)]
     pub listing_mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
@@ -1522,6 +1544,7 @@ pub struct Consume<'info> {
     #[account(mut)]
     pub mint: Box<Account<'info, Mint>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", mint.key().as_ref()],
         bump = listing_mint_authority_bump,
@@ -1545,6 +1568,7 @@ pub struct InitListing<'info> {
     #[account(init, seeds=[b"listing", mint.key().as_ref()], bump, payer = user, space = 8 + 235 + 128)]
     pub listing: Box<Account<'info, Listing>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint", mint.key().as_ref()],
         bump = mint_bump,
@@ -1602,6 +1626,7 @@ pub struct SetListingAuthority<'info> {
     #[account(mut)]
     pub listing: Account<'info, Listing>,
 
+    /// CHECK: This is an authority, and we're not reading or writing from it.
     pub authority: AccountInfo<'info>,
 
     #[account(mut)]
@@ -1624,7 +1649,6 @@ pub struct SetListingCharter<'info> {
 
 
 #[derive(Accounts)]
-#[instruction()]
 pub struct InitCharter<'info> {
     // 8 for the tag
     // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 for the charter
@@ -1634,9 +1658,10 @@ pub struct InitCharter<'info> {
 
     pub mint: Account<'info, Mint>,
 
+    /// CHECK: This is an authority, and we're not reading or writing from it.
     pub authority: AccountInfo<'info>,
 
-    pub vote_deposit: Account<'info, TokenAccount>,
+    pub reserve: Account<'info, TokenAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -1669,6 +1694,7 @@ pub struct SetCharterAuthority<'info> {
     #[account(mut)]
     pub charter: Account<'info, Charter>,
 
+    /// CHECK: This is an authority, and we're not reading or writing from it.
     pub authority: AccountInfo<'info>,
 
     #[account(mut)]
@@ -1763,6 +1789,7 @@ pub struct InitCashier<'info> {
     )]
     pub stake: Account<'info, TokenAccount>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"cashier.stake", stake.key().as_ref()],
         bump=stake_bump,
@@ -1799,13 +1826,13 @@ pub struct InitCashierTreasury<'info> {
         payer=authority,
         space= 8 + 1 + 32 + 32 + 32 + 128
     )]
-    pub treasury: Account<'info, CashierTreasury>,
+    pub treasury: Box<Account<'info, CashierTreasury>>,
 
     #[account(has_one=authority)]
-    pub cashier: Account<'info, Cashier>, 
+    pub cashier: Box<Account<'info, Cashier>>, 
 
     #[account(has_one=mint)]
-    pub deposit: Account<'info, TokenAccount>,
+    pub deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -1813,15 +1840,16 @@ pub struct InitCashierTreasury<'info> {
         token::mint = mint,
         token::authority = escrow_authority
     )]
-    pub escrow: Account<'info, TokenAccount>,
+    pub escrow: Box<Account<'info, TokenAccount>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"cashier.escrow", escrow.key().as_ref()],
         bump=escrow_bump,
     )]
     pub escrow_authority: AccountInfo<'info>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -1845,6 +1873,7 @@ pub struct BurnCashierStake<'info> {
     #[account(mut, has_one=mint)]
     pub stake: Account<'info, TokenAccount>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"mint", mint.key().as_ref()],
         bump=mint_authority_bump,
@@ -1866,19 +1895,19 @@ pub struct BurnCashierStake<'info> {
 #[instruction(mint_authority_bump: u8, cashier_escrow_bump: u8)]
 pub struct WithdrawCashierTreasury<'info> {
     #[account(constraint=charter.mint==vote_mint.key())]
-    pub charter: Account<'info, Charter>,
+    pub charter: Box<Account<'info, Charter>>,
 
     // The treasury of the charter
     #[account(mut, has_one=charter)]
-    pub charter_treasury: Account<'info, CharterTreasury>,
+    pub charter_treasury: Box<Account<'info, CharterTreasury>>,
 
     #[account(has_one=charter, has_one=stake)]
-    pub cashier: Account<'info, Cashier>, 
+    pub cashier: Box<Account<'info, Cashier>>, 
 
     // The token account that contains the stake 
     // the cashier has in the network
     #[account(constraint=stake.mint==vote_mint.key())]
-    pub stake: Account<'info, TokenAccount>,
+    pub stake: Box<Account<'info, TokenAccount>>,
 
     // The treasury that binds the escrow, deposit, and 
     // cashier together
@@ -1888,15 +1917,16 @@ pub struct WithdrawCashierTreasury<'info> {
         has_one=deposit, 
         constraint=cashier_treasury.mint==payment_mint.key()
     )]
-    pub cashier_treasury: Account<'info, CashierTreasury>,
+    pub cashier_treasury: Box<Account<'info, CashierTreasury>>,
 
     // Where the tokens are right now 
     #[account(
         mut,
         constraint=escrow.mint==payment_mint.key() 
     )]
-    pub escrow: Account<'info, TokenAccount>,
+    pub escrow: Box<Account<'info, TokenAccount>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"cashier.escrow", escrow.key().as_ref()],
         bump=cashier_escrow_bump,
@@ -1907,13 +1937,13 @@ pub struct WithdrawCashierTreasury<'info> {
     #[account(mut, 
         constraint=deposit.mint==payment_mint.key() 
     )]
-    pub deposit: Account<'info, TokenAccount>,
+    pub deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub payment_mint: Account<'info, Mint>,
+    pub payment_mint: Box<Account<'info, Mint>>,
 
     // The governance token mint
-    pub vote_mint: Account<'info, Mint>,
+    pub vote_mint: Box<Account<'info, Mint>>,
 
     pub clock: Sysvar<'info, Clock>,
     pub rent: Sysvar<'info, Rent>,
@@ -1926,16 +1956,17 @@ pub struct WithdrawCashierTreasury<'info> {
 #[instruction(stake_bump: u8)]
 pub struct WithdrawCashierStake<'info> {
     #[account(mut, constraint=charter.mint==vote_mint.key())]
-    pub charter: Account<'info, Charter>,
+    pub charter: Box<Account<'info, Charter>>,
 
     #[account(has_one=charter, has_one=stake)]
-    pub cashier: Account<'info, Cashier>, 
+    pub cashier: Box<Account<'info, Cashier>>, 
 
     // The token account that contains the stake 
     // the cashier has in the network
     #[account(constraint=stake.mint==vote_mint.key())]
-    pub stake: Account<'info, TokenAccount>,
+    pub stake: Box<Account<'info, TokenAccount>>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"cashier.stake", stake.key().as_ref()],
         bump=stake_bump,
@@ -1946,10 +1977,10 @@ pub struct WithdrawCashierStake<'info> {
     #[account(mut, 
         constraint=deposit.mint==vote_mint.key() 
     )]
-    pub deposit: Account<'info, TokenAccount>,
+    pub deposit: Box<Account<'info, TokenAccount>>,
 
     // The governance token mint
-    pub vote_mint: Account<'info, Mint>,
+    pub vote_mint: Box<Account<'info, Mint>>,
 
     pub clock: Sysvar<'info, Clock>,
     pub rent: Sysvar<'info, Rent>,

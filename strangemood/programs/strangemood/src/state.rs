@@ -118,7 +118,7 @@ pub struct Charter {
     pub mint: Pubkey,
 
     // The community treasury of the native token.
-    pub vote_deposit: Pubkey,
+    pub reserve: Pubkey,
 
     // The number of epochs a withdraw period lasts.
     pub withdraw_period: u64,
