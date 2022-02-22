@@ -864,7 +864,7 @@ ctx.accounts.token_program.to_account_info(),
         Ok(())
     }
 
-    pub fn init_cashier(ctx: Context<InitCashier>, _stake_bump: u8, uri: String) -> Result<()> {
+    pub fn init_cashier(ctx: Context<InitCashier>, _stake_authority_bump: u8, uri: String) -> Result<()> {
         let cashier = &mut ctx.accounts.cashier;
         cashier.is_initialized = true;
         cashier.charter = ctx.accounts.charter.key();
@@ -883,7 +883,7 @@ ctx.accounts.token_program.to_account_info(),
         treasury.cashier = ctx.accounts.cashier.key();
         treasury.deposit = ctx.accounts.deposit.key();
         treasury.mint = ctx.accounts.mint.key();
-        treasury.last_withdraw_epoch = ctx.accounts.clock.epoch;
+        treasury.last_withdraw_at = ctx.accounts.clock.epoch;
 
         Ok(())
     }
@@ -911,7 +911,7 @@ ctx.accounts.token_program.to_account_info(),
         // Calculate the amount to transfer
         let amount_per_period = stake.amount as f64 * charter_treasury.scalar;
         let amount_per_epoch = amount_per_period as f64 / charter.withdraw_period as f64;
-        let epochs_passed = clock.epoch - cashier_treasury.last_withdraw_epoch;
+        let epochs_passed = clock.epoch - cashier_treasury.last_withdraw_at;
         let amount_to_transfer = amount_per_epoch * epochs_passed as f64;
 
         // Transfer what we can
@@ -926,7 +926,7 @@ ctx.accounts.token_program.to_account_info(),
         )?;
 
         // Update cashier treasury's last epoch
-        cashier_treasury.last_withdraw_epoch = clock.epoch;
+        cashier_treasury.last_withdraw_at = clock.epoch;
 
         Ok(())
     }
@@ -1788,7 +1788,7 @@ pub struct SetCharterTreasuryDeposit<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(stake_bump: u8)]
+#[instruction(stake_authority_bump: u8)]
 pub struct InitCashier<'info> {
     // 8 for the tag
     // 1 for is_initalized 
@@ -1799,6 +1799,8 @@ pub struct InitCashier<'info> {
     // 256 for URI
     // 128 for future versions
     #[account(init,
+        seeds = [b"cashier", stake.key().as_ref()],
+        bump,
         payer = authority,
         space = 8 + 1 + 32 + 32 + 8 + 256 + 128
     )]
@@ -1814,7 +1816,7 @@ pub struct InitCashier<'info> {
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"token_authority", stake.key().as_ref()],
-        bump=stake_bump,
+        bump=stake_authority_bump,
     )]
     pub stake_authority: AccountInfo<'info>,
 

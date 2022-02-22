@@ -1,0 +1,140 @@
+import assert from "assert";
+import { PublicKey } from "@solana/web3.js";
+import * as anchor from "@project-serum/anchor";
+import * as splToken from "@solana/spl-token";
+import { Program, splitArgsAndCtx } from "@project-serum/anchor";
+import { Strangemood } from "../../target/types/strangemood";
+import { TestClient } from "./testClient";
+import { makeReceiptNonce } from "..";
+import { createMint, createTokenAccount } from "./utils";
+import { pda } from "../pda";
+import { MAINNET } from "../constants";
+const { SystemProgram, Keypair } = anchor.web3;
+
+export async function createCharter(
+  program: Program<Strangemood>,
+  expansionRate: number,
+  paymentContribution: number,
+  voteContribution: number,
+  withdrawPeriod: anchor.BN,
+  stakeWithdrawAmount: anchor.BN,
+  uri: string
+) {
+  const mint = await createMint(program);
+  const reserve = await createTokenAccount(program, mint.publicKey);
+
+  const [charter_pda, _] = await pda.charter(program.programId, mint.publicKey);
+
+  await program.methods
+    .initCharter(
+      expansionRate,
+      paymentContribution,
+      voteContribution,
+      withdrawPeriod,
+      stakeWithdrawAmount,
+      uri
+    )
+    .accounts({
+      charter: charter_pda,
+      mint: mint.publicKey,
+      authority: program.provider.wallet.publicKey,
+      reserve: reserve.publicKey,
+      user: program.provider.wallet.publicKey,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+  const charter = await program.account.charter.fetch(charter_pda);
+
+  return {
+    account: charter,
+    publicKey: charter_pda,
+  };
+}
+
+export async function createCharterTreasury(
+  program: Program<Strangemood>,
+  charter: PublicKey,
+  mint: PublicKey
+) {
+  const [treasury_pda, _] = await pda.treasury(
+    program.programId,
+    charter,
+    mint
+  );
+  const deposit = await createTokenAccount(program, mint);
+
+  await program.methods
+    .initCharterTreasury(1.0)
+    .accounts({
+      treasury: treasury_pda,
+      mint: mint,
+      deposit: deposit.publicKey,
+      charter: charter,
+    })
+    .rpc();
+  const treasury = await program.account.charterTreasury.fetch(treasury_pda);
+
+  return {
+    account: treasury,
+    publicKey: treasury_pda,
+  };
+}
+
+export async function initListing(
+  program: Program<Strangemood>,
+  charter: { account: any; publicKey: PublicKey },
+  charterTreasury: { account: any; publicKey: PublicKey },
+  paymentMint: PublicKey,
+  decimals: number,
+  price: number,
+  isRefundable: boolean,
+  isConsumable: boolean,
+  isAvailable: boolean,
+  cashierSplit: number,
+  uri: string
+) {
+  const listingMint = Keypair.generate();
+
+  const paymentDeposit = await createTokenAccount(program, paymentMint);
+  const voteDeposit = await createTokenAccount(program, charter.account.mint);
+
+  const [mint_authority, mint_authority_bump] = await pda.mint_authority(
+    program.programId,
+    listingMint.publicKey
+  );
+  const [listing_pda, _] = await pda.listing(
+    program.programId,
+    listingMint.publicKey
+  );
+
+  await program.methods
+    .initListing(
+      mint_authority_bump,
+      decimals,
+      new anchor.BN(price),
+      isRefundable,
+      isConsumable,
+      isAvailable,
+      cashierSplit,
+      uri
+    )
+    .accounts({
+      listing: listing_pda,
+      mintAuthority: mint_authority,
+      mint: listingMint.publicKey,
+      paymentDeposit: paymentDeposit.publicKey,
+      voteDeposit: voteDeposit.publicKey,
+      charter: charter.publicKey,
+      charterTreasury: charterTreasury.publicKey,
+      user: program.provider.wallet.publicKey,
+    })
+    .signers([listingMint])
+    .rpc();
+
+  const listing = await program.account.listing.fetch(listing_pda);
+
+  return {
+    account: listing,
+    publicKey: listing_pda,
+  };
+}

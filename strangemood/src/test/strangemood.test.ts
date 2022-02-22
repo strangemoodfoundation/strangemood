@@ -1,89 +1,19 @@
 import assert from "assert";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@project-serum/anchor";
-import * as splToken from "@solana/spl-token";
 import { Program, splitArgsAndCtx } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
-import { TestClient } from "./testClient";
-import { fetchStrangemoodProgram, makeReceiptNonce } from "..";
+import { makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
 import { MAINNET } from "../constants";
-const { SystemProgram, Keypair } = anchor.web3;
+import { createCharter, createCharterTreasury } from "./instructions";
+const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY } = anchor.web3;
 
 describe("no nonce buffer bug", () => {
   const nonce = makeReceiptNonce();
   nonce.toBuffer();
 });
-
-async function createCharter(
-  program: Program<Strangemood>,
-  expansionRate: number,
-  paymentContribution: number,
-  voteContribution: number,
-  withdrawPeriod: anchor.BN,
-  stakeWithdrawAmount: anchor.BN,
-  uri: string
-) {
-  const mint = await createMint(program);
-  const reserve = await createTokenAccount(program, mint.publicKey);
-
-  const [charter_pda, _] = await pda.charter(program.programId, mint.publicKey);
-
-  await program.methods
-    .initCharter(
-      expansionRate,
-      paymentContribution,
-      voteContribution,
-      withdrawPeriod,
-      stakeWithdrawAmount,
-      uri
-    )
-    .accounts({
-      charter: charter_pda,
-      mint: mint.publicKey,
-      authority: program.provider.wallet.publicKey,
-      reserve: reserve.publicKey,
-      user: program.provider.wallet.publicKey,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
-  const charter = await program.account.charter.fetch(charter_pda);
-
-  return {
-    account: charter,
-    publicKey: charter_pda,
-  };
-}
-
-async function createCharterTreasury(
-  program: Program<Strangemood>,
-  charter: PublicKey,
-  mint: PublicKey
-) {
-  const [treasury_pda, _] = await pda.treasury(
-    program.programId,
-    charter,
-    mint
-  );
-  const deposit = await createTokenAccount(program, mint);
-
-  await program.methods
-    .initCharterTreasury(1.0)
-    .accounts({
-      treasury: treasury_pda,
-      mint: mint,
-      deposit: deposit.publicKey,
-      charter: charter,
-    })
-    .rpc();
-  const treasury = await program.account.charterTreasury.fetch(treasury_pda);
-
-  return {
-    account: treasury,
-    publicKey: treasury_pda,
-  };
-}
 
 describe("Strangemood", () => {
   const provider = anchor.Provider.env();
@@ -298,5 +228,51 @@ describe("Strangemood", () => {
     assert.equal(listing.cashierSplit, 0.1);
     assert.equal(listing.uri, "ipfs://somecid");
     assert.equal(listing.price.toNumber(), 10);
+  });
+
+  it("init_cashier", async () => {
+    const charter = await createCharter(
+      program,
+      10,
+      0.01,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+
+    const stake = Keypair.generate();
+    const [cashier_pda, cashier_bump] = await pda.cashier(
+      program.programId,
+      stake.publicKey
+    );
+    const [stakeAuthority, stake_authority_bump] = await pda.token_authority(
+      program.programId,
+      stake.publicKey
+    );
+
+    await program.methods
+      .initCashier(stake_authority_bump, "ipfs://cashier")
+      .accounts({
+        cashier: cashier_pda,
+        stake: stake.publicKey,
+        stakeAuthority,
+        charter: charter.publicKey,
+        charterMint: charter.account.mint,
+        authority: program.provider.wallet.publicKey,
+        clock: SYSVAR_CLOCK_PUBKEY,
+      })
+      .signers([stake])
+      .rpc();
+
+    const cashier = await program.account.cashier.fetch(cashier_pda);
+    assert.equal(
+      cashier.authority.toString(),
+      program.provider.wallet.publicKey.toString()
+    );
+    assert.equal(cashier.charter.toString(), charter.publicKey.toString());
+    assert.equal(cashier.stake.toString(), stake.publicKey.toString());
+    assert.equal(cashier.lastWithdrawAt, 0);
+    assert.equal(cashier.uri, "ipfs://cashier");
   });
 });

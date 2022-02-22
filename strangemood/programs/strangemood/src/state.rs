@@ -197,5 +197,5 @@ pub struct CashierTreasury {
     pub mint: Pubkey,
 
     // The last epoch the cashier has withdrawn from their deposit.
-    pub last_withdraw_epoch: u64,
+    pub last_withdraw_at: u64,
 }

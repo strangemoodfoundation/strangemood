@@ -36,6 +36,13 @@ export const pda = {
     );
   },
 
+  cashier: async (strangemoodProgramId: PublicKey, stake: PublicKey) => {
+    return web3.PublicKey.findProgramAddress(
+      [Buffer.from("cashier"), stake.toBuffer()],
+      strangemoodProgramId
+    );
+  },
+
   treasury: async (
     strangemoodProgramId: PublicKey,
     cashierOrCharter: PublicKey,
