@@ -9,9 +9,9 @@ import { makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
 import { MAINNET } from "../constants";
-const { SystemProgram, Keypair } = anchor.web3;
+const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY } = anchor.web3;
 
-export async function createCharter(
+export async function initCharter(
   program: Program<Strangemood>,
   expansionRate: number,
   paymentContribution: number,
@@ -136,5 +136,41 @@ export async function initListing(
   return {
     account: listing,
     publicKey: listing_pda,
+  };
+}
+
+export async function initCashier(
+  program: Program<Strangemood>,
+  charter: { account: any; publicKey: PublicKey },
+  uri = "ipfs://cashier"
+) {
+  const stake = Keypair.generate();
+  const [cashier_pda, cashier_bump] = await pda.cashier(
+    program.programId,
+    stake.publicKey
+  );
+  const [stakeAuthority, stake_authority_bump] = await pda.token_authority(
+    program.programId,
+    stake.publicKey
+  );
+
+  await program.methods
+    .initCashier(stake_authority_bump, uri)
+    .accounts({
+      cashier: cashier_pda,
+      stake: stake.publicKey,
+      stakeAuthority,
+      charter: charter.publicKey,
+      charterMint: charter.account.mint,
+      authority: program.provider.wallet.publicKey,
+      clock: SYSVAR_CLOCK_PUBKEY,
+    })
+    .signers([stake])
+    .rpc();
+
+  const cashier = await program.account.cashier.fetch(cashier_pda);
+  return {
+    account: cashier,
+    publicKey: cashier_pda,
   };
 }

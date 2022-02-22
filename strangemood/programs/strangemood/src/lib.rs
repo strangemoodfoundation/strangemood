@@ -876,8 +876,8 @@ ctx.accounts.token_program.to_account_info(),
         Ok(())
     }
 
-    pub fn init_cashier_treasury(ctx: Context<InitCashierTreasury>) -> Result<()> {
-        let treasury = &mut ctx.accounts.treasury; 
+    pub fn init_cashier_treasury(ctx: Context<InitCashierTreasury>, _escrow_authority_bump: u8) -> Result<()> {
+        let treasury = &mut ctx.accounts.cashier_treasury; 
         
         treasury.is_initialized = true; 
         treasury.cashier = ctx.accounts.cashier.key();
@@ -1837,7 +1837,7 @@ pub struct InitCashier<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(escrow_bump: u8)]
+#[instruction(escrow_authority_bump: u8)]
 pub struct InitCashierTreasury<'info> {
     // 8 for the tag 
     // 1 for is_initialized
@@ -1854,10 +1854,17 @@ pub struct InitCashierTreasury<'info> {
         payer=authority,
         space= 8 + 1 + 32 + 32 + 32 + 32 + 8 + 128
     )]
-    pub treasury: Box<Account<'info, CashierTreasury>>,
+    pub cashier_treasury: Box<Account<'info, CashierTreasury>>,
 
-    #[account(has_one=authority)]
+    #[account(has_one=authority, has_one=charter)]
     pub cashier: Box<Account<'info, Cashier>>, 
+
+    #[account(
+        has_one=charter,
+        constraint=charter_treasury.mint==cashier_treasury.mint
+    )]
+    pub charter_treasury: Box<Account<'info, CharterTreasury>>,
+    pub charter: Box<Account<'info, Charter>>,
 
     #[account(has_one=mint)]
     pub deposit: Box<Account<'info, TokenAccount>>,
@@ -1873,7 +1880,7 @@ pub struct InitCashierTreasury<'info> {
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"token_authority", escrow.key().as_ref()],
-        bump=escrow_bump,
+        bump=escrow_authority_bump,
     )]
     pub escrow_authority: AccountInfo<'info>,
 

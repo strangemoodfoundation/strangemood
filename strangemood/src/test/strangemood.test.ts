@@ -7,7 +7,11 @@ import { makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
 import { MAINNET } from "../constants";
-import { createCharter, createCharterTreasury } from "./instructions";
+import {
+  initCharter,
+  createCharterTreasury,
+  initCashier,
+} from "./instructions";
 const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY } = anchor.web3;
 
 describe("no nonce buffer bug", () => {
@@ -65,7 +69,7 @@ describe("Strangemood", () => {
   });
 
   it("init_charter_treasury", async () => {
-    const charter = await createCharter(
+    const charter = await initCharter(
       program,
       10,
       0.01,
@@ -102,7 +106,7 @@ describe("Strangemood", () => {
   });
 
   it("can't create two charter treasuries of the same type", async () => {
-    const charter = await createCharter(
+    const charter = await initCharter(
       program,
       10,
       0.01,
@@ -150,7 +154,7 @@ describe("Strangemood", () => {
   });
 
   it("init_listing", async () => {
-    const charter = await createCharter(
+    const charter = await initCharter(
       program,
       10,
       0.01,
@@ -231,7 +235,7 @@ describe("Strangemood", () => {
   });
 
   it("init_cashier", async () => {
-    const charter = await createCharter(
+    const charter = await initCharter(
       program,
       10,
       0.01,
@@ -274,5 +278,61 @@ describe("Strangemood", () => {
     assert.equal(cashier.stake.toString(), stake.publicKey.toString());
     assert.equal(cashier.lastWithdrawAt, 0);
     assert.equal(cashier.uri, "ipfs://cashier");
+  });
+
+  it("init_cashier_treasury", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.01,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const cashier = await initCashier(program, charter);
+    const mint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      mint.publicKey
+    );
+    const deposit = await createTokenAccount(program, mint.publicKey);
+
+    const escrow = Keypair.generate();
+    const [escrow_authority, bump] = await pda.token_authority(
+      program.programId,
+      escrow.publicKey
+    );
+    const [cashier_treasury_pda, _] = await pda.treasury(
+      program.programId,
+      cashier.publicKey,
+      mint.publicKey
+    );
+
+    await program.methods
+      .initCashierTreasury(bump)
+      .accounts({
+        cashierTreasury: cashier_treasury_pda,
+        cashier: cashier.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        charter: charter.publicKey,
+        deposit: deposit.publicKey,
+        escrow: escrow.publicKey,
+        escrowAuthority: escrow_authority,
+        mint: mint.publicKey,
+        clock: SYSVAR_CLOCK_PUBKEY,
+        authority: program.provider.wallet.publicKey,
+      })
+      .rpc();
+
+    const cashierTreasury = await program.account.cashierTreasury.fetch(
+      cashier_treasury_pda
+    );
+
+    assert.equal(
+      cashierTreasury.authority.toString(),
+      program.provider.wallet.publicKey.toString()
+    );
   });
 });
