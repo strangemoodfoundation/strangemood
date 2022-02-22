@@ -291,6 +291,12 @@ describe("Strangemood", () => {
       new anchor.BN(1),
       "https://strangemood.org"
     );
+
+    assert.equal(charter.account.uri, "https://strangemood.org");
+    if (!charter) {
+      throw new Error("charter not initialized");
+    }
+
     const cashier = await initCashier(program, charter);
     const mint = await createMint(program);
     const charterTreasury = await createCharterTreasury(
@@ -333,22 +339,29 @@ describe("Strangemood", () => {
     );
 
     assert.equal(
-      cashierTreasury.authority.toString(),
-      program.provider.wallet.publicKey.toString()
+      cashierTreasury.cashier.toString(),
+      cashier.publicKey.toString(),
+      "cashier does not match"
     );
-    // assert.equal(
-    //   cashierTreasury.cashier.toString(),
-    //   cashier.publicKey.toString()
-    // );
-    // assert.equal(
-    //   cashierTreasury.deposit.toString(),
-    //   deposit.publicKey.toString()
-    // );
-    // assert.equal(
-    //   cashierTreasury.escrow.toString(),
-    //   escrow.publicKey.toString()
-    // );
-    // assert.equal(cashierTreasury.mint.toString(), mint.publicKey.toString());
-    // assert.equal(cashierTreasury.lastWithdrawAt, 0);
+    assert.equal(
+      cashierTreasury.deposit.toString(),
+      deposit.publicKey.toString(),
+      "deposit does not match"
+    );
+    assert.equal(
+      cashierTreasury.escrow.toString(),
+      escrow.publicKey.toString(),
+      "escrow does not match"
+    );
+    assert.equal(
+      cashierTreasury.mint.toString(),
+      mint.publicKey.toString(),
+      "mint does not match"
+    );
+    assert.equal(
+      cashierTreasury.lastWithdrawAt,
+      0,
+      "lastWithdrawAt does not match"
+    );
   });
 });

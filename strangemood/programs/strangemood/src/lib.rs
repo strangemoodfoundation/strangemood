@@ -826,6 +826,7 @@ ctx.accounts.token_program.to_account_info(),
         treasury.is_initialized = true; 
         treasury.cashier = ctx.accounts.cashier.key();
         treasury.deposit = ctx.accounts.deposit.key();
+        treasury.escrow = ctx.accounts.escrow.key();
         treasury.mint = ctx.accounts.mint.key();
         treasury.last_withdraw_at = ctx.accounts.clock.epoch;
 
@@ -1799,7 +1800,7 @@ pub struct InitCashierTreasury<'info> {
 
     #[account(
         has_one=charter @ StrangemoodError::CharterTreasuryHasUnexpectedCharter,
-        constraint=charter_treasury.mint==cashier_treasury.mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint
+        has_one=mint @ StrangemoodError::CharterTreasuryHasUnexpectedMint
     )]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
     pub charter: Box<Account<'info, Charter>>,

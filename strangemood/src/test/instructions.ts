@@ -154,6 +154,10 @@ export async function initCashier(
     stake.publicKey
   );
 
+  if (!charter) {
+    throw new Error("charter is required");
+  }
+
   await program.methods
     .initCashier(stake_authority_bump, uri)
     .accounts({
