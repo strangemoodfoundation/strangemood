@@ -11,7 +11,6 @@ pub mod cpi;
 
 declare_id!("sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW");
 
-
 fn distribute_governance_tokens<'a>(
     contributed: u64, 
     scalar: f64, 
@@ -182,7 +181,7 @@ fn transfer_funds_from_escrow_with_cashier<'info>(
         charter_deposit.to_account_info(),
         authority.to_account_info(),
         to_charter_amount,
-        b"escrow",
+        b"token_authority",
         bump
     )?;
 
@@ -193,7 +192,7 @@ fn transfer_funds_from_escrow_with_cashier<'info>(
         listing_deposit.to_account_info(),
         authority.to_account_info(),
         to_lister_amount,
-        b"escrow",
+        b"token_authority",
         bump
     )?;
 
@@ -204,7 +203,7 @@ fn transfer_funds_from_escrow_with_cashier<'info>(
     cashier_deposit.to_account_info(),
         authority.to_account_info(),
         to_cashier_amount,
-        b"escrow",
+        b"token_authority",
         bump
     )?;
 
@@ -234,7 +233,7 @@ fn transfer_funds_from_escrow<'info>(
         charter_deposit.to_account_info(),
         authority.to_account_info(),
         to_charter_amount,
-        b"escrow",
+        b"token_authority",
         bump
     )?;
 
@@ -245,7 +244,7 @@ fn transfer_funds_from_escrow<'info>(
         listing_deposit.to_account_info(),
         authority.to_account_info(),
         to_lister_amount,
-        b"escrow",
+        b"token_authority",
         bump
     )?;
 
@@ -263,7 +262,7 @@ pub mod strangemood {
 
     pub fn init_listing(
         ctx: Context<InitListing>,
-        _mint_bump: u8,
+        _mint_authority_bump: u8,
         _decimals: u8,
         price: u64,
         refundable: bool,
@@ -295,7 +294,7 @@ pub mod strangemood {
         listing.is_initialized = true;
         listing.price = price;
         listing.mint = ctx.accounts.mint.key();
-        listing.authority = *ctx.accounts.user.key;
+        listing.authority = *ctx.accounts.authority.key;
         listing.payment_deposit = ctx.accounts.payment_deposit.key();
         listing.vote_deposit = ctx.accounts.vote_deposit.key();
         listing.charter = ctx.accounts.charter.key();
@@ -656,7 +655,7 @@ ctx.accounts.token_program.to_account_info(),
             ctx.accounts.return_deposit.to_account_info(), 
             ctx.accounts.escrow_authority.to_account_info(), 
             ctx.accounts.escrow.amount,
-            b"escrow",
+            b"token_authority",
             escrow_authority_bump
         )?;
 
@@ -830,16 +829,16 @@ ctx.accounts.token_program.to_account_info(),
         Ok(())
     }
 
-    pub fn set_charter_vote_deposit(ctx: Context<SetCharterVoteDeposit>) -> Result<()> {
+    pub fn set_charter_vote_deposit(ctx: Context<SetCharterReserve>) -> Result<()> {
         if ctx.accounts.user.key() != ctx.accounts.charter.authority {
             return Err(StrangemoodError::AuthorityIsUnauthorized.into());
         }
 
-        ctx.accounts.charter.reserve = ctx.accounts.vote_deposit.key();
+        ctx.accounts.charter.reserve = ctx.accounts.reserve.key();
         Ok(())
     }
 
-    pub fn init_charter_treasury(ctx: Context<InitCharterTreasury>, _treasury_bump: u8, scalar: f64) -> Result<()> {
+    pub fn init_charter_treasury(ctx: Context<InitCharterTreasury>, scalar: f64) -> Result<()> {
         
         let treasury = &mut ctx.accounts.treasury;
         treasury.charter = ctx.accounts.charter.key();
@@ -871,7 +870,7 @@ ctx.accounts.token_program.to_account_info(),
         cashier.charter = ctx.accounts.charter.key();
         cashier.stake = ctx.accounts.stake.key();
         cashier.authority = ctx.accounts.authority.key();
-        cashier.last_withdraw_epoch = ctx.accounts.clock.epoch;
+        cashier.last_withdraw_at = ctx.accounts.clock.epoch;
         cashier.uri = uri;
 
         Ok(())
@@ -941,7 +940,7 @@ ctx.accounts.token_program.to_account_info(),
         // Calculate the amount to transfer
         let amount_per_period = charter.stake_withdraw_amount;
         let amount_per_epoch = amount_per_period as f64 / charter.withdraw_period as f64;
-        let epochs_passed = clock.epoch - cashier.last_withdraw_epoch;
+        let epochs_passed = clock.epoch - cashier.last_withdraw_at;
         let amount_to_transfer = amount_per_epoch * epochs_passed as f64;
 
         // Transfer what we can
@@ -951,12 +950,12 @@ ctx.accounts.token_program.to_account_info(),
             ctx.accounts.deposit.to_account_info(),
         ctx.accounts.stake_authority.to_account_info(),
             cmp::min(amount_to_transfer as u64, ctx.accounts.stake.amount),
-            b"cashier.stake", 
+            b"token_authority", 
             cashier_escrow_bump
         )?;
 
         // Update cashier treasury's last epoch
-        cashier.last_withdraw_epoch = clock.epoch;
+        cashier.last_withdraw_at = clock.epoch;
 
         Ok(())
     }
@@ -981,7 +980,7 @@ pub struct MintTo<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", mint.key().as_ref()],
+        seeds = [b"mint_authority", mint.key().as_ref()],
         bump = listing_mint_authority_bump,
     )]
     pub mint_authority: AccountInfo<'info>,
@@ -1023,7 +1022,7 @@ pub struct StartTrial<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", listing_mint.key().as_ref()],
+        seeds = [b"mint_authority", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
@@ -1057,7 +1056,7 @@ pub struct StartTrial<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"escrow", escrow.key().as_ref()],
+        seeds=[b"token_authority", escrow.key().as_ref()],
         bump=escrow_authority_bump,
     )]
     pub escrow_authority: AccountInfo<'info>,
@@ -1089,7 +1088,7 @@ pub struct StartTrialWithCashier<'info> {
     )]
     pub listing_payment_deposit: Box<Account<'info, TokenAccount>>,
 
-    // The type of funds that this 
+    // The type of funds that this
     pub listing_payment_deposit_mint: Account<'info, Mint>,
 
     // The person who's allowed to cash out the listing
@@ -1106,7 +1105,7 @@ pub struct StartTrialWithCashier<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", listing_mint.key().as_ref()],
+        seeds = [b"mint_authority", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
@@ -1140,7 +1139,7 @@ pub struct StartTrialWithCashier<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"escrow", escrow.key().as_ref()],
+        seeds=[b"token_authority", escrow.key().as_ref()],
         bump=escrow_authority_bump,
     )]
     pub escrow_authority: AccountInfo<'info>,
@@ -1185,7 +1184,7 @@ pub struct Purchase<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", listing_mint.key().as_ref()],
+        seeds = [b"mint_authority", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
@@ -1208,7 +1207,7 @@ pub struct Purchase<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", charter_mint.key().as_ref()],
+        seeds = [b"mint_authority", charter_mint.key().as_ref()],
         bump = charter_mint_bump,
     )]
     pub charter_mint_authority: AccountInfo<'info>,
@@ -1276,7 +1275,7 @@ pub struct PurchaseWithCashier<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", listing_mint.key().as_ref()],
+        seeds = [b"mint_authority", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
@@ -1299,7 +1298,7 @@ pub struct PurchaseWithCashier<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", charter_mint.key().as_ref()],
+        seeds = [b"mint_authority", charter_mint.key().as_ref()],
         bump = charter_mint_bump,
     )]
     pub charter_mint_authority: AccountInfo<'info>,
@@ -1342,7 +1341,7 @@ pub struct FinishTrial<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"escrow", receipt_escrow.key().as_ref()],
+        seeds=[b"token_authority", receipt_escrow.key().as_ref()],
         bump=receipt_escrow_authority_bump,
     )]
     pub receipt_escrow_authority: AccountInfo<'info>,
@@ -1379,7 +1378,7 @@ pub struct FinishTrial<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", charter_mint.key().as_ref()],
+        seeds = [b"mint_authority", charter_mint.key().as_ref()],
         bump = charter_mint_bump,
     )]
     pub charter_mint_authority: AccountInfo<'info>,
@@ -1434,7 +1433,7 @@ pub struct FinishTrialWithCashier<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"escrow", receipt_escrow.key().as_ref()],
+        seeds=[b"token_authority", receipt_escrow.key().as_ref()],
         bump=receipt_escrow_authority_bump,
     )]
     pub receipt_escrow_authority: AccountInfo<'info>,
@@ -1471,7 +1470,7 @@ pub struct FinishTrialWithCashier<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", charter_mint.key().as_ref()],
+        seeds = [b"mint_authority", charter_mint.key().as_ref()],
         bump = charter_mint_bump,
     )]
     pub charter_mint_authority: AccountInfo<'info>,
@@ -1526,7 +1525,7 @@ pub struct Refund<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", listing_mint.key().as_ref()],
+        seeds = [b"mint_authority", listing_mint.key().as_ref()],
         bump = listing_mint_authority_bump,
     )]
     pub listing_mint_authority: AccountInfo<'info>,
@@ -1546,7 +1545,7 @@ pub struct Consume<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", mint.key().as_ref()],
+        seeds = [b"mint_authority", mint.key().as_ref()],
         bump = listing_mint_authority_bump,
     )]
     pub mint_authority: AccountInfo<'info>,
@@ -1560,41 +1559,53 @@ pub struct Consume<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(mint_bump: u8, listing_mint_decimals: u8)]
+#[instruction(mint_authority_bump: u8, decimals: u8)]
 pub struct InitListing<'info> {
     // 8 for the tag
-    // 235 for the size of the listing account itself
-    // 128 for metadata URI
-    #[account(init, seeds=[b"listing", mint.key().as_ref()], bump, payer = user, space = 8 + 235 + 128)]
+    // 1 for is_initialized
+    // 1 for is_available 
+    // 32 for charter
+    // 32 for authority
+    // 32 for payment_deposit
+    // 32 for payment_deposit
+    // 8 for price
+    // 32 for mint 
+    // 1 for is_refundable
+    // 1 for is_consumable 
+    // 8 for cashier_split
+    // 256 for metadata URI
+    // 128 for future versions
+    #[account(init, seeds=[b"listing", mint.key().as_ref()], bump, payer = authority, space = 8 + 1 + 1 + 32 + 32 + 32 + 32 + 8 + 32 + 1 + 1 + 8 + 256 + 128)]
     pub listing: Box<Account<'info, Listing>>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint", mint.key().as_ref()],
-        bump = mint_bump,
+        seeds = [b"mint_authority", mint.key().as_ref()],
+        bump = mint_authority_bump,
     )]
-    pub mint_authority_pda: AccountInfo<'info>,
+    pub mint_authority: AccountInfo<'info>,
 
-    #[account(init, mint::decimals = listing_mint_decimals, mint::authority = mint_authority_pda, mint::freeze_authority = mint_authority_pda, payer = user)]
+    #[account(init, mint::decimals = decimals, mint::authority = mint_authority, mint::freeze_authority = mint_authority, payer = authority)]
     pub mint: Box<Account<'info, Mint>>,
 
-    pub payment_deposit: Box<Account<'info, TokenAccount>>,
-    pub vote_deposit: Box<Account<'info, TokenAccount>>,
-
-    // Box'd to move the charter (which is fairly hefty)
-    // to the heap instead of the stack.
-    // Not actually sure if this is a good idea, but
-    // without the Box, we run out of space?
+    // The charter that this listing will belong to, effectively determining it's governance.
     pub charter: Box<Account<'info, Charter>>,
 
+    // The charter treasury that proves that this governance supports the payment method
+    // that this charter is using.
     #[account(has_one=charter)]
     pub charter_treasury: Box<Account<'info, CharterTreasury>>,
+
+    #[account(constraint=payment_deposit.mint==charter_treasury.mint)]
+    pub payment_deposit: Box<Account<'info, TokenAccount>>,
+    pub vote_deposit: Box<Account<'info, TokenAccount>>,
 
     pub rent: Sysvar<'info, Rent>,
     pub token_program: Program<'info, Token>,
 
+    // The soon to be authority of the listing
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -1610,11 +1621,19 @@ pub struct SetListing<'info> {
 
 #[derive(Accounts)]
 pub struct SetListingDeposit<'info> {
-    #[account(mut)]
+    #[account(mut, has_one=charter)]
     pub listing: Account<'info, Listing>,
 
+    #[account(constraint=charter_treasury.mint==payment_deposit.mint)]
     pub payment_deposit: Account<'info, TokenAccount>,
+
+    #[account(constraint=vote_deposit.mint==charter.mint)]
     pub vote_deposit: Account<'info, TokenAccount>,
+
+    pub charter: Account<'info, TokenAccount>,
+
+    #[account(has_one=charter)]
+    pub charter_treasury: Account<'info, CharterTreasury>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -1651,9 +1670,9 @@ pub struct SetListingCharter<'info> {
 #[derive(Accounts)]
 pub struct InitCharter<'info> {
     // 8 for the tag
-    // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 for the charter
+    // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 256 for the charter
     // 256 as a buffer for future versions
-    #[account(init, seeds = [b"charter", mint.key().as_ref()], bump, payer = user, space = 8 + 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 + 256)]
+    #[account(init, seeds = [b"charter", mint.key().as_ref()], bump, payer = user, space = 8 + 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 256 + 256)]
     pub charter: Account<'info, Charter>,
 
     pub mint: Account<'info, Mint>,
@@ -1679,11 +1698,11 @@ pub struct SetCharter<'info> {
 }
 
 #[derive(Accounts)]
-pub struct SetCharterVoteDeposit<'info> {
+pub struct SetCharterReserve<'info> {
     #[account(mut)]
     pub charter: Account<'info, Charter>,
 
-    pub vote_deposit: Account<'info, TokenAccount>,
+    pub reserve: Account<'info, TokenAccount>,
 
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -1704,16 +1723,19 @@ pub struct SetCharterAuthority<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(treasury_bump: u8)]
 pub struct InitCharterTreasury<'info> {
     // 8 for the tag
-    // 8 + 1 + 8 + 1 + 8 + 1 + 32 + 32 + 32 + 128 for the charter
-    // 128 as a buffer for future versions
+    // 1 is initialiezd
+    // 32 for cashier
+    // 32 for escrow 
+    // 32 for mint
+    // 8 for scalar
+    // 256 as a buffer for future versions
     #[account(init,
         seeds = [b"treasury", charter.key().as_ref(), mint.key().as_ref()],
         bump,
         payer = authority,
-        space = 8 + 1 + 32 + 32 + 8 + 1 + 128
+        space = 8 + 1 + 32 + 32 + 32 + 8 + 256
     )]
     pub treasury: Account<'info, CharterTreasury>,
 
@@ -1750,7 +1772,7 @@ pub struct SetCharterTreasuryExpansionScalar<'info> {
 
 #[derive(Accounts)]
 pub struct SetCharterTreasuryDeposit<'info> {
-    #[account(mut, has_one=charter)]
+    #[account(mut, has_one=charter, has_one=mint)]
     pub treasury: Account<'info, CharterTreasury>,
 
     #[account(has_one=authority)]
@@ -1772,13 +1794,13 @@ pub struct InitCashier<'info> {
     // 1 for is_initalized 
     // 32 for charter
     // 32 for stake
-    // 8 for last_withdraw_epoch 
+    // 8 for last_withdraw_at
     // 32 for authority
-    // 128 for URI
+    // 256 for URI
     // 128 for future versions
     #[account(init,
         payer = authority,
-        space = 8 + 1 + 32 + 32 + 8 + 128 +  128
+        space = 8 + 1 + 32 + 32 + 8 + 256 + 128
     )]
     pub cashier: Account<'info, Cashier>,
 
@@ -1791,7 +1813,7 @@ pub struct InitCashier<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"cashier.stake", stake.key().as_ref()],
+        seeds=[b"token_authority", stake.key().as_ref()],
         bump=stake_bump,
     )]
     pub stake_authority: AccountInfo<'info>,
@@ -1818,13 +1840,17 @@ pub struct InitCashierTreasury<'info> {
     // 8 for the tag 
     // 1 for is_initialized
     // 32 for cashier
+    // 32 for escrow
     // 32 for deposit 
     // 32 for mint 
+    // 8 for last_withdraw_epoch
     // 128 for future verisons
     #[account(
         init, 
+        seeds = [b"treasury", cashier.key().as_ref(), mint.key().as_ref()],
+        bump,
         payer=authority,
-        space= 8 + 1 + 32 + 32 + 32 + 128
+        space= 8 + 1 + 32 + 32 + 32 + 32 + 8 + 128
     )]
     pub treasury: Box<Account<'info, CashierTreasury>>,
 
@@ -1844,7 +1870,7 @@ pub struct InitCashierTreasury<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"cashier.escrow", escrow.key().as_ref()],
+        seeds=[b"token_authority", escrow.key().as_ref()],
         bump=escrow_bump,
     )]
     pub escrow_authority: AccountInfo<'info>,
@@ -1875,7 +1901,7 @@ pub struct BurnCashierStake<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"mint", mint.key().as_ref()],
+        seeds=[b"mint_authority", mint.key().as_ref()],
         bump=mint_authority_bump,
     )]
     pub mint_authority: AccountInfo<'info>,
@@ -1928,7 +1954,7 @@ pub struct WithdrawCashierTreasury<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"cashier.escrow", escrow.key().as_ref()],
+        seeds=[b"token_authority", escrow.key().as_ref()],
         bump=cashier_escrow_bump,
     )]
     pub escrow_authority: AccountInfo<'info>,
@@ -1968,7 +1994,7 @@ pub struct WithdrawCashierStake<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"cashier.stake", stake.key().as_ref()],
+        seeds=[b"token_authority", stake.key().as_ref()],
         bump=stake_bump,
     )]
     pub stake_authority: AccountInfo<'info>,

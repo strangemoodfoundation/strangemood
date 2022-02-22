@@ -166,7 +166,7 @@ pub struct Cashier {
     pub stake: Pubkey,
 
     // The last epoch the cashier has withdrawn from their stake account
-    pub last_withdraw_epoch: u64,
+    pub last_withdraw_at: u64,
 
     // The authority that's allowed to withdraw from this cashier
     pub authority: Pubkey,
@@ -176,7 +176,7 @@ pub struct Cashier {
     pub uri: String,
 }
 
-// A treasury owned by the cashier.
+// A treasury owned by the cashier. There is only one mint per cashier
 #[account]
 pub struct CashierTreasury {
     /// Set to "true" by the program when InitListing is run

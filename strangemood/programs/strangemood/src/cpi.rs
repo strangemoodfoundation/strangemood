@@ -183,7 +183,7 @@ pub fn close_token_escrow_account<'a>(
         account: from,
         destination: to,
     };
-    let seeds = &[b"escrow", key.as_ref(), &[bump]];
+    let seeds = &[b"token_authority", key.as_ref(), &[bump]];
     let signers = &[&seeds[..]];
     let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
     anchor_spl::token::close_account(cpi_ctx)
