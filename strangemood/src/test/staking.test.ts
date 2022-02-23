@@ -87,7 +87,7 @@ describe("Staking Cashiers", () => {
     await program.provider.send(new Transaction().add(transferIx));
 
     // Give the charter authority over the mint
-    const [mint_authority, mint_authority_bump] = await pda.mint_authority(
+    const [mint_authority, __] = await pda.mint_authority(
       program.programId,
       charter.mint
     );

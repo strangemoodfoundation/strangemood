@@ -877,7 +877,7 @@ ctx.accounts.stake_authority.to_account_info(),
     }
 
     // A decentralized crank that moves money from the the cashier's escrow to their deposit.
-    pub fn withdraw_cashier_stake(ctx: Context<WithdrawCashierStake>, cashier_escrow_bump: u8) -> Result<()> {
+    pub fn withdraw_cashier_stake(ctx: Context<WithdrawCashierStake>, stake_authority_bump: u8) -> Result<()> {
         let charter = ctx.accounts.charter.clone().into_inner();
         let clock = ctx.accounts.clock.clone();
         let cashier = &mut ctx.accounts.cashier;
@@ -896,7 +896,7 @@ ctx.accounts.stake_authority.to_account_info(),
         ctx.accounts.stake_authority.to_account_info(),
             cmp::min(amount_to_transfer as u64, ctx.accounts.stake.amount),
             b"token_authority", 
-            cashier_escrow_bump
+            stake_authority_bump
         )?;
 
         // Update cashier treasury's last epoch
@@ -1932,7 +1932,7 @@ pub struct WithdrawCashierTreasury<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(stake_bump: u8)]
+#[instruction(stake_authority_bump: u8)]
 pub struct WithdrawCashierStake<'info> {
     #[account(mut, constraint=charter.mint==vote_mint.key() @ StrangemoodError::CharterHasUnexpectedMint)]
     pub charter: Box<Account<'info, Charter>>,
@@ -1951,7 +1951,7 @@ pub struct WithdrawCashierStake<'info> {
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds=[b"token_authority", stake.key().as_ref()],
-        bump=stake_bump,
+        bump=stake_authority_bump,
     )]
     pub stake_authority: AccountInfo<'info>,
 
