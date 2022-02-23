@@ -375,7 +375,7 @@ ctx.accounts.token_program.to_account_info(),
             &listing,
             &charter,
             ctx.accounts.token_program.clone(),
-            *ctx.accounts.purchase_token_account.clone(),
+            *ctx.accounts.payment.clone(),
             *ctx.accounts.charter_treasury_deposit.clone(),
             *ctx.accounts.listings_payment_deposit.clone(),
             *ctx.accounts.cashier_treasury_escrow.clone(),
@@ -393,7 +393,7 @@ ctx.accounts.token_program.to_account_info(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
              ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_vote_deposit.to_account_info(),
+             ctx.accounts.charter_reserve.to_account_info(),
         )?;
 
         // Approve the delegate over the inventory 
@@ -440,7 +440,7 @@ ctx.accounts.token_program.to_account_info(),
         let total = amount * listing.price;
         token_transfer(
             ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.purchase_token_account.to_account_info(),
+            ctx.accounts.payment.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
             ctx.accounts.purchaser.to_account_info(),
             total,
@@ -501,7 +501,7 @@ ctx.accounts.token_program.to_account_info(),
         let total = amount * listing.price;
         token_transfer(
             ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.purchase_token_account.to_account_info(),
+            ctx.accounts.payment.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
             ctx.accounts.user.to_account_info(),
             total,
@@ -567,7 +567,7 @@ ctx.accounts.token_program.to_account_info(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
              ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_vote_deposit.to_account_info(),
+             ctx.accounts.charter_reserve.to_account_info(),
         )?;
 
         // Close the escrow account.
@@ -626,7 +626,7 @@ ctx.accounts.token_program.to_account_info(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
              ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_vote_deposit.to_account_info(),
+             ctx.accounts.charter_reserve.to_account_info(),
         )?;
 
         // Close the escrow account.
@@ -828,7 +828,7 @@ ctx.accounts.token_program.to_account_info(),
         Ok(())
     }
 
-    pub fn set_charter_vote_deposit(ctx: Context<SetCharterReserve>) -> Result<()> {
+    pub fn set_charter_reserve(ctx: Context<SetCharterReserve>) -> Result<()> {
         ctx.accounts.charter.reserve = ctx.accounts.reserve.key();
         Ok(())
     }
@@ -990,7 +990,7 @@ pub struct StartTrial<'info> {
 
     // The user's token account where funds will be transfered from
     #[account(mut)]
-    pub purchase_token_account: Box<Account<'info, TokenAccount>>,
+    pub payment: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
     #[account(
@@ -1077,7 +1077,7 @@ pub struct StartTrialWithCashier<'info> {
 
     // The user's token account where funds will be transfered from
     #[account(mut)]
-    pub purchase_token_account: Box<Account<'info, TokenAccount>>,
+    pub payment: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
     #[account(
@@ -1250,7 +1250,7 @@ pub struct Purchase<'info> {
 pub struct PurchaseWithCashier<'info> {
     // The user's token account where funds will be transfered from
     #[account(mut)]
-    pub purchase_token_account: Box<Account<'info, TokenAccount>>,
+    pub payment: Box<Account<'info, TokenAccount>>,
 
     #[account(has_one=charter)]
     pub cashier: Box<Account<'info, Cashier>>,
@@ -1314,7 +1314,7 @@ pub struct PurchaseWithCashier<'info> {
     pub charter_treasury_deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub charter_vote_deposit: Box<Account<'info, TokenAccount>>,
+    pub charter_reserve: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub charter_mint: Box<Account<'info, Mint>>,
@@ -1328,7 +1328,7 @@ pub struct PurchaseWithCashier<'info> {
 
     #[account(
         constraint=charter.mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
-        constraint=charter.reserve==charter_vote_deposit.key() @ StrangemoodError::CharterHasUnexpectedReserve,
+        constraint=charter.reserve==charter_reserve.key() @ StrangemoodError::CharterHasUnexpectedReserve,
     )]
     pub charter: Box<Account<'info, Charter>>,
 
@@ -1389,7 +1389,7 @@ pub struct FinishTrial<'info> {
     pub charter_treasury_deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub charter_vote_deposit: Box<Account<'info, TokenAccount>>,
+    pub charter_reserve: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub charter_mint: Box<Account<'info, Mint>>,
@@ -1407,7 +1407,7 @@ pub struct FinishTrial<'info> {
     // without the Box, we run out of space?
     #[account(
         constraint=charter.mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
-        constraint=charter.reserve==charter_vote_deposit.key() @ StrangemoodError::CharterHasUnexpectedReserve,
+        constraint=charter.reserve==charter_reserve.key() @ StrangemoodError::CharterHasUnexpectedReserve,
     )]
     pub charter: Box<Account<'info, Charter>>,
 
@@ -1480,7 +1480,7 @@ pub struct FinishTrialWithCashier<'info> {
     pub charter_treasury_deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub charter_vote_deposit: Box<Account<'info, TokenAccount>>,
+    pub charter_reserve: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub charter_mint: Box<Account<'info, Mint>>,
@@ -1494,7 +1494,7 @@ pub struct FinishTrialWithCashier<'info> {
 
     #[account(
         constraint=charter.mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
-        constraint=charter.reserve==charter_vote_deposit.key() @ StrangemoodError::CharterHasUnexpectedReserve,
+        constraint=charter.reserve==charter_reserve.key() @ StrangemoodError::CharterHasUnexpectedReserve,
     )]
     pub charter: Box<Account<'info, Charter>>,
 

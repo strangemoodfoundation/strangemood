@@ -15,6 +15,7 @@ import {
   initListing,
   mintTo,
   purchase,
+  createCashierTreasury,
 } from "./instructions";
 import { createMintToInstruction, transfer } from "@solana/spl-token";
 const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY, Transaction } =
@@ -463,6 +464,131 @@ describe("Strangemood", () => {
       listing.account.paymentDeposit
     );
     assert.equal(listingDeposit.amount, 6);
+
+    // Check that the charter deposit was paid
+    let charterDeposit = await splToken.getAccount(
+      program.provider.connection,
+      charterTreasury.account.deposit
+    );
+    assert.equal(charterDeposit.amount, 4);
+  });
+
+  it("can purchase a listing with a cashier", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
+      10,
+      0,
+      true,
+      false,
+      true,
+      0.5
+    );
+    const cashier = await initCashier(program, charter);
+    const cashierTreasury = await createCashierTreasury(
+      program,
+      charter.publicKey,
+      charterTreasury.publicKey,
+      cashier.publicKey,
+      paymentMint.publicKey
+    );
+
+    const inventory = await createTokenAccount(program, listing.account.mint);
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
+
+    const [listing_mint_authority, listing_mint_authority_bump] =
+      await pda.mint_authority(program.programId, listing.account.mint);
+
+    const [charter_mint_authority, charter_mint_authority_bump] =
+      await pda.mint_authority(program.programId, charter.account.mint);
+
+    const [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    // Mint payment tokens into the payment account
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // Check we have the funds to pay for the listing
+    let before = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
+    );
+    assert.equal(before.amount, 100);
+
+    // purchase the listing
+    await program.methods
+      .purchaseWithCashier(
+        listing_mint_authority_bump,
+        charter_mint_authority_bump,
+        inventory_delegate_bump,
+        new anchor.BN(1)
+      )
+      .accounts({
+        cashier: cashier.publicKey,
+        cashierTreasury: cashierTreasury.publicKey,
+        cashierTreasuryEscrow: cashierTreasury.account.escrow,
+        payment: payment.publicKey,
+        inventory: inventory.publicKey,
+        inventoryDelegate: inventory_delegate,
+        listingsPaymentDeposit: listing.account.paymentDeposit,
+        listingsVoteDeposit: listing.account.voteDeposit,
+        listing: listing.publicKey,
+        listingMint: listing.account.mint,
+        listingMintAuthority: listing_mint_authority,
+        charter: charter.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        charterTreasuryDeposit: charterTreasury.account.deposit,
+        charterReserve: charter.account.reserve,
+        charterMint: charter.account.mint,
+        charterMintAuthority: charter_mint_authority,
+        purchaser: program.provider.wallet.publicKey,
+      })
+      .rpc();
+
+    // check the account was charged
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
+    );
+    assert.equal(after.amount, 90);
+
+    // Check that the inventory has the token
+    let inventoryAccount = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(inventoryAccount.amount, 1);
+
+    // Check that the listing payment deposit was paid
+    let listingDeposit = await splToken.getAccount(
+      program.provider.connection,
+      listing.account.paymentDeposit
+    );
+    assert.equal(listingDeposit.amount, 3);
+
+    // Check that the listing payment deposit was paid
+    let cashierDeposit = await splToken.getAccount(
+      program.provider.connection,
+      cashierTreasury.account.escrow
+    );
+    assert.equal(cashierDeposit.amount, 3);
 
     // Check that the charter deposit was paid
     let charterDeposit = await splToken.getAccount(

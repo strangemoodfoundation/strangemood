@@ -99,6 +99,50 @@ export async function createCharterTreasury(
   };
 }
 
+export async function createCashierTreasury(
+  program: Program<Strangemood>,
+  charter: PublicKey,
+  charterTreasury: PublicKey,
+  cashier: PublicKey,
+  mint: PublicKey
+) {
+  const deposit = await createTokenAccount(program, mint);
+
+  const escrow = Keypair.generate();
+  const [escrow_authority, bump] = await pda.token_authority(
+    program.programId,
+    escrow.publicKey
+  );
+  const [treasury_pda, _] = await pda.treasury(
+    program.programId,
+    cashier,
+    mint
+  );
+
+  await program.methods
+    .initCashierTreasury(bump)
+    .accounts({
+      cashierTreasury: treasury_pda,
+      cashier: cashier,
+      charterTreasury: charterTreasury,
+      charter: charter,
+      deposit: deposit.publicKey,
+      escrow: escrow.publicKey,
+      escrowAuthority: escrow_authority,
+      mint: mint,
+      clock: SYSVAR_CLOCK_PUBKEY,
+      authority: program.provider.wallet.publicKey,
+    })
+    .signers([escrow])
+    .rpc();
+  const treasury = await program.account.cashierTreasury.fetch(treasury_pda);
+
+  return {
+    account: treasury,
+    publicKey: treasury_pda,
+  };
+}
+
 export async function initListing(
   program: Program<Strangemood>,
   charter: { account: any; publicKey: PublicKey },
