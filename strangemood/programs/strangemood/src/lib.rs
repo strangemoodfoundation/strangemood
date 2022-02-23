@@ -421,7 +421,6 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn start_trial(
         ctx: Context<StartTrial>,
-        receipt_nonce: u128,
         listing_mint_authority_bump: u8,
         _escrow_authority_bump: u8,
         _inventory_delegate_bump: u8,
@@ -473,7 +472,6 @@ ctx.accounts.token_program.to_account_info(),
         receipt.quantity = amount;
         receipt.inventory = ctx.accounts.inventory.key();
         receipt.cashier = None;
-        receipt.nonce = receipt_nonce;
         receipt.price = total;
         receipt.escrow = ctx.accounts.escrow.key();
 
@@ -482,7 +480,6 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn start_trial_with_cashier(
         ctx: Context<StartTrialWithCashier>,
-        receipt_nonce: u128,
         listing_mint_authority_bump: u8,
         _escrow_authority_bump: u8,
         _inventory_delegate_bump: u8,
@@ -524,7 +521,6 @@ ctx.accounts.token_program.to_account_info(),
         receipt.quantity = amount;
         receipt.inventory = ctx.accounts.inventory.key();
         receipt.cashier = Some(ctx.accounts.cashier.key());
-        receipt.nonce = receipt_nonce;
         receipt.price = total;
         receipt.escrow = ctx.accounts.escrow.key();
 
@@ -985,7 +981,7 @@ pub struct MintTo<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, listing_mint_authority_bump: u8, escrow_authority_bump:u8, inventory_delegate_bump: u8)]
+#[instruction(listing_mint_authority_bump: u8, escrow_authority_bump:u8, inventory_delegate_bump: u8)]
 pub struct StartTrial<'info> {
 
     // The user's token account where funds will be transfered from
@@ -1041,12 +1037,11 @@ pub struct StartTrial<'info> {
     // 32 for escrow pubkey
     // 8 for quantity u64
     // 8 for price u64
-    // 16 for the unique nonce
     #[account(init,
-        seeds = [b"receipt" as &[u8], &receipt_nonce.to_le_bytes()],
+        seeds = [b"receipt", escrow.key().as_ref()],
         bump,
         payer = purchaser,
-        space = 8 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
+        space = 8 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8)]
     pub receipt: Box<Account<'info, Receipt>>,
 
     #[account(
@@ -1072,7 +1067,7 @@ pub struct StartTrial<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, listing_mint_authority_bump: u8, escrow_authority_bump:u8, inventory_delegate_bump:u8)]
+#[instruction(listing_mint_authority_bump: u8, escrow_authority_bump:u8, inventory_delegate_bump:u8)]
 pub struct StartTrialWithCashier<'info> {
 
     // The user's token account where funds will be transfered from
@@ -1131,12 +1126,11 @@ pub struct StartTrialWithCashier<'info> {
     // 32 for escrow pubkey
     // 8 for quantity u64
     // 8 for price u64
-    // 16 for the unique nonce
     #[account(init,
-        seeds = [b"receipt" as &[u8], &receipt_nonce.to_le_bytes()],
+        seeds = [b"receipt", escrow.key().as_ref()],
         bump,
         payer = user,
-        space = 8 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
+        space = 8 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8)]
     pub receipt: Box<Account<'info, Receipt>>,
 
     #[account(

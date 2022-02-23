@@ -30,11 +30,6 @@ pub struct Receipt {
     // The price when they bought the listing. We store this here
     // because the price could be updated in between purchase and cash.
     pub price: u64,
-
-    // A unique series of bytes used to generate the PDA and bump
-    // for this receipt from `["receipt", listing_pubkey, nonce]`
-    // By convention, this is a uuid.
-    pub nonce: u128,
 }
 
 #[account]

@@ -1,13 +1,11 @@
 import assert from "assert";
-import { PublicKey } from "@solana/web3.js";
 import * as splToken from "@solana/spl-token";
 import * as anchor from "@project-serum/anchor";
-import { Program, splitArgsAndCtx } from "@project-serum/anchor";
+import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
-import { cash, makeReceiptNonce } from "..";
+import { makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
-import { MAINNET } from "../constants";
 import {
   initCharter,
   createCharterTreasury,
@@ -17,7 +15,7 @@ import {
   purchase,
   createCashierTreasury,
 } from "./instructions";
-import { createMintToInstruction, transfer } from "@solana/spl-token";
+
 const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY, Transaction } =
   anchor.web3;
 
@@ -671,5 +669,96 @@ describe("Strangemood", () => {
       inventory.publicKey
     );
     assert.equal(after.amount, 2);
+  });
+
+  it("can start_trial, and then finish_trial", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
+      1,
+      0,
+      true,
+      true
+    );
+
+    const inventory = await createTokenAccount(program, listing.account.mint);
+
+    // Mint payment tokens into the payment account
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // start the trial
+    const escrow = Keypair.generate();
+    const [listing_mint_authority, listing_mint_authority_bump] =
+      await pda.mint_authority(program.programId, listing.account.mint);
+    const [escrow_authority, escrow_authority_bump] = await pda.token_authority(
+      program.programId,
+      escrow.publicKey
+    );
+    const [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    const [receipt, _] = await pda.receipt(program.programId, escrow.publicKey);
+    await program.methods
+      .startTrial(
+        listing_mint_authority_bump,
+        escrow_authority_bump,
+        inventory_delegate_bump,
+        new anchor.BN(10)
+      )
+      .accounts({
+        payment: payment.publicKey,
+        listing: listing.publicKey,
+        listingPaymentDeposit: listing.account.paymentDeposit,
+        listingPaymentDepositMint: paymentMint.publicKey,
+        listingMint: listing.account.mint,
+        listingMintAuthority: listing_mint_authority,
+        inventory: inventory.publicKey,
+        inventoryDelegate: inventory_delegate,
+        receipt: receipt,
+        escrow: escrow.publicKey,
+        escrowAuthority: escrow_authority,
+        purchaser: program.provider.wallet.publicKey,
+      })
+      .signers([escrow])
+      .rpc();
+
+    // Account is charged
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
+    );
+    assert.equal(after.amount, 90);
+
+    // Check that the inventory has the token
+    let inventoryAccount = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(inventoryAccount.amount, 10);
+
+    // Check that the funds are in the receipt escrow
+    let escrowAccount = await splToken.getAccount(
+      program.provider.connection,
+      escrow.publicKey
+    );
+    assert.equal(escrowAccount.amount, 10);
   });
 });
