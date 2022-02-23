@@ -1,14 +1,10 @@
-import assert from "assert";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import { Program, splitArgsAndCtx } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
-import { TestClient } from "./testClient";
-import { makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
-import { MAINNET } from "../constants";
 import {
   AuthorityType,
   createMintToInstruction,
