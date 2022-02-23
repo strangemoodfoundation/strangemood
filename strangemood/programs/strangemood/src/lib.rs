@@ -1848,7 +1848,7 @@ pub struct BurnCashierStake<'info> {
         has_one=charter @ StrangemoodError::CashierHasUnexpectedCharter, 
         has_one=stake @ StrangemoodError::CashierHasUnexpectedStake
     )]
-    pub cashier: Account<'info, Cashier>, 
+    pub cashier: Account<'info, Cashier>,
 
     #[account(mut, has_one=mint @ StrangemoodError::CharterHasUnexpectedMint)]
     pub stake: Account<'info, TokenAccount>,

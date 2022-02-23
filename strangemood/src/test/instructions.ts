@@ -176,5 +176,6 @@ export async function initCashier(
   return {
     account: cashier,
     publicKey: cashier_pda,
+    stake: stake,
   };
 }
