@@ -17,6 +17,7 @@
     "/oclif.manifest.json"
   ],
   "dependencies": {
+    "@ipld/car": "^3.2.3",
     "@oclif/core": "^1",
     "@oclif/plugin-autocomplete": "^1.2.0",
     "@oclif/plugin-help": "^5",
@@ -28,8 +29,11 @@
     "@solana/spl-token": "0.2.0-alpha.2",
     "@solana/web3.js": "^1.34.0",
     "@strangemood/strangemood": "^0.0.0-76",
+    "carbites": "^1.0.6",
     "chalk": "^4.1.2",
-    "ora": "5.4.1"
+    "ipfs-car": "^0.6.2",
+    "ora": "5.4.1",
+    "progress": "^2.0.3"
   },
   "devDependencies": {
     "@oclif/test": "^2",
