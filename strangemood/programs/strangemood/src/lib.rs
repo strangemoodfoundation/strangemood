@@ -20,7 +20,7 @@ fn distribute_governance_tokens<'a>(
     token_program: AccountInfo<'a>, 
     charter_mint: AccountInfo<'a>,
     charter_mint_authority: AccountInfo<'a>,
-    charter_mint_bump: u8,
+    charter_mint_authority_bump: u8,
     listing_deposit: AccountInfo<'a>,
     charter_deposit: AccountInfo<'a>,
 ) -> Result<()> {
@@ -35,7 +35,7 @@ fn distribute_governance_tokens<'a>(
         charter_mint.clone(),
        listing_deposit,
         charter_mint_authority.clone(),
-        charter_mint_bump,
+        charter_mint_authority_bump,
         deposit_amount,
     )?;
 
@@ -45,7 +45,7 @@ fn distribute_governance_tokens<'a>(
         charter_mint,
         charter_deposit,
         charter_mint_authority,
-        charter_mint_bump,
+        charter_mint_authority_bump,
         contribution_amount,
     )?;
 
@@ -258,7 +258,7 @@ fn transfer_funds_from_escrow<'info>(
 pub mod strangemood {
     use anchor_lang::{prelude::Context, solana_program::{program_option::COption}};
 
-    use crate::{error::StrangemoodError, cpi::{token_transfer, mint_to_and_freeze, token_transfer_with_seed, burn, close_token_escrow_account, close_native_account}};
+    use crate::{error::StrangemoodError, cpi::{token_transfer, mint_to_and_freeze, token_transfer_with_seed, burn, close_token_escrow_account, close_native_account, approve_delegate}};
 
     use super::*;
 
@@ -296,7 +296,8 @@ pub mod strangemood {
 
     pub fn purchase(ctx: Context<Purchase>,   
         listing_mint_authority_bump: u8,
-        charter_mint_bump: u8,
+        charter_mint_authority_bump: u8,
+        _inventory_delegate_bump: u8,
         amount: u64
     ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
@@ -312,7 +313,7 @@ pub mod strangemood {
             &listing,
             &charter,
             ctx.accounts.token_program.clone(),
-            *ctx.accounts.purchase_token_account.clone(),
+            *ctx.accounts.payment.clone(),
             *ctx.accounts.charter_treasury_deposit.clone(),
             *ctx.accounts.listings_payment_deposit.clone(),
             ctx.accounts.purchaser.clone()
@@ -327,9 +328,19 @@ pub mod strangemood {
              ctx.accounts.token_program.to_account_info(),
              ctx.accounts.charter_mint.to_account_info(),
              ctx.accounts.charter_mint_authority.to_account_info(),
-             charter_mint_bump,
+             charter_mint_authority_bump,
              ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_vote_deposit.to_account_info(),
+             ctx.accounts.charter_reserve.to_account_info(),
+        )?;
+
+        // Approve the delegate over the inventory 
+        let delegated_amount = ctx.accounts.inventory.amount + amount;
+        approve_delegate(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
+            ctx.accounts.inventory_delegate.to_account_info(),
+            ctx.accounts.purchaser.to_account_info(),
+            delegated_amount
         )?;
 
         // Distribute listing token 
@@ -339,7 +350,7 @@ ctx.accounts.token_program.to_account_info(),
             ctx.accounts.inventory.to_account_info(),
     ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
-            amount, 
+            amount,
         )?;
 
         Ok(())
@@ -347,7 +358,8 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn purchase_with_cashier(ctx: Context<PurchaseWithCashier>,   
         listing_mint_authority_bump: u8,
-        charter_mint_bump: u8,
+        charter_mint_authority_bump: u8,
+        _inventory_delegate_bump: u8,
         amount: u64
     ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
@@ -379,9 +391,19 @@ ctx.accounts.token_program.to_account_info(),
              ctx.accounts.token_program.to_account_info(),
              ctx.accounts.charter_mint.to_account_info(),
              ctx.accounts.charter_mint_authority.to_account_info(),
-             charter_mint_bump,
+             charter_mint_authority_bump,
              ctx.accounts.listings_vote_deposit.to_account_info(),
              ctx.accounts.charter_vote_deposit.to_account_info(),
+        )?;
+
+        // Approve the delegate over the inventory 
+        let delegated_amount = ctx.accounts.inventory.amount + amount;
+        approve_delegate(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
+            ctx.accounts.inventory_delegate.to_account_info(),
+            ctx.accounts.purchaser.to_account_info(),
+            delegated_amount
         )?;
 
         // Distribute listing token 
@@ -402,6 +424,7 @@ ctx.accounts.token_program.to_account_info(),
         receipt_nonce: u128,
         listing_mint_authority_bump: u8,
         _escrow_authority_bump: u8,
+        _inventory_delegate_bump: u8,
         amount: u64,
     ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
@@ -419,8 +442,18 @@ ctx.accounts.token_program.to_account_info(),
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.purchase_token_account.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
-            ctx.accounts.user.to_account_info(),
+            ctx.accounts.purchaser.to_account_info(),
             total,
+        )?;
+
+        // Approve the delegate over the inventory 
+        let delegated_amount = ctx.accounts.inventory.amount + amount;
+        approve_delegate(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
+            ctx.accounts.inventory_delegate.to_account_info(),
+            ctx.accounts.purchaser.to_account_info(),
+            delegated_amount
         )?;
 
         // Mint the token, which can be burned later upon refund.
@@ -436,7 +469,7 @@ ctx.accounts.token_program.to_account_info(),
         let receipt = &mut ctx.accounts.receipt;
         receipt.is_initialized = true;
         receipt.listing = ctx.accounts.listing.key();
-        receipt.purchaser = ctx.accounts.user.key();
+        receipt.purchaser = ctx.accounts.purchaser.key();
         receipt.quantity = amount;
         receipt.inventory = ctx.accounts.inventory.key();
         receipt.cashier = None;
@@ -452,6 +485,7 @@ ctx.accounts.token_program.to_account_info(),
         receipt_nonce: u128,
         listing_mint_authority_bump: u8,
         _escrow_authority_bump: u8,
+        _inventory_delegate_bump: u8,
         amount: u64,
     ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
@@ -499,7 +533,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn finish_trial(
         ctx: Context<FinishTrialWithCashier>,
-        charter_mint_bump: u8,
+        charter_mint_authority_bump: u8,
         receipt_escrow_authority_bump: u8
     ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
@@ -531,7 +565,7 @@ ctx.accounts.token_program.to_account_info(),
              ctx.accounts.token_program.to_account_info(),
              ctx.accounts.charter_mint.to_account_info(),
              ctx.accounts.charter_mint_authority.to_account_info(),
-             charter_mint_bump,
+             charter_mint_authority_bump,
              ctx.accounts.listings_vote_deposit.to_account_info(),
              ctx.accounts.charter_vote_deposit.to_account_info(),
         )?;
@@ -556,7 +590,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn finish_trial_with_cashier(
         ctx: Context<FinishTrialWithCashier>,
-        charter_mint_bump: u8,
+        charter_mint_authority_bump: u8,
         receipt_escrow_authority_bump: u8
     ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
@@ -590,7 +624,7 @@ ctx.accounts.token_program.to_account_info(),
              ctx.accounts.token_program.to_account_info(),
              ctx.accounts.charter_mint.to_account_info(),
              ctx.accounts.charter_mint_authority.to_account_info(),
-             charter_mint_bump,
+             charter_mint_authority_bump,
              ctx.accounts.listings_vote_deposit.to_account_info(),
              ctx.accounts.charter_vote_deposit.to_account_info(),
         )?;
@@ -660,7 +694,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn consume(
         ctx: Context<Consume>,
-        listing_mint_authority_bump: u8,
+        inventory_delegate_bump: u8,
         amount: u64,
     ) -> Result<()> {
         let listing = ctx.accounts.listing.clone().into_inner();
@@ -673,8 +707,8 @@ ctx.accounts.token_program.to_account_info(),
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.mint.to_account_info(),
             ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.mint_authority.to_account_info(),
-            listing_mint_authority_bump,
+            ctx.accounts.inventory_delegate.to_account_info(),
+            inventory_delegate_bump,
             amount,
         )?;
 
@@ -934,7 +968,7 @@ pub struct MintTo<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, listing_mint_authority_bump: u8, escrow_authority_bump:u8)]
+#[instruction(receipt_nonce: u128, listing_mint_authority_bump: u8, escrow_authority_bump:u8, inventory_delegate_bump: u8)]
 pub struct StartTrial<'info> {
 
     // The user's token account where funds will be transfered from
@@ -960,6 +994,13 @@ pub struct StartTrial<'info> {
     // will be deposited at
     #[account(mut)]
     pub inventory: Account<'info, TokenAccount>,
+
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
+    #[account(
+        seeds = [b"token_authority", inventory.key().as_ref()],
+        bump = inventory_delegate_bump,
+    )]
+    pub inventory_delegate: AccountInfo<'info>,
 
     // The mint associated with the listing
     #[account(mut)]
@@ -987,13 +1028,13 @@ pub struct StartTrial<'info> {
     #[account(init,
         seeds = [b"receipt" as &[u8], &receipt_nonce.to_le_bytes()],
         bump,
-        payer = user,
+        payer = purchaser,
         space = 8 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8 + 16)]
     pub receipt: Box<Account<'info, Receipt>>,
 
     #[account(
         init,
-        payer=user,
+        payer=purchaser,
         token::mint = listing_payment_deposit_mint,
         token::authority = escrow_authority,
     )]
@@ -1007,14 +1048,14 @@ pub struct StartTrial<'info> {
     pub escrow_authority: AccountInfo<'info>,
 
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub purchaser: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
-#[instruction(receipt_nonce: u128, listing_mint_authority_bump: u8, escrow_authority_bump:u8)]
+#[instruction(receipt_nonce: u128, listing_mint_authority_bump: u8, escrow_authority_bump:u8, inventory_delegate_bump:u8)]
 pub struct StartTrialWithCashier<'info> {
 
     // The user's token account where funds will be transfered from
@@ -1044,6 +1085,13 @@ pub struct StartTrialWithCashier<'info> {
     #[account(mut)]
     pub inventory: Account<'info, TokenAccount>,
 
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
+    #[account(
+        seeds = [b"token_authority", inventory.key().as_ref()],
+        bump = inventory_delegate_bump,
+    )]
+    pub inventory_delegate: AccountInfo<'info>,
+
     // The mint associated with the listing
     #[account(mut)]
     pub listing_mint: Box<Account<'info, Mint>>,
@@ -1098,16 +1146,23 @@ pub struct StartTrialWithCashier<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(listing_mint_authority_bump: u8, charter_mint_bump: u8,)]
+#[instruction(listing_mint_authority_bump: u8, charter_mint_authority_bump: u8, inventory_delegate_bump: u8)]
 pub struct Purchase<'info> {
     // The user's token account where funds will be transfered from
     #[account(mut)]
-    pub purchase_token_account: Box<Account<'info, TokenAccount>>,
+    pub payment: Box<Account<'info, TokenAccount>>,
 
     // TODO: consider rename? 
     // Where the listing token is deposited when purchase is complete.
     #[account(mut)]
     pub inventory: Box<Account<'info, TokenAccount>>,
+
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
+    #[account(
+        seeds = [b"token_authority", inventory.key().as_ref()],
+        bump = inventory_delegate_bump,
+    )]
+    pub inventory_delegate: AccountInfo<'info>,
 
     #[account(mut)]
     pub listings_payment_deposit: Box<Account<'info, TokenAccount>>,
@@ -1145,7 +1200,7 @@ pub struct Purchase<'info> {
     pub charter_treasury_deposit: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub charter_vote_deposit: Box<Account<'info, TokenAccount>>,
+    pub charter_reserve: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub charter_mint: Box<Account<'info, Mint>>,
@@ -1153,7 +1208,7 @@ pub struct Purchase<'info> {
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint_authority", charter_mint.key().as_ref()],
-        bump = charter_mint_bump,
+        bump = charter_mint_authority_bump,
     )]
     pub charter_mint_authority: AccountInfo<'info>,
 
@@ -1163,7 +1218,7 @@ pub struct Purchase<'info> {
     // without the Box, we run out of space?
     #[account(
         constraint=charter.clone().into_inner().mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
-        constraint=charter.reserve==charter_vote_deposit.key() @ StrangemoodError::CharterHasUnexpectedReserve,
+        constraint=charter.reserve==charter_reserve.key() @ StrangemoodError::CharterHasUnexpectedReserve,
         constraint=charter.mint==charter_mint.key() @ StrangemoodError::CharterHasUnexpectedMint,
     )]
     pub charter: Box<Account<'info, Charter>>,
@@ -1173,9 +1228,8 @@ pub struct Purchase<'info> {
     pub system_program: Program<'info, System>,
 }
 
-
 #[derive(Accounts)]
-#[instruction(listing_mint_authority_bump: u8, charter_mint_bump: u8,)]
+#[instruction(listing_mint_authority_bump: u8, charter_mint_authority_bump: u8, inventory_delegate_bump: u8)]
 pub struct PurchaseWithCashier<'info> {
     // The user's token account where funds will be transfered from
     #[account(mut)]
@@ -1199,6 +1253,13 @@ pub struct PurchaseWithCashier<'info> {
     // Where the listing token is deposited when purchase is complete.
     #[account(mut)]
     pub inventory: Box<Account<'info, TokenAccount>>,
+
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
+    #[account(
+        seeds = [b"token_authority", inventory.key().as_ref()],
+        bump = inventory_delegate_bump,
+    )]
+    pub inventory_delegate: AccountInfo<'info>,
 
     #[account(mut)]
     pub listings_payment_deposit: Box<Account<'info, TokenAccount>>,
@@ -1244,7 +1305,7 @@ pub struct PurchaseWithCashier<'info> {
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint_authority", charter_mint.key().as_ref()],
-        bump = charter_mint_bump,
+        bump = charter_mint_authority_bump,
     )]
     pub charter_mint_authority: AccountInfo<'info>,
 
@@ -1261,7 +1322,7 @@ pub struct PurchaseWithCashier<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(charter_mint_bump: u8, receipt_escrow_authority_bump: u8)]
+#[instruction(charter_mint_authority_bump: u8, receipt_escrow_authority_bump: u8)]
 pub struct FinishTrial<'info> {
 
     #[account(mut,
@@ -1319,7 +1380,7 @@ pub struct FinishTrial<'info> {
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint_authority", charter_mint.key().as_ref()],
-        bump = charter_mint_bump,
+        bump = charter_mint_authority_bump,
     )]
     pub charter_mint_authority: AccountInfo<'info>,
 
@@ -1338,7 +1399,7 @@ pub struct FinishTrial<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(charter_mint_bump: u8, receipt_escrow_authority_bump: u8)]
+#[instruction(charter_mint_authority_bump: u8, receipt_escrow_authority_bump: u8)]
 pub struct FinishTrialWithCashier<'info> {
     #[account(has_one=charter)]
     pub cashier: Box<Account<'info, Cashier>>,
@@ -1410,7 +1471,7 @@ pub struct FinishTrialWithCashier<'info> {
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
         seeds = [b"mint_authority", charter_mint.key().as_ref()],
-        bump = charter_mint_bump,
+        bump = charter_mint_authority_bump,
     )]
     pub charter_mint_authority: AccountInfo<'info>,
 
@@ -1469,7 +1530,7 @@ pub struct Refund<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(listing_mint_authority_bump:u8)]
+#[instruction(inventory_delegate_bump:u8)]
 pub struct Consume<'info> {
     #[account(
         has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority,
@@ -1481,10 +1542,10 @@ pub struct Consume<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds = [b"mint_authority", mint.key().as_ref()],
-        bump = listing_mint_authority_bump,
+        seeds = [b"token_authority", inventory.key().as_ref()],
+        bump = inventory_delegate_bump,
     )]
-    pub mint_authority: AccountInfo<'info>,
+    pub inventory_delegate: AccountInfo<'info>,
 
     #[account(mut)]
     pub inventory: Box<Account<'info, TokenAccount>>,

@@ -122,7 +122,7 @@ export async function setupGovernance(
       accounts: {
         charter: charterPDA,
         authority: program.provider.wallet.publicKey,
-        voteDeposit: realm_vote_deposit,
+        reserve: realm_vote_deposit,
         mint: vote_mint,
         user: realmAuthority.publicKey,
         systemProgram: SystemProgram.programId,

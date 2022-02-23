@@ -1,3 +1,4 @@
+use anchor_lang::solana_program::account_info::Account;
 use anchor_lang::solana_program::system_instruction;
 use anchor_lang::{prelude::*, solana_program};
 
@@ -59,6 +60,24 @@ pub fn freeze_account<'a>(
     let signers = &[&seeds[..]];
     let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
     anchor_spl::token::freeze_account(cpi_ctx)
+}
+
+// Calls splToken's approve instruction
+pub fn approve_delegate<'a>(
+    token_program: AccountInfo<'a>,
+    account: AccountInfo<'a>,
+    delegate: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    amount: u64,
+) -> Result<()> {
+    let cpi_program = token_program;
+    let cpi_accounts = anchor_spl::token::Approve {
+        to: account,
+        authority: authority,
+        delegate,
+    };
+    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+    anchor_spl::token::approve(cpi_ctx, amount)
 }
 
 // Transfer from one token account to another using the Token Program

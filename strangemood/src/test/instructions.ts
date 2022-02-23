@@ -9,7 +9,12 @@ import { makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
 import { MAINNET } from "../constants";
-const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY } = anchor.web3;
+import {
+  AuthorityType,
+  createSetAuthorityInstruction,
+} from "@solana/spl-token";
+const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY, Transaction } =
+  anchor.web3;
 
 export async function initCharter(
   program: Program<Strangemood>,
@@ -44,6 +49,19 @@ export async function initCharter(
     })
     .rpc();
   const charter = await program.account.charter.fetch(charter_pda);
+
+  // Hand the mint over to the charter
+  const [mint_authority, __] = await pda.mint_authority(
+    program.programId,
+    charter.mint
+  );
+  const setAuthorityIx = createSetAuthorityInstruction(
+    mint.publicKey,
+    program.provider.wallet.publicKey,
+    AuthorityType.MintTokens,
+    mint_authority
+  );
+  await program.provider.send(new Transaction().add(setAuthorityIx));
 
   return {
     account: charter,
@@ -85,13 +103,13 @@ export async function initListing(
   charter: { account: any; publicKey: PublicKey },
   charterTreasury: { account: any; publicKey: PublicKey },
   paymentMint: PublicKey,
-  decimals: number,
   price: number,
-  isRefundable: boolean,
-  isConsumable: boolean,
-  isAvailable: boolean,
-  cashierSplit: number,
-  uri: string
+  decimals = 0,
+  isRefundable = true,
+  isConsumable = false,
+  isAvailable = true,
+  cashierSplit = 0.1,
+  uri = "ipfs://cid"
 ) {
   const listingMint = Keypair.generate();
 
