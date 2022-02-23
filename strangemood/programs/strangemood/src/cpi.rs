@@ -35,7 +35,7 @@ pub fn mint_to<'a>(
         to: to,
         authority: authority,
     };
-    let seeds = &[b"mint", cloned_mint.as_ref(), &[bump]];
+    let seeds = &[b"mint_authority", cloned_mint.as_ref(), &[bump]];
     let signers = &[&seeds[..]];
     let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
     anchor_spl::token::mint_to(cpi_ctx, amount)
@@ -55,7 +55,7 @@ pub fn freeze_account<'a>(
         account: account,
         authority: authority,
     };
-    let seeds = &[b"mint", cloned_mint.as_ref(), &[bump]];
+    let seeds = &[b"mint_authority", cloned_mint.as_ref(), &[bump]];
     let signers = &[&seeds[..]];
     let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
     anchor_spl::token::freeze_account(cpi_ctx)
@@ -116,7 +116,7 @@ pub fn burn<'a>(
         to: account,
         authority: authority,
     };
-    let seeds = &[b"mint", cloned_mint.as_ref(), &[bump]];
+    let seeds = &[b"mint_authority", cloned_mint.as_ref(), &[bump]];
     let signers = &[&seeds[..]];
     let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
     anchor_spl::token::burn(cpi_ctx, amount)

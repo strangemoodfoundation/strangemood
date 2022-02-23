@@ -836,11 +836,12 @@ ctx.accounts.token_program.to_account_info(),
     pub fn burn_cashier_stake(ctx: Context<BurnCashierStake>,  mint_authority_bump: u8, amount: u64) -> Result<()> {   
         burn(
             ctx.accounts.token_program.to_account_info(), 
-            ctx.accounts.mint.to_account_info(),
-             ctx.accounts.stake.to_account_info(),
-              ctx.accounts.mint_authority.to_account_info(),
-               mint_authority_bump,
-                amount)?;
+    ctx.accounts.mint.to_account_info(),
+ctx.accounts.stake.to_account_info(),
+ctx.accounts.mint_authority.to_account_info(),
+        mint_authority_bump,
+        amount
+        )?;
 
         Ok(())
     }

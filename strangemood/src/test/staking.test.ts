@@ -87,17 +87,24 @@ describe("Staking Cashiers", () => {
     await program.provider.send(new Transaction().add(transferIx));
 
     // Give the charter authority over the mint
-    const [mint_pda, mint_authority_bump] = await pda.mint_authority(
+    const [mint_authority, mint_authority_bump] = await pda.mint_authority(
       program.programId,
-      mint.publicKey
+      charter.mint
     );
     const setAuthorityIx = createSetAuthorityInstruction(
       mint.publicKey,
       program.provider.wallet.publicKey,
       AuthorityType.MintTokens,
-      mint_pda
+      mint_authority
     );
     await program.provider.send(new Transaction().add(setAuthorityIx));
+
+    assert.equal(
+      (
+        await splToken.getMint(program.provider.connection, mint.publicKey)
+      ).mintAuthority.toString(),
+      mint_authority.toString()
+    );
 
     // get the balance of the stake token account
     let before = await splToken.getAccount(
@@ -115,7 +122,7 @@ describe("Staking Cashiers", () => {
         mint: mint.publicKey,
         authority: program.provider.wallet.publicKey,
         stake: cashier.stake.publicKey,
-        mintAuthority: mint_pda,
+        mintAuthority: mint_authority,
       })
       .rpc();
 
