@@ -258,7 +258,7 @@ fn transfer_funds_from_escrow<'info>(
 pub mod strangemood {
     use anchor_lang::{prelude::Context, solana_program::{program_option::COption}};
 
-    use crate::{error::StrangemoodError, cpi::{token_transfer, mint_to_and_freeze, token_transfer_with_seed, burn, close_token_escrow_account, close_native_account, approve_delegate}};
+    use crate::{error::StrangemoodError, cpi::{token_transfer, mint_to_and_freeze, token_transfer_with_seed, burn, close_token_escrow_account, close_native_account, approve_delegate, thaw_account, freeze_account}};
 
     use super::*;
 
@@ -694,6 +694,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn consume(
         ctx: Context<Consume>,
+        mint_authority_bump: u8,
         inventory_delegate_bump: u8,
         amount: u64,
     ) -> Result<()> {
@@ -703,6 +704,14 @@ ctx.accounts.token_program.to_account_info(),
             return Err(error!(StrangemoodError::ListingIsNotConsumable));
         }
 
+        thaw_account(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
+            ctx.accounts.mint_authority.to_account_info(),
+            mint_authority_bump,
+        )?;
+
         burn(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.mint.to_account_info(),
@@ -710,6 +719,14 @@ ctx.accounts.token_program.to_account_info(),
             ctx.accounts.inventory_delegate.to_account_info(),
             inventory_delegate_bump,
             amount,
+        )?;
+
+        freeze_account(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
+            ctx.accounts.mint_authority.to_account_info(),
+            mint_authority_bump,
         )?;
 
         Ok(())
@@ -1530,7 +1547,7 @@ pub struct Refund<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(inventory_delegate_bump:u8)]
+#[instruction(mint_authority_bump: u8, inventory_delegate_bump:u8)]
 pub struct Consume<'info> {
     #[account(
         has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority,
@@ -1539,6 +1556,13 @@ pub struct Consume<'info> {
 
     #[account(mut)]
     pub mint: Box<Account<'info, Mint>>,
+
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
+    #[account(
+        seeds = [b"mint_authority", mint.key().as_ref()],
+        bump = mint_authority_bump,
+    )]
+    pub mint_authority: AccountInfo<'info>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(

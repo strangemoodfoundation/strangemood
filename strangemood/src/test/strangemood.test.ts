@@ -13,8 +13,10 @@ import {
   createCharterTreasury,
   initCashier,
   initListing,
+  mintTo,
+  purchase,
 } from "./instructions";
-import { createMintToInstruction, mintTo, transfer } from "@solana/spl-token";
+import { createMintToInstruction, transfer } from "@solana/spl-token";
 const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY, Transaction } =
   anchor.web3;
 
@@ -405,13 +407,7 @@ describe("Strangemood", () => {
       await pda.token_authority(program.programId, inventory.publicKey);
 
     // Mint payment tokens into the payment account
-    const fundAccountIx = createMintToInstruction(
-      paymentMint.publicKey,
-      payment.publicKey,
-      program.provider.wallet.publicKey,
-      100
-    );
-    await program.provider.send(new Transaction().add(fundAccountIx));
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
 
     // Check we have the funds to pay for the listing
     let before = await splToken.getAccount(
@@ -474,5 +470,80 @@ describe("Strangemood", () => {
       charterTreasury.account.deposit
     );
     assert.equal(charterDeposit.amount, 4);
+  });
+
+  it("can purchase a listing, and then consume that listing", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
+      1,
+      0,
+      true,
+      true
+    );
+
+    // Mint payment tokens into the payment account
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // purchase the listing
+    const { inventory } = await purchase(
+      program,
+      charter,
+      charterTreasury,
+      listing,
+      payment.publicKey,
+      5
+    );
+
+    let before = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(before.amount, 5);
+
+    let [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    let [mint_authority, mint_authority_bump] = await pda.mint_authority(
+      program.programId,
+      listing.account.mint
+    );
+
+    // Consume the listing
+    await program.methods
+      .consume(mint_authority_bump, inventory_delegate_bump, new anchor.BN(3))
+      .accounts({
+        inventory: inventory.publicKey,
+        mint: listing.account.mint,
+        mintAuthority: mint_authority,
+        inventoryDelegate: inventory_delegate,
+        listing: listing.publicKey,
+        authority: listing.account.authority,
+      })
+      .rpc();
+
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(after.amount, 2);
   });
 });

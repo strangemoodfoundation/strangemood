@@ -62,6 +62,26 @@ pub fn freeze_account<'a>(
     anchor_spl::token::freeze_account(cpi_ctx)
 }
 
+pub fn thaw_account<'a>(
+    token_program: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    account: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    bump: u8,
+) -> Result<()> {
+    let cpi_program = token_program;
+    let cloned_mint = mint.key.clone();
+    let cpi_accounts = anchor_spl::token::ThawAccount {
+        mint: mint,
+        account: account,
+        authority: authority,
+    };
+    let seeds = &[b"mint_authority", cloned_mint.as_ref(), &[bump]];
+    let signers = &[&seeds[..]];
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
+    anchor_spl::token::thaw_account(cpi_ctx)
+}
+
 // Calls splToken's approve instruction
 pub fn approve_delegate<'a>(
     token_program: AccountInfo<'a>,

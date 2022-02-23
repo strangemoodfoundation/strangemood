@@ -11,6 +11,7 @@ import { pda } from "../pda";
 import { MAINNET } from "../constants";
 import {
   AuthorityType,
+  createMintToInstruction,
   createSetAuthorityInstruction,
 } from "@solana/spl-token";
 const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY, Transaction } =
@@ -196,4 +197,70 @@ export async function initCashier(
     publicKey: cashier_pda,
     stake: stake,
   };
+}
+
+export async function purchase(
+  program: Program<Strangemood>,
+  charter: { account: any; publicKey: PublicKey },
+  charterTreasury: { account: any; publicKey: PublicKey },
+  listing: { account: any; publicKey: PublicKey },
+  payment: PublicKey,
+  quantity: number
+) {
+  const inventory = await createTokenAccount(program, listing.account.mint);
+
+  const [listing_mint_authority, listing_mint_authority_bump] =
+    await pda.mint_authority(program.programId, listing.account.mint);
+
+  const [charter_mint_authority, charter_mint_authority_bump] =
+    await pda.mint_authority(program.programId, charter.account.mint);
+
+  const [inventory_delegate, inventory_delegate_bump] =
+    await pda.token_authority(program.programId, inventory.publicKey);
+
+  // purchase the listing
+  await program.methods
+    .purchase(
+      listing_mint_authority_bump,
+      charter_mint_authority_bump,
+      inventory_delegate_bump,
+      new anchor.BN(quantity)
+    )
+    .accounts({
+      payment: payment,
+      inventory: inventory.publicKey,
+      inventoryDelegate: inventory_delegate,
+      listingsPaymentDeposit: listing.account.paymentDeposit,
+      listingsVoteDeposit: listing.account.voteDeposit,
+      listing: listing.publicKey,
+      listingMint: listing.account.mint,
+      listingMintAuthority: listing_mint_authority,
+      charter: charter.publicKey,
+      charterTreasury: charterTreasury.publicKey,
+      charterTreasuryDeposit: charterTreasury.account.deposit,
+      charterReserve: charter.account.reserve,
+      charterMint: charter.account.mint,
+      charterMintAuthority: charter_mint_authority,
+      purchaser: program.provider.wallet.publicKey,
+    })
+    .rpc();
+
+  return {
+    inventory,
+  };
+}
+
+export async function mintTo(
+  program: Program<Strangemood>,
+  mint: PublicKey,
+  to: PublicKey,
+  amount: number
+) {
+  const fundAccountIx = createMintToInstruction(
+    mint,
+    to,
+    program.provider.wallet.publicKey,
+    amount
+  );
+  await program.provider.send(new Transaction().add(fundAccountIx));
 }
