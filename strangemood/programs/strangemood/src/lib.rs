@@ -273,7 +273,6 @@ pub mod strangemood {
         cashier_split: f64,
         uri: String,
     ) -> Result<()> {
-
         if cashier_split < 0.0 || cashier_split > 1.0 {
             return Err(error!(StrangemoodError::CashierSplitIsInvalid));
         }
@@ -838,7 +837,7 @@ ctx.accounts.token_program.to_account_info(),
             ctx.accounts.token_program.to_account_info(), 
     ctx.accounts.mint.to_account_info(),
 ctx.accounts.stake.to_account_info(),
-ctx.accounts.mint_authority.to_account_info(),
+ctx.accounts.stake_authority.to_account_info(),
         mint_authority_bump,
         amount
         )?;
@@ -1837,7 +1836,7 @@ pub struct InitCashierTreasury<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(mint_authority_bump: u8)]
+#[instruction(stake_authority_bump: u8)]
 pub struct BurnCashierStake<'info> {
     #[account(
         has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority,
@@ -1856,10 +1855,10 @@ pub struct BurnCashierStake<'info> {
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
     #[account(
-        seeds=[b"mint_authority", mint.key().as_ref()],
-        bump=mint_authority_bump,
+        seeds=[b"token_authority", stake.key().as_ref()],
+        bump=stake_authority_bump,
     )]
-    pub mint_authority: AccountInfo<'info>,
+    pub stake_authority: AccountInfo<'info>,
 
     #[account(mut)]
     pub mint: Account<'info, Mint>,

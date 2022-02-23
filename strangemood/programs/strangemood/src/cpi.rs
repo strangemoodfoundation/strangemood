@@ -110,13 +110,13 @@ pub fn burn<'a>(
     amount: u64,
 ) -> Result<()> {
     let cpi_program = token_program;
-    let cloned_mint = mint.key.clone();
+    let cloned_account = account.key.clone();
     let cpi_accounts = anchor_spl::token::Burn {
-        mint: mint,
+        mint,
         to: account,
-        authority: authority,
+        authority,
     };
-    let seeds = &[b"mint_authority", cloned_mint.as_ref(), &[bump]];
+    let seeds = &[b"token_authority", cloned_account.as_ref(), &[bump]];
     let signers = &[&seeds[..]];
     let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
     anchor_spl::token::burn(cpi_ctx, amount)

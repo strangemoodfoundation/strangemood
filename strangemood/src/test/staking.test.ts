@@ -113,16 +113,21 @@ describe("Staking Cashiers", () => {
     );
     assert.equal(before.amount, 100);
 
+    const [stake_authority, stake_authority_bump] = await pda.token_authority(
+      program.programId,
+      cashier.stake.publicKey
+    );
+
     // Burn 50 stake tokens
     await program.methods
-      .burnCashierStake(mint_authority_bump, new anchor.BN(50))
+      .burnCashierStake(stake_authority_bump, new anchor.BN(50))
       .accounts({
         charter: charter_pda,
         cashier: cashier.publicKey,
         mint: mint.publicKey,
         authority: program.provider.wallet.publicKey,
         stake: cashier.stake.publicKey,
-        mintAuthority: mint_authority,
+        stakeAuthority: stake_authority,
       })
       .rpc();
 
