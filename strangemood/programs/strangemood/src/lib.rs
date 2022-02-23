@@ -528,7 +528,7 @@ ctx.accounts.token_program.to_account_info(),
     }
 
     pub fn finish_trial(
-        ctx: Context<FinishTrialWithCashier>,
+        ctx: Context<FinishTrial>,
         charter_mint_authority_bump: u8,
         receipt_escrow_authority_bump: u8
     ) -> Result<()> {

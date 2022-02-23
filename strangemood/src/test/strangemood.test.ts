@@ -581,7 +581,7 @@ describe("Strangemood", () => {
     );
     assert.equal(listingDeposit.amount, 3);
 
-    // Check that the listing payment deposit was paid
+    // Check that the cashier payment deposit was paid
     let cashierDeposit = await splToken.getAccount(
       program.provider.connection,
       cashierTreasury.account.escrow
@@ -760,5 +760,41 @@ describe("Strangemood", () => {
       escrow.publicKey
     );
     assert.equal(escrowAccount.amount, 10);
+
+    // Finish the trial
+    const [charter_mint_authority, charter_mint_authority_bump] =
+      await pda.mint_authority(program.programId, charter.account.mint);
+    await program.methods
+      .finishTrial(charter_mint_authority_bump, escrow_authority_bump)
+      .accounts({
+        receipt,
+        purchaser: program.provider.wallet.publicKey,
+        listingsPaymentDeposit: listing.account.paymentDeposit,
+        listingsVoteDeposit: listing.account.voteDeposit,
+        listing: listing.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        charterTreasuryDeposit: charterTreasury.account.deposit,
+        charterReserve: charter.account.reserve,
+        receiptEscrow: escrow.publicKey,
+        receiptEscrowAuthority: escrow_authority,
+        charter: charter.publicKey,
+        charterMint: charter.account.mint,
+        charterMintAuthority: charter_mint_authority,
+      })
+      .rpc();
+
+    // Check that the listing payment deposit was paid
+    let listingDeposit = await splToken.getAccount(
+      program.provider.connection,
+      listing.account.paymentDeposit
+    );
+    assert.equal(listingDeposit.amount, 6);
+
+    // Check that the charter deposit was paid
+    let charterDeposit = await splToken.getAccount(
+      program.provider.connection,
+      charterTreasury.account.deposit
+    );
+    assert.equal(charterDeposit.amount, 4);
   });
 });
