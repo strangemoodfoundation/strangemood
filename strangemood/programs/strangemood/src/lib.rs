@@ -1865,7 +1865,6 @@ pub struct BurnCashierStake<'info> {
 
     pub authority: Signer<'info>,
 
-    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>
 }
@@ -1927,7 +1926,6 @@ pub struct WithdrawCashierTreasury<'info> {
     pub vote_mint: Box<Account<'info, Mint>>,
 
     pub clock: Sysvar<'info, Clock>,
-    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>
 }
