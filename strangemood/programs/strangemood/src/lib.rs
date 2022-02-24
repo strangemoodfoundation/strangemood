@@ -644,26 +644,37 @@ ctx.accounts.token_program.to_account_info(),
     }
 
     pub fn refund_trial(
-        ctx: Context<Refund>,
+        ctx: Context<RefundTrial>,
         listing_mint_authority_bump: u8,
+        inventory_delegate_bump: u8,
         escrow_authority_bump:u8,
     ) -> Result<()> {
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
-        burn(
+        thaw_account(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.listing_mint.to_account_info(),
             ctx.accounts.inventory.to_account_info(),
             ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
+        )?;
+
+        burn(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
+            ctx.accounts.inventory_delegate.to_account_info(),
+            inventory_delegate_bump,
             receipt.quantity,
         )?;
 
-        // Close the receipt account
-        close_native_account(
-            &ctx.accounts.receipt.to_account_info(),
-            &ctx.accounts.purchaser.to_account_info(),
-        );
+        freeze_account(
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.listing_mint.to_account_info(),
+            ctx.accounts.inventory.to_account_info(),
+            ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_authority_bump,
+        )?;
 
         // Transfer all the funds in the escrow back to the user 
         token_transfer_with_seed(            
@@ -678,12 +689,19 @@ ctx.accounts.token_program.to_account_info(),
 
         // Close the escrow
         close_token_escrow_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.escrow.to_account_info(),
+ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.escrow.to_account_info(),
             ctx.accounts.purchaser.to_account_info(),
-            ctx.accounts.escrow_authority.to_account_info(),
+    ctx.accounts.escrow_authority.to_account_info(),
             escrow_authority_bump
         )?;
+
+        // Close the receipt account
+        close_native_account(
+            &ctx.accounts.receipt.to_account_info(),
+            &ctx.accounts.purchaser.to_account_info(),
+        );
+
 
         Ok(())
     }
@@ -1497,8 +1515,8 @@ pub struct FinishTrialWithCashier<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(listing_mint_authority_bump: u8)]
-pub struct Refund<'info> {
+#[instruction(listing_mint_authority_bump: u8, inventory_delegate_bump: u8, escrow_authority_bump: u8)]
+pub struct RefundTrial<'info> {
     pub purchaser: Signer<'info>,
 
     // Where we'll return the tokens back to 
@@ -1517,10 +1535,21 @@ pub struct Refund<'info> {
     pub escrow: Account<'info, TokenAccount>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
+    #[account(
+        seeds=[b"token_authority", escrow.key().as_ref()],
+        bump=escrow_authority_bump,
+    )]
     pub escrow_authority: AccountInfo<'info>,
 
     #[account(mut)]
     pub inventory: Box<Account<'info, TokenAccount>>,
+
+    /// CHECK: This is a PDA, and we're not reading or writing from it.
+    #[account(
+        seeds=[b"token_authority", inventory.key().as_ref()],
+        bump=inventory_delegate_bump,
+    )]
+    pub inventory_delegate: AccountInfo<'info>,
 
     // The listing to purchase
     #[account(constraint=listing.mint==listing_mint.key() @ StrangemoodError::ListingHasUnexpectedMint)]
