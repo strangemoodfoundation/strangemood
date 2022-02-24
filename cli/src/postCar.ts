@@ -34,13 +34,14 @@ export async function postCar(bytes: Uint8Array) {
             const json = await response.json();
             return json;
          } catch (error) {
-            // console.error(error);
-            // const errorBody = await error.response.text();
-            // console.error(`Error body: ${errorBody}`);
+            console.error(error);
+            const errorBody = await error.response.text();
+            console.error(`Error body: ${errorBody}`);
          }
       } catch (error) {
-         // console.log(error);
+         console.log(error);
       }
       retryCount++;
    }
+   return null;
 } 
