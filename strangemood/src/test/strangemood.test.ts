@@ -671,6 +671,176 @@ describe("Strangemood", () => {
     assert.equal(after.amount, 2);
   });
 
+  it("can start start_trial with a cashier, and then finish_trial with cashier", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
+      1,
+      0,
+      true,
+      true
+    );
+    const cashier = await initCashier(program, charter);
+    const cashierTreasury = await createCashierTreasury(
+      program,
+      charter.publicKey,
+      charterTreasury.publicKey,
+      cashier.publicKey,
+      paymentMint.publicKey
+    );
+
+    const inventory = await createTokenAccount(program, listing.account.mint);
+
+    // Mint payment tokens into the payment account
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // start the trial
+    const escrow = Keypair.generate();
+    const [listing_mint_authority, listing_mint_authority_bump] =
+      await pda.mint_authority(program.programId, listing.account.mint);
+    const [escrow_authority, escrow_authority_bump] = await pda.token_authority(
+      program.programId,
+      escrow.publicKey
+    );
+    const [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    const [receipt, _] = await pda.receipt(program.programId, escrow.publicKey);
+    await program.methods
+      .startTrialWithCashier(
+        listing_mint_authority_bump,
+        escrow_authority_bump,
+        inventory_delegate_bump,
+        new anchor.BN(10)
+      )
+      .accounts({
+        cashier: cashier.publicKey,
+        payment: payment.publicKey,
+        listing: listing.publicKey,
+        listingPaymentDeposit: listing.account.paymentDeposit,
+        listingPaymentDepositMint: paymentMint.publicKey,
+        listingMint: listing.account.mint,
+        listingMintAuthority: listing_mint_authority,
+        inventory: inventory.publicKey,
+        inventoryDelegate: inventory_delegate,
+        receipt: receipt,
+        escrow: escrow.publicKey,
+        escrowAuthority: escrow_authority,
+        purchaser: program.provider.wallet.publicKey,
+      })
+      .signers([escrow])
+      .rpc();
+
+    const receiptAccount = await program.account.receipt.fetch(receipt);
+    assert.equal(
+      receiptAccount.cashier.toString(),
+      cashier.publicKey.toString()
+    );
+    assert.equal(
+      receiptAccount.purchaser.toString(),
+      program.provider.wallet.publicKey.toString()
+    );
+    assert.equal(
+      receiptAccount.listing.toString(),
+      listing.publicKey.toString()
+    );
+    assert.equal(receiptAccount.escrow.toString(), escrow.publicKey.toString());
+    assert.equal(
+      receiptAccount.inventory.toString(),
+      inventory.publicKey.toString()
+    );
+    assert.equal(receiptAccount.quantity.toNumber(), 10);
+    assert.equal(receiptAccount.price.toNumber(), 1);
+
+    // Account is charged
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
+    );
+    assert.equal(after.amount, 90);
+
+    // Check that the inventory has the token
+    let inventoryAccount = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(inventoryAccount.amount, 10);
+
+    // Check that the funds are in the receipt escrow
+    let escrowAccount = await splToken.getAccount(
+      program.provider.connection,
+      escrow.publicKey
+    );
+    assert.equal(escrowAccount.amount, 10);
+
+    // Finish the trial
+    const [charter_mint_authority, charter_mint_authority_bump] =
+      await pda.mint_authority(program.programId, charter.account.mint);
+    await program.methods
+      .finishTrialWithCashier(
+        charter_mint_authority_bump,
+        escrow_authority_bump
+      )
+      .accounts({
+        receipt,
+        cashier: cashier.publicKey,
+        cashierTreasury: cashierTreasury.publicKey,
+        cashierTreasuryEscrow: cashierTreasury.account.escrow,
+        purchaser: program.provider.wallet.publicKey,
+        listingsPaymentDeposit: listing.account.paymentDeposit,
+        listingsVoteDeposit: listing.account.voteDeposit,
+        listing: listing.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        charterTreasuryDeposit: charterTreasury.account.deposit,
+        charterReserve: charter.account.reserve,
+        receiptEscrow: escrow.publicKey,
+        receiptEscrowAuthority: escrow_authority,
+        charter: charter.publicKey,
+        charterMint: charter.account.mint,
+        charterMintAuthority: charter_mint_authority,
+      })
+      .rpc();
+
+    // Check that the listing payment deposit was paid
+    let listingDeposit = await splToken.getAccount(
+      program.provider.connection,
+      listing.account.paymentDeposit
+    );
+    assert.equal(listingDeposit.amount, 5);
+
+    // Check that the listing payment deposit was paid
+    let cashierEscrow = await splToken.getAccount(
+      program.provider.connection,
+      cashierTreasury.account.escrow
+    );
+    assert.equal(cashierEscrow.amount, 1);
+
+    // Check that the charter deposit was paid
+    let charterDeposit = await splToken.getAccount(
+      program.provider.connection,
+      charterTreasury.account.deposit
+    );
+    assert.equal(charterDeposit.amount, 4);
+  });
+
   it("can start_trial, and then finish_trial", async () => {
     const charter = await initCharter(
       program,
@@ -739,6 +909,23 @@ describe("Strangemood", () => {
       })
       .signers([escrow])
       .rpc();
+
+    const receiptAccount = await program.account.receipt.fetch(receipt);
+    assert.equal(
+      receiptAccount.purchaser.toString(),
+      program.provider.wallet.publicKey.toString()
+    );
+    assert.equal(
+      receiptAccount.listing.toString(),
+      listing.publicKey.toString()
+    );
+    assert.equal(receiptAccount.escrow.toString(), escrow.publicKey.toString());
+    assert.equal(
+      receiptAccount.inventory.toString(),
+      inventory.publicKey.toString()
+    );
+    assert.equal(receiptAccount.quantity.toNumber(), 10);
+    assert.equal(receiptAccount.price.toNumber(), 1);
 
     // Account is charged
     let after = await splToken.getAccount(

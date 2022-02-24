@@ -472,7 +472,7 @@ ctx.accounts.token_program.to_account_info(),
         receipt.quantity = amount;
         receipt.inventory = ctx.accounts.inventory.key();
         receipt.cashier = None;
-        receipt.price = total;
+        receipt.price = listing.price;
         receipt.escrow = ctx.accounts.escrow.key();
 
         Ok(())
@@ -500,7 +500,7 @@ ctx.accounts.token_program.to_account_info(),
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.payment.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
-            ctx.accounts.user.to_account_info(),
+            ctx.accounts.purchaser.to_account_info(),
             total,
         )?;
 
@@ -517,12 +517,12 @@ ctx.accounts.token_program.to_account_info(),
         let receipt = &mut ctx.accounts.receipt;
         receipt.is_initialized = true;
         receipt.listing = ctx.accounts.listing.key();
-        receipt.purchaser = ctx.accounts.user.key();
-        receipt.quantity = amount;
+        receipt.purchaser = ctx.accounts.purchaser.key();
         receipt.inventory = ctx.accounts.inventory.key();
-        receipt.cashier = Some(ctx.accounts.cashier.key());
-        receipt.price = total;
+        receipt.cashier = Option::Some(ctx.accounts.cashier.key());
         receipt.escrow = ctx.accounts.escrow.key();
+        receipt.price = listing.price;
+        receipt.quantity = amount;
 
         Ok(())
     }
@@ -540,7 +540,7 @@ ctx.accounts.token_program.to_account_info(),
             return Err(error!(StrangemoodError::ReceiptHasCashier));
         }
 
-        let total: u64 = receipt.price;
+        let total: u64 = receipt.price * receipt.quantity;
         let splits = transfer_funds_from_escrow(
             total, 
             &listing,
@@ -597,7 +597,7 @@ ctx.accounts.token_program.to_account_info(),
             return Err(error!(StrangemoodError::ReceiptDoesNotHaveCashier));
         }
 
-        let total: u64 = receipt.price;
+        let total: u64 = receipt.price * receipt.quantity;
         let splits = transfer_funds_from_escrow_with_cashier(
             total, 
             &listing,
@@ -1033,7 +1033,7 @@ pub struct StartTrial<'info> {
     // 32 for listing pubkey
     // 32 for inventory pubkey
     // 32 for purchaser pubkey
-    // 32 for cashier pubkey
+    // 32 + 1 for cashier pubkey 
     // 32 for escrow pubkey
     // 8 for quantity u64
     // 8 for price u64
@@ -1041,7 +1041,7 @@ pub struct StartTrial<'info> {
         seeds = [b"receipt", escrow.key().as_ref()],
         bump,
         payer = purchaser,
-        space = 8 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8)]
+        space = 8 + 1 + 32 + 32 + 32 + (32 + 1) + 32 + 8 + 8)]
     pub receipt: Box<Account<'info, Receipt>>,
 
     #[account(
@@ -1122,20 +1122,20 @@ pub struct StartTrialWithCashier<'info> {
     // 32 for listing pubkey
     // 32 for inventory pubkey
     // 32 for purchaser pubkey
-    // 32 for cashier pubkey
+    // 32 + 1 for cashier pubkey + option
     // 32 for escrow pubkey
     // 8 for quantity u64
     // 8 for price u64
     #[account(init,
         seeds = [b"receipt", escrow.key().as_ref()],
         bump,
-        payer = user,
-        space = 8 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 8)]
+        payer = purchaser,
+        space = 8 + 1 + 32 + 32 + 32 + (32 + 1) + 32 + 8 + 8)]
     pub receipt: Box<Account<'info, Receipt>>,
 
     #[account(
         init,
-        payer=user,
+        payer=purchaser,
         token::mint = listing_payment_deposit_mint,
         token::authority = escrow_authority,
     )]
@@ -1149,7 +1149,7 @@ pub struct StartTrialWithCashier<'info> {
     pub escrow_authority: AccountInfo<'info>,
 
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub purchaser: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,

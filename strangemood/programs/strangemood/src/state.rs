@@ -1,5 +1,51 @@
 use anchor_lang::{account, prelude::*};
 
+#[cfg(test)]
+mod tests {
+    use anchor_lang::{prelude::Pubkey, AccountDeserialize, AccountSerialize};
+
+    use super::Receipt;
+
+    #[test]
+    fn receipt() {
+        // Without cashier
+        let r = Receipt {
+            is_initialized: true,
+            listing: Pubkey::new_unique(),
+            inventory: Pubkey::new_unique(),
+            purchaser: Pubkey::new_unique(),
+            cashier: None,
+            escrow: Pubkey::new_unique(),
+            quantity: 8,
+            price: 10,
+        };
+        let mut buf = Vec::new();
+        r.try_serialize(&mut buf).unwrap();
+        let len = buf.len();
+        Receipt::try_deserialize(&mut buf.as_slice()).unwrap();
+
+        assert!(len == 154);
+
+        // With cashier
+        let r = Receipt {
+            is_initialized: true,
+            listing: Pubkey::new_unique(),
+            inventory: Pubkey::new_unique(),
+            purchaser: Pubkey::new_unique(),
+            cashier: Some(Pubkey::new_unique()),
+            escrow: Pubkey::new_unique(),
+            quantity: 8,
+            price: 10,
+        };
+        let mut buf = Vec::new();
+        r.try_serialize(&mut buf).unwrap();
+        let len = buf.len();
+        Receipt::try_deserialize(&mut buf.as_slice()).unwrap();
+
+        assert!(len == 186);
+    }
+}
+
 #[account]
 pub struct Receipt {
     /// Set to "true" by the program when BeginPurchase is run
