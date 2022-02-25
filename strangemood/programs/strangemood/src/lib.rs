@@ -814,6 +814,7 @@ ctx.accounts.token_program.to_account_info(),
     // Migrate a listing to a different charter
     pub fn set_listing_charter(ctx: Context<SetListingCharter>) -> Result<()> {
         ctx.accounts.listing.charter = ctx.accounts.charter.key();
+        ctx.accounts.listing.vote_deposit = ctx.accounts.vote_deposit.key();
         Ok(())
     }
 
@@ -828,7 +829,7 @@ ctx.accounts.token_program.to_account_info(),
     pub fn set_charter_contribution_rate(
         ctx: Context<SetCharter>,
         payment_contribution: f64,
-        vote_contribution: f64,
+        vote_contribution: f64
     ) -> Result<()> {
         ctx.accounts.charter.payment_contribution = payment_contribution;
         ctx.accounts.charter.vote_contribution = vote_contribution;
@@ -969,33 +970,6 @@ ctx.accounts.stake_authority.to_account_info(),
 
         Ok(())
     }
-}
-
-
-#[derive(Accounts)]
-#[instruction(listing_mint_authority_bump: u8)]
-pub struct MintTo<'info> {
-
-    pub inventory: Box<Account<'info, Listing>>,
-
-    // The listing we can mint from
-    #[account(
-        has_one=mint @ StrangemoodError::ListingHasUnexpectedMint,
-        has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority
-    )]
-    pub listing: Box<Account<'info, Listing>>,
-
-    // The listing mint
-    pub mint: Box<Account<'info, Mint>>,
-
-    /// CHECK: This is a PDA, and we're not reading or writing from it.
-    #[account(
-        seeds = [b"mint_authority", mint.key().as_ref()],
-        bump = listing_mint_authority_bump,
-    )]
-    pub mint_authority: AccountInfo<'info>,
-
-    pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -1666,6 +1640,29 @@ pub struct SetListing<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetListingCharter<'info> {
+    #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority)]
+    pub listing: Account<'info, Listing>,
+
+    #[account(
+        has_one=mint @ StrangemoodError::CharterHasUnexpectedMint,
+    )]
+    pub charter: Box<Account<'info, Charter>>,
+
+    pub mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        constraint=vote_deposit.mint==charter.mint @ StrangemoodError::TokenAccountHasUnexpectedMint, 
+        has_one=mint @ StrangemoodError::TokenAccountHasUnexpectedMint
+    )]
+    pub vote_deposit: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct SetListingDeposit<'info> {
     #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority, has_one=charter @ StrangemoodError::ListingHasUnexpectedCharter)]
     pub listing: Account<'info, Listing>,
@@ -1693,19 +1690,6 @@ pub struct SetListingAuthority<'info> {
 
     /// CHECK: This is an authority, and we're not reading or writing from it.
     pub new_authority: AccountInfo<'info>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-
-#[derive(Accounts)]
-pub struct SetListingCharter<'info> {
-    #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority)]
-    pub listing: Account<'info, Listing>,
-
-    pub charter: Account<'info, Charter>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -1753,7 +1737,6 @@ pub struct SetCharterReserve<'info> {
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
-
 #[derive(Accounts)]
 pub struct SetCharterAuthority<'info> {
     #[account(mut, has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority)]
@@ -1766,7 +1749,6 @@ pub struct SetCharterAuthority<'info> {
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
-
 
 #[derive(Accounts)]
 pub struct InitCharterTreasury<'info> {

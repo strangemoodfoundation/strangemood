@@ -10,6 +10,7 @@ pub fn mint_to_and_freeze<'a>(
     bump: u8,
     amount: u64,
 ) -> Result<()> {
+    thaw_account(token_program, mint, to, authority, bump);
     mint_to(
         token_program.clone(),
         mint.clone(),

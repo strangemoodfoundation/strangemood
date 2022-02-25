@@ -67,6 +67,19 @@ export default class CharterInit extends Command {
         "The % of vote token expansion that is contribution to the governance",
       required: true,
     }),
+
+    withdrawPeriod: Flags.integer({
+      description: "The number of epochs a cashier withdraw period lasts",
+      required: false,
+      default: 1,
+    }),
+
+    stakeWithdrawAmount: Flags.integer({
+      description:
+        "The amount of cashier stake that can be withdrawn per withdraw period",
+      required: false,
+      default: 50,
+    }),
   };
 
   static args = [];
@@ -138,28 +151,33 @@ export default class CharterInit extends Command {
 
     // Create a deposit for votes to go to
     spinner.text = "InitTokenAccount";
-    const asVoteDeposit = await withTokenAccount(program, mint);
-    instructions.push(...asVoteDeposit.ixs);
-    signers.push(asVoteDeposit.keypair);
+    const asReserve = await withTokenAccount(program, mint);
+    instructions.push(...asReserve.ixs);
+    signers.push(asReserve.keypair);
 
     // Create the charter
     spinner.text = "InitCharter";
     const asInitCharter = await initCharter({
       program: program,
       authority: program.provider.wallet.publicKey,
-      voteDeposit: asVoteDeposit.keypair.publicKey,
+      reserve: asReserve.keypair.publicKey,
       mint: mint,
       signer: program.provider.wallet.publicKey,
       uri: flags.uri.toString(),
       expansion,
       paymentContribution,
       voteContribution,
+      withdrawPeriod: new anchor.BN(flags.withdrawPeriod),
+      stakeWithdrawAmount: new anchor.BN(flags.stakeWithdrawAmount),
     });
     instructions.push(...asInitCharter.instructions);
 
     // Move the mint authority to a PDA of the program.
     spinner.text = "SetMintAuthority";
-    const [mintAuthority, _] = await pda.mint(program.programId, mint);
+    const [mintAuthority, _] = await pda.mint_authority(
+      program.programId,
+      mint
+    );
     const asSetMintAuthority = await withSetMintAuthority(
       program,
       mint,

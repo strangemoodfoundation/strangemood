@@ -109,7 +109,6 @@ export default class TreasuryInit extends Command {
     const asCharterTreasury = await initCharterTreasury({
       program,
       charter,
-      authority: charterAccount.authority,
       deposit,
       mint,
       scalar,

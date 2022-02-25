@@ -503,7 +503,7 @@ export async function initListing(args: {
   return {
     instructions,
     signers: [listingMint],
-    publicKey: listing_pda,
+    listing: listing_pda,
   };
 }
 
@@ -545,6 +545,7 @@ export async function initCharter(args: {
 
   return {
     instructions,
+    charter: charter_pda,
   };
 }
 
@@ -667,8 +668,9 @@ export async function initCharterTreasury(args: {
     .instruction();
 
   let instructions = [ix];
-
+  x;
   return {
     instructions,
+    treasury: treasury_pda,
   };
 }
