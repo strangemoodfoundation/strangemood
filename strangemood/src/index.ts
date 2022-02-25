@@ -14,24 +14,17 @@ import { pda as _pda } from "./pda";
 import * as constants from "./constants";
 import { v4 } from "uuid";
 const { web3 } = anchor;
-const { SystemProgram, SYSVAR_RENT_PUBKEY } = web3;
+const { SystemProgram, SYSVAR_RENT_PUBKEY, Keypair, SYSVAR_CLOCK_PUBKEY } =
+  web3;
 import { Buffer } from "buffer";
 import * as splToken from "@solana/spl-token";
-import { toAmountAndDecimals } from "./numbers";
 import { idlAddress } from "@project-serum/anchor/dist/cjs/idl";
+import { program } from "@project-serum/anchor/dist/cjs/spl/token";
 
 export const pda = _pda;
 
 export const MAINNET = constants.MAINNET;
 export const TESTNET = constants.TESTNET;
-
-export function makeReceiptNonce() {
-  let buffer = [];
-  v4(null, buffer);
-  const as_hex = buffer.map((n) => n.toString(16)).join("");
-
-  return new anchor.BN(as_hex, 16, "le");
-}
 
 export async function fetchStrangemoodProgram(
   provider: anchor.Provider,
@@ -56,8 +49,20 @@ export type Charter = Awaited<
   ReturnType<Program<Strangemood>["account"]["charter"]["fetch"]>
 >;
 
+export type Cashier = Awaited<
+  ReturnType<Program<Strangemood>["account"]["cashier"]["fetch"]>
+>;
+
 export type Receipt = Awaited<
   ReturnType<Program<Strangemood>["account"]["receipt"]["fetch"]>
+>;
+
+export type CharterTreasury = Awaited<
+  ReturnType<Program<Strangemood>["account"]["charterTreasury"]["fetch"]>
+>;
+
+export type CashierTreasury = Awaited<
+  ReturnType<Program<Strangemood>["account"]["cashierTreasury"]["fetch"]>
 >;
 
 export interface AccountInfo<Acc> {
@@ -100,6 +105,19 @@ async function asListingInfo(
   };
 }
 
+async function asCashierInfo(
+  program: Program<Strangemood>,
+  arg: AccountInfo<Cashier> | PublicKey
+): Promise<AccountInfo<Cashier>> {
+  if (isAccountInfo(arg)) {
+    return arg;
+  }
+  return {
+    account: await program.account.cashier.fetch(arg),
+    publicKey: arg,
+  };
+}
+
 async function asCharterInfo(
   program: Program<Strangemood>,
   arg: AccountInfo<Charter> | PublicKey
@@ -113,146 +131,279 @@ async function asCharterInfo(
   };
 }
 
-/**
- * Allows a purchase to be cashable, effectively marking
- * it as no-longer refundable.
- */
-export async function setReceiptCashable(args: {
-  program: Program<Strangemood>;
-  signer: anchor.web3.PublicKey;
-  receipt: AccountInfo<Receipt> | PublicKey;
-  government?: constants.Government;
-}) {
-  let receiptInfo = await asReceiptInfo(args.program, args.receipt);
+async function asCharterTreasuryInfo(
+  program: Program<Strangemood>,
+  charter: PublicKey,
+  mint: PublicKey
+): Promise<AccountInfo<CharterTreasury>> {
+  let [charterTreasuryPublicKey, charterTreasuryBump] = await pda.treasury(
+    program.programId,
+    charter,
+    mint
+  );
 
-  let ix = args.program.instruction.setReceiptCashable({
-    accounts: {
-      listing: receiptInfo.account.listing,
-      receipt: receiptInfo.publicKey,
-      authority: args.signer,
-    },
-  });
-
-  let instructions = [ix];
+  let charterTreasury = await program.account.charterTreasury.fetch(
+    charterTreasuryPublicKey
+  );
 
   return {
-    instructions,
+    account: charterTreasury,
+    publicKey: charterTreasuryPublicKey,
   };
 }
 
-/**
- * Cancels an in-progress purchase, returning
- * the escrow the purchaser, and, if the purchase
- * was refundable, burns the tokens they received
- * at purchase time.
- */
-export async function cancel(args: {
-  program: Program<Strangemood>;
-  signer: anchor.web3.PublicKey;
-  receipt: AccountInfo<Receipt> | PublicKey;
-  listing: AccountInfo<Listing> | PublicKey;
-}) {
-  let receiptInfo = await asReceiptInfo(args.program, args.receipt);
-  let listingInfo = await asListingInfo(args.program, args.listing);
-
-  let [_, listingBump] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("listing"), listingInfo.account.mint.toBuffer()],
-    args.program.programId
+async function asCashierTreasuryInfo(
+  program: Program<Strangemood>,
+  cashier: PublicKey,
+  mint: PublicKey
+): Promise<AccountInfo<CharterTreasury>> {
+  let [cashierTreasuryPublicKey, cashierTreasuryBump] = await pda.treasury(
+    program.programId,
+    cashier,
+    mint
   );
 
-  let [listingMintAuthority, listingMintAuthorityBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), listingInfo.account.mint.toBuffer()],
-      args.program.programId
-    );
-
-  let [escrowAuthority, escrowAuthorityBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("escrow"), receiptInfo.account.escrow.toBuffer()],
-      args.program.programId
-    );
-
-  let returnTokenAccount = await splToken.getAssociatedTokenAddress(
-    receiptInfo.account.mint,
-    args.signer
+  let cashierTreasury = await program.account.cashierTreasury.fetch(
+    cashierTreasuryPublicKey
   );
-
-  const ix = args.program.instruction.cancel(
-    listingMintAuthorityBump,
-    escrowAuthorityBump,
-    {
-      accounts: {
-        returnDeposit: returnTokenAccount,
-        purchaser: args.signer,
-        receipt: receiptInfo.publicKey,
-        escrow: receiptInfo.account.escrow,
-        escrowAuthority: escrowAuthority,
-        listingTokenAccount: receiptInfo.account.listingTokenAccount,
-        listing: receiptInfo.account.listing,
-        listingMint: listingInfo.account.mint,
-        listingMintAuthority: listingMintAuthority,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-      },
-    }
-  );
-
-  let instructions = [ix];
 
   return {
-    instructions,
+    account: cashierTreasury,
+    publicKey: cashierTreasuryPublicKey,
   };
 }
 
-/**
- * If the listing is consumable, burns tokens of a
- * particular account.
- */
-export async function consume(args: {
+async function getOrCreateAssociatedTokenAccount(args: {
+  program: Program<Strangemood>;
+  mint: PublicKey;
+  signer: PublicKey;
+}) {
+  let instructions = [];
+  let account = await getAssociatedTokenAddress(args.mint, args.signer);
+  if (!(await args.program.provider.connection.getAccountInfo(account))) {
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        args.signer,
+        account,
+        args.signer,
+        args.mint
+      )
+    );
+  }
+
+  return {
+    instructions,
+    account,
+  };
+}
+
+async function purchaseWithoutCashier(args: {
   program: Program<Strangemood>;
   signer: PublicKey;
-  listing: AccountInfo<Receipt> | PublicKey;
-  listingTokenAccount: PublicKey;
+  listing: AccountInfo<Listing> | PublicKey;
   quantity: anchor.BN;
 }) {
+  let instructions = [];
   let listingInfo = await asListingInfo(args.program, args.listing);
-
-  let [_, listingBump] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("listing"), listingInfo.account.mint.toBuffer()],
-    args.program.programId
+  let charterInfo = await asCharterInfo(
+    args.program,
+    listingInfo.account.charter
   );
 
-  let [listingMintAuthority, listingMintAuthorityBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), listingInfo.account.mint.toBuffer()],
-      args.program.programId
+  // Create an inventory if it doesn't exist
+  let inventory = await getAssociatedTokenAddress(
+    listingInfo.account.mint,
+    args.signer
+  );
+  if (!(await args.program.provider.connection.getAccountInfo(inventory))) {
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        args.signer,
+        inventory,
+        args.signer,
+        listingInfo.account.mint
+      )
     );
+  }
 
-  const ix = args.program.instruction.consume(
-    listingMintAuthorityBump,
-    args.quantity,
-    {
-      accounts: {
-        listing: listingInfo.publicKey,
-        mint: listingInfo.account.mint,
-        mintAuthority: listingMintAuthority,
-        listingTokenAccount: args.listingTokenAccount,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        authority: args.signer,
-      },
-    }
+  let deposit = await splToken.getAccount(
+    args.program.provider.connection,
+    listingInfo.account.paymentDeposit
+  );
+  let payment = await getAssociatedTokenAddress(deposit.mint, args.signer);
+
+  // Setup PDAs
+  let [_, listingBump] = await pda.listing(
+    args.program.programId,
+    listingInfo.publicKey
+  );
+  let [inventoryDelegate, inventoryDelegateBump] = await pda.token_authority(
+    args.program.programId,
+    inventory
+  );
+  let [listingMintAuthority, listingMintAuthorityBump] =
+    await pda.mint_authority(args.program.programId, listingInfo.account.mint);
+  let [charterMintAuthority, charterMintAuthorityBump] =
+    await pda.mint_authority(args.program.programId, charterInfo.account.mint);
+
+  let charterTreasuryInfo = await asCharterTreasuryInfo(
+    args.program,
+    charterInfo.publicKey,
+    deposit.mint
   );
 
-  let instructions = [ix];
+  let ix = await args.program.methods
+    .purchase(
+      listingMintAuthorityBump,
+      charterMintAuthorityBump,
+      inventoryDelegateBump,
+      args.quantity
+    )
+    .accounts({
+      payment: payment,
+      inventory: inventory,
+      inventoryDelegate: inventoryDelegate,
+      listingsPaymentDeposit: listingInfo.account.paymentDeposit,
+      listingsVoteDeposit: listingInfo.account.voteDeposit,
+      listing: listingInfo.publicKey,
+      listingMint: listingInfo.account.mint,
+      listingMintAuthority: listingMintAuthority,
+      charter: charterInfo.publicKey,
+      charterTreasury: charterTreasuryInfo.publicKey,
+      charterTreasuryDeposit: charterTreasuryInfo.account.deposit,
+      charterReserve: charterInfo.account.reserve,
+      charterMint: charterInfo.account.mint,
+      charterMintAuthority: charterMintAuthority,
+      purchaser: args.signer,
+    })
+    .instructions();
+
+  instructions.push(ix);
 
   return {
     instructions,
   };
 }
 
-/**
- * Creates a new listing for sale.
- */
+async function purchaseWithCashier(args: {
+  program: Program<Strangemood>;
+  signer: PublicKey;
+  listing: AccountInfo<Listing> | PublicKey;
+  quantity: anchor.BN;
+  cashier: AccountInfo<Cashier> | PublicKey;
+}) {
+  let instructions = [];
+  let listingInfo = await asListingInfo(args.program, args.listing);
+  let charterInfo = await asCharterInfo(
+    args.program,
+    listingInfo.account.charter
+  );
+  let cashierInfo = await asCashierInfo(args.program, args.cashier);
+
+  // Create an inventory if it doesn't exist
+  let inventory = await getAssociatedTokenAddress(
+    listingInfo.account.mint,
+    args.signer
+  );
+  if (!(await args.program.provider.connection.getAccountInfo(inventory))) {
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        args.signer,
+        inventory,
+        args.signer,
+        listingInfo.account.mint
+      )
+    );
+  }
+
+  let deposit = await splToken.getAccount(
+    args.program.provider.connection,
+    listingInfo.account.paymentDeposit
+  );
+  let payment = await getAssociatedTokenAddress(deposit.mint, args.signer);
+
+  // Setup PDAs
+  let [_, listingBump] = await pda.listing(
+    args.program.programId,
+    listingInfo.publicKey
+  );
+  let [inventoryDelegate, inventoryDelegateBump] = await pda.token_authority(
+    args.program.programId,
+    inventory
+  );
+  let [listingMintAuthority, listingMintAuthorityBump] =
+    await pda.mint_authority(args.program.programId, listingInfo.account.mint);
+  let [charterMintAuthority, charterMintAuthorityBump] =
+    await pda.mint_authority(args.program.programId, charterInfo.account.mint);
+
+  let charterTreasuryInfo = await asCharterTreasuryInfo(
+    args.program,
+    charterInfo.publicKey,
+    deposit.mint
+  );
+
+  let cashierTreasury = await asCashierTreasuryInfo(
+    args.program,
+    cashierInfo.publicKey,
+    deposit.mint
+  );
+
+  let ix = await args.program.methods
+    .purchaseWithCashier(
+      listingMintAuthorityBump,
+      charterMintAuthorityBump,
+      inventoryDelegateBump,
+      args.quantity
+    )
+    .accounts({
+      cashier: cashierInfo.publicKey,
+      cashierTreasury: cashierTreasury.publicKey,
+      cashierTreasuryEscrow: cashierTreasury.account.escrow,
+      payment: payment,
+      inventory: inventory,
+      inventoryDelegate: inventoryDelegate,
+      listingsPaymentDeposit: listingInfo.account.paymentDeposit,
+      listingsVoteDeposit: listingInfo.account.voteDeposit,
+      listing: listingInfo.publicKey,
+      listingMint: listingInfo.account.mint,
+      listingMintAuthority: listingMintAuthority,
+      charter: charterInfo.publicKey,
+      charterTreasury: charterTreasuryInfo.publicKey,
+      charterTreasuryDeposit: charterTreasuryInfo.account.deposit,
+      charterReserve: charterInfo.account.reserve,
+      charterMint: charterInfo.account.mint,
+      charterMintAuthority: charterMintAuthority,
+      purchaser: args.signer,
+    })
+    .instructions();
+
+  instructions.push(ix);
+
+  return {
+    instructions,
+  };
+}
+
+export async function purchase(args: {
+  program: Program<Strangemood>;
+  signer: PublicKey;
+  listing: AccountInfo<Listing> | PublicKey;
+  quantity: anchor.BN;
+  cashier?: AccountInfo<Cashier> | PublicKey;
+}) {
+  if (args.cashier) {
+    return purchaseWithCashier({
+      program: args.program,
+      signer: args.signer,
+      listing: args.listing,
+      quantity: args.quantity,
+      cashier: args.cashier,
+    });
+  } else {
+    return purchaseWithoutCashier(args);
+  }
+}
+
 export async function initListing(args: {
   program: Program<Strangemood>;
   signer: PublicKey;
@@ -261,7 +412,7 @@ export async function initListing(args: {
   price: anchor.BN;
 
   // The decimals on the underlying mint.
-  decimals: number;
+  decimals?: number;
 
   // Example: "ipfs://my-cid"
   uri: string;
@@ -275,619 +426,249 @@ export async function initListing(args: {
   // Can this listing be purchased?
   isAvailable: boolean;
 
+  // The percentage of the sale that goes to the marketplace (cashier)
+  // that caused the sale. A value of 0.4 means 40% goes to the cashier.
+  // Must be between 0.0 and 1.0.
+  //
+  // To "opt out" of cashier splits, set this to 0.0.
+  cashierSplit: number;
+
   // the mint to be paid in.
   currency: PublicKey;
 
   // The charter this listing is associated with
   charter: AccountInfo<Charter> | PublicKey;
 }) {
-  if (!args.uri || args.uri.length > 128) {
-    throw new Error(
-      "Listing's URI field must be a string less than 128 characters."
-    );
+  if (args.cashierSplit > 1 || args.cashierSplit < 0) {
+    throw new Error("cashierSplit must be between 0.0 and 1.0");
   }
-
-  const mintKeypair = anchor.web3.Keypair.generate();
 
   let instructions = [];
-
-  let [listingMintAuthority, listingMintBump] = await pda.mint(
-    args.program.programId,
-    mintKeypair.publicKey
-  );
-  let [listingPDA, listingBump] = await pda.listing(
-    args.program.programId,
-    mintKeypair.publicKey
-  );
-  let charter = await asCharterInfo(args.program, args.charter);
-
-  // Find or create an associated vote token account
-  let associatedVoteAddress = await getAssociatedTokenAddress(
-    charter.account.mint,
-    args.signer
-  );
-  if (
-    !(await args.program.provider.connection.getAccountInfo(
-      associatedVoteAddress
-    ))
-  ) {
-    instructions.push(
-      createAssociatedTokenAccountInstruction(
-        args.signer,
-        associatedVoteAddress,
-        args.signer,
-        charter.account.mint
-      )
-    );
-  }
-
-  let associatedSolAddress = await getAssociatedTokenAddress(
-    NATIVE_MINT,
-    args.signer
-  );
-  if (
-    !(await args.program.provider.connection.getAccountInfo(
-      associatedVoteAddress
-    ))
-  ) {
-    instructions.push(
-      createAssociatedTokenAccountInstruction(
-        args.signer,
-        associatedVoteAddress,
-        args.signer,
-        NATIVE_MINT
-      )
-    );
-  }
-
-  const [treasuryPDA, _] = await pda.treasury(
-    args.program.programId,
-    charter.publicKey,
+  const listingMint = Keypair.generate();
+  const charterInfo = await asCharterInfo(args.program, args.charter);
+  let charterTreasuryInfo = await asCharterTreasuryInfo(
+    args.program,
+    charterInfo.publicKey,
     args.currency
   );
-  let treasuryInfo = await args.program.provider.connection.getAccountInfo(
-    treasuryPDA
-  );
-  if (!treasuryInfo) {
-    throw new Error(
-      `The charter "${args.charter.toString()}" has no treasury for the "${args.currency.toString()}" mint.`
-    );
-  }
 
-  let init_instruction_ix = args.program.instruction.initListing(
-    listingMintBump,
-    args.decimals,
-    args.price,
-    args.isRefundable,
-    args.isConsumable,
-    args.isAvailable,
-    args.uri,
-    {
-      accounts: {
-        listing: listingPDA,
-        mint: mintKeypair.publicKey,
-        mintAuthorityPda: listingMintAuthority,
-        charterTreasury: treasuryPDA,
-        rent: SYSVAR_RENT_PUBKEY,
-        paymentDeposit: associatedSolAddress,
-        voteDeposit: associatedVoteAddress,
-        charter: charter.publicKey,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        user: args.signer,
-        systemProgram: SystemProgram.programId,
-      },
-      signers: [mintKeypair],
-    }
-  );
-  instructions.push(init_instruction_ix);
+  const paymentDeposit = await getOrCreateAssociatedTokenAccount({
+    program: args.program,
+    mint: args.currency,
+    signer: args.signer,
+  });
+  instructions.push(...paymentDeposit.instructions);
+  const voteDeposit = await getOrCreateAssociatedTokenAccount({
+    program: args.program,
+    mint: charterInfo.account.mint,
+    signer: args.signer,
+  });
+  instructions.push(...voteDeposit.instructions);
 
-  return {
-    instructions,
-    signers: [mintKeypair],
-    publicKey: listingPDA,
-  };
-}
-
-/**
- * Initiates a purchase. The purchase must eventually
- * be "cashed" by the cashier.
- */
-export async function purchase(args: {
-  program: Program<Strangemood>;
-  cashier: PublicKey;
-  signer: PublicKey;
-  listing: AccountInfo<Listing> | PublicKey;
-  quantity: anchor.BN;
-}) {
-  let listingInfo = await asListingInfo(args.program, args.listing);
-  const listingDeposit = await splToken.getAccount(
-    args.program.provider.connection,
-    listingInfo.account.paymentDeposit
-  );
-
-  let [listingMintAuthority, listingMintBump] = await pda.mint(
+  const [mint_authority, mint_authority_bump] = await pda.mint_authority(
     args.program.programId,
-    listingInfo.account.mint
+    listingMint.publicKey
   );
-
-  let instructions = [];
-
-  const nonce = makeReceiptNonce();
-  const [receipt_pda, receipt_bump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("receipt"), nonce.toArrayLike(Buffer, "le", 16)],
-      args.program.programId
-    );
-
-  let listingTokenAccount = await getAssociatedTokenAddress(
-    listingInfo.account.mint,
-    args.signer
-  );
-  if (
-    !(await args.program.provider.connection.getAccountInfo(
-      listingTokenAccount
-    ))
-  ) {
-    instructions.push(
-      createAssociatedTokenAccountInstruction(
-        args.signer,
-        listingTokenAccount,
-        args.signer,
-        listingInfo.account.mint
-      )
-    );
-  }
-
-  let escrowKeypair = anchor.web3.Keypair.generate();
-  let [escrowAuthority, escrowAuthorityBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("escrow"), escrowKeypair.publicKey.toBuffer()],
-      args.program.programId
-    );
-
-  let purchaseTokenAccount = await splToken.getAssociatedTokenAddress(
-    listingDeposit.mint,
-    args.signer
-  );
-
-  // If the deposit account is wrapped SOL, and the user has SOL,
-  // but DOESN'T have a wrapped SOL token account, then we should
-  // just make an account for them and fund it if they have the funds.
-  if (listingDeposit.mint.toString() === splToken.NATIVE_MINT.toString()) {
-    let nativeBalance = await args.program.provider.connection.getBalance(
-      args.signer
-    );
-    let total = listingInfo.account.price.mul(args.quantity);
-    try {
-      const wrappedSolAccount = await splToken.getAccount(
-        args.program.provider.connection,
-        purchaseTokenAccount
-      );
-
-      // If the user doesn't have enough SOL in their token account,
-      // but has SOL, we should should transfer sol to their account.
-      if (new anchor.BN(wrappedSolAccount.amount.toString()).lt(total)) {
-        // If they don't have enough SOL in their wrapped and system accounts
-        // then we should throw an error.
-        let combinedBalance = new anchor.BN(nativeBalance).add(
-          new anchor.BN(wrappedSolAccount.amount.toString())
-        );
-        if (combinedBalance.lt(total)) {
-          throw new Error(
-            `User cannot afford the purchase. Need=${total.toString()} Have=${combinedBalance.toString()}`
-          );
-        }
-
-        // If they have SOL in two places, we could fix that for them.
-        let remainder = total.sub(
-          new anchor.BN(wrappedSolAccount.amount.toString())
-        );
-        instructions.push(
-          SystemProgram.transfer({
-            fromPubkey: args.signer,
-            toPubkey: purchaseTokenAccount,
-            lamports: remainder.toNumber(),
-          }),
-          splToken.createSyncNativeInstruction(purchaseTokenAccount)
-        );
-      }
-    } catch (err) {
-      // If the user doesn't have an account, we should create one and fund it,
-      // if they actually have the SOL to do so.
-      if (new anchor.BN(nativeBalance).lt(total)) {
-        throw new Error(
-          `User cannot afford the purchase. Need=${total.toString()} Have=${nativeBalance}`
-        );
-      }
-
-      instructions.push(
-        splToken.createAssociatedTokenAccountInstruction(
-          args.signer,
-          purchaseTokenAccount,
-          args.signer,
-          splToken.NATIVE_MINT
-        ),
-        SystemProgram.transfer({
-          fromPubkey: args.signer,
-          toPubkey: purchaseTokenAccount,
-          lamports: total.toNumber(),
-        }),
-        splToken.createSyncNativeInstruction(purchaseTokenAccount)
-      );
-    }
-  }
-
-  let purchase_ix = args.program.instruction.purchase(
-    nonce,
-    listingMintBump,
-    escrowAuthorityBump,
-    new anchor.BN(args.quantity),
-    {
-      accounts: {
-        cashier: args.cashier,
-        escrow: escrowKeypair.publicKey,
-        escrowAuthority,
-        listing: listingInfo.publicKey,
-        listingMint: listingInfo.account.mint,
-        listingMintAuthority: listingMintAuthority,
-        listingPaymentDeposit: listingInfo.account.paymentDeposit,
-        listingPaymentDepositMint: listingDeposit.mint,
-        listingTokenAccount: listingTokenAccount,
-        purchaseTokenAccount: purchaseTokenAccount,
-        receipt: receipt_pda,
-        rent: SYSVAR_RENT_PUBKEY,
-        systemProgram: SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        user: args.signer,
-      },
-    }
-  );
-  instructions.push(purchase_ix);
-
-  return {
-    instructions,
-    receipt: receipt_pda,
-    signers: [escrowKeypair],
-  };
-}
-
-/**
- * Cashes out the receipt, emptying the escrow
- * to the lister and the realm.
- *
- * If the receipt is non-refundable, then this
- * instruction also gives the user their listing
- * tokens.
- *
- * This instruction is expected to be signed by
- * the user's keypair.
- *
- * @param args
- */
-export async function cash(args: {
-  program: Program<Strangemood>;
-  signer: anchor.web3.PublicKey;
-  receipt: AccountInfo<Receipt> | PublicKey;
-  listing?: AccountInfo<Listing> | PublicKey;
-}) {
-  let receiptInfo = await asReceiptInfo(args.program, args.receipt);
-
-  let listingInfo: AccountInfo<Listing>;
-  if (args.listing) {
-    listingInfo = await asListingInfo(args.program, args.listing);
-  } else {
-    listingInfo = await asListingInfo(
-      args.program,
-      receiptInfo.account.listing
-    );
-  }
-  let charter = await args.program.account.charter.fetch(
-    listingInfo.account.charter
-  );
-
-  let [listingMintAuthority, listingMintAuthorityBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), listingInfo.account.mint.toBuffer()],
-      args.program.programId
-    );
-
-  let [charterMintAuthority, charterMintBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("mint"), charter.mint.toBuffer()],
-      args.program.programId
-    );
-
-  // TODO: this error is client-side, because the error that you'd get from the Strangemood program
-  // is fairly unhelpful: "custom program error: 0x4", "Error: owner does not match".
-  //
-  // But this check also makes a network call on every cash instruction, so in the future we can speed
-  // this up by just including a more helpful error or log in the Strangemood program.
-  let charterMint = await splToken.getMint(
-    args.program.provider.connection,
-    charter.mint
-  );
-  if (
-    charterMint.mintAuthority.toString() !== charterMintAuthority.toString()
-  ) {
-    throw new Error(
-      `The Charter's Mint ('${charter.mint.toString()}') has not set it's "MintAuthority" to the Strangemood Program, and so cashing will fail. Set the MintAuthority to '${charterMintAuthority.toString()}'. The current authority is '${charterMint.mintAuthority.toString()}'`
-    );
-  }
-
-  let [escrowAuthority, escrowAuthorityBump] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("escrow"), receiptInfo.account.escrow.toBuffer()],
-      args.program.programId
-    );
-
-  const listingDeposit = await splToken.getAccount(
-    args.program.provider.connection,
-    listingInfo.account.paymentDeposit
-  );
-
-  let [treasury_pda, treasury_bump] = await pda.treasury(
+  const [listing_pda, _] = await pda.listing(
     args.program.programId,
-    listingInfo.account.charter,
-    listingDeposit.mint
-  );
-  const treasuryDeposit = await args.program.account.charterTreasury.fetch(
-    treasury_pda
+    listingMint.publicKey
   );
 
-  let instructions = [];
-
-  instructions.push(
-    args.program.instruction.cash(
-      listingMintAuthorityBump,
-      charterMintBump,
-      escrowAuthorityBump,
-      {
-        accounts: {
-          cashier: args.signer,
-          receipt: receiptInfo.publicKey,
-          escrow: receiptInfo.account.escrow,
-          escrowAuthority,
-          listing: listingInfo.publicKey,
-          listingTokenAccount: receiptInfo.account.listingTokenAccount,
-          listingsPaymentDeposit: listingInfo.account.paymentDeposit,
-          listingsVoteDeposit: listingInfo.account.voteDeposit,
-          charterTreasuryDeposit: treasuryDeposit.deposit,
-          charterTreasury: treasury_pda,
-          charterVoteDeposit: charter.voteDeposit,
-          charterMint: charter.mint,
-          charterMintAuthority: charterMintAuthority,
-          charter: listingInfo.account.charter,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-          listingMint: listingInfo.account.mint,
-          listingMintAuthority: listingMintAuthority,
-        },
-      }
+  let ix = await args.program.methods
+    .initListing(
+      mint_authority_bump,
+      args.decimals || 0,
+      args.price,
+      args.isRefundable,
+      args.isConsumable,
+      args.isAvailable,
+      args.cashierSplit,
+      args.uri
     )
-  );
+    .accounts({
+      listing: listing_pda,
+      mintAuthority: mint_authority,
+      mint: listingMint.publicKey,
+      paymentDeposit: paymentDeposit.account,
+      voteDeposit: voteDeposit.account,
+      charter: charterInfo.publicKey,
+      charterTreasury: charterTreasuryInfo.publicKey,
+      user: args.signer,
+    })
+    .signers([listingMint])
+    .instructions();
+
+  instructions.push(ix);
 
   return {
     instructions,
+    signers: [listingMint],
+    publicKey: listing_pda,
   };
-}
-
-export async function setListingPrice(args: {
-  program: Program<Strangemood>;
-
-  signer: anchor.web3.PublicKey;
-  price: anchor.BN;
-  listing: AccountInfo<Listing> | PublicKey;
-}) {
-  let listingKey: PublicKey = isAccountInfo(args.listing)
-    ? args.listing.publicKey
-    : args.listing;
-
-  let instructions = [];
-  instructions.push(
-    args.program.instruction.setListingPrice(args.price, {
-      accounts: {
-        user: args.signer,
-        listing: listingKey,
-        systemProgram: SystemProgram.programId,
-      },
-    })
-  );
-  return { instructions };
-}
-
-export async function setListingUri(args: {
-  program: Program<Strangemood>;
-
-  signer: anchor.web3.PublicKey;
-  uri: string;
-  listing: AccountInfo<Listing> | PublicKey;
-}) {
-  let instructions = [];
-
-  let listingKey: PublicKey = isAccountInfo(args.listing)
-    ? args.listing.publicKey
-    : args.listing;
-
-  instructions.push(
-    args.program.instruction.setListingUri(args.uri, {
-      accounts: {
-        user: args.signer,
-        listing: listingKey,
-        systemProgram: SystemProgram.programId,
-      },
-    })
-  );
-  return { instructions };
-}
-
-export async function setListingDeposits(args: {
-  program: Program<Strangemood>;
-
-  signer: anchor.web3.PublicKey;
-  listing: AccountInfo<Listing> | PublicKey;
-  solDeposit: PublicKey;
-  voteDeposit: PublicKey;
-}) {
-  let instructions = [];
-
-  let listingKey: PublicKey = isAccountInfo(args.listing)
-    ? args.listing.publicKey
-    : args.listing;
-
-  instructions.push(
-    args.program.instruction.setListingDeposits({
-      accounts: {
-        user: args.signer,
-        listing: listingKey,
-        paymentDeposit: args.solDeposit,
-        voteDeposit: args.voteDeposit,
-        systemProgram: SystemProgram.programId,
-      },
-    })
-  );
-  return { instructions };
-}
-
-export async function setListingAvailability(args: {
-  program: Program<Strangemood>;
-
-  signer: anchor.web3.PublicKey;
-  listing: AccountInfo<Listing> | PublicKey;
-}) {
-  let instructions = [];
-
-  let listingKey: PublicKey = isAccountInfo(args.listing)
-    ? args.listing.publicKey
-    : args.listing;
-
-  instructions.push(
-    args.program.instruction.setListingAvailability(true, {
-      accounts: {
-        user: args.signer,
-        listing: listingKey,
-        systemProgram: SystemProgram.programId,
-      },
-    })
-  );
-  return { instructions };
-}
-
-export async function setListingAuthority(args: {
-  program: Program<Strangemood>;
-
-  signer: anchor.web3.PublicKey;
-  listing: AccountInfo<Listing> | PublicKey;
-  newAuthority: anchor.web3.PublicKey;
-}) {
-  let instructions = [];
-
-  let listingKey: PublicKey = isAccountInfo(args.listing)
-    ? args.listing.publicKey
-    : args.listing;
-
-  instructions.push(
-    args.program.instruction.setListingAuthority({
-      accounts: {
-        user: args.signer,
-        listing: listingKey,
-        systemProgram: SystemProgram.programId,
-        authority: args.newAuthority,
-      },
-    })
-  );
-  return { instructions };
-}
-
-export async function initCharterTreasury(args: {
-  program: Program<Strangemood>;
-  charter: PublicKey;
-  authority: PublicKey;
-  deposit: PublicKey;
-  mint: PublicKey;
-  scalar: number;
-}) {
-  let charter = await args.program.account.charter.fetch(args.charter);
-
-  let [treasury_pda, treasury_bump] = await pda.treasury(
-    args.program.programId,
-    args.charter,
-    args.mint
-  );
-
-  const scalar = toAmountAndDecimals(args.scalar.toString());
-
-  const ix = args.program.instruction.initCharterTreasury(
-    treasury_bump,
-    scalar.amount,
-    scalar.decimals,
-    {
-      accounts: {
-        treasury: treasury_pda,
-        charter: args.charter,
-        mint: args.mint,
-        deposit: args.deposit,
-        systemProgram: SystemProgram.programId,
-        authority: charter.authority,
-      },
-    }
-  );
-
-  let instructions = [ix];
-  return { instructions, treasury: treasury_pda };
 }
 
 export async function initCharter(args: {
   program: Program<Strangemood>;
   authority: PublicKey;
-  voteDeposit: PublicKey;
+  reserve: PublicKey;
   mint: PublicKey;
   signer: PublicKey;
   expansion: number;
   paymentContribution: number;
   voteContribution: number;
+  withdrawPeriod: anchor.BN;
+  stakeWithdrawAmount: anchor.BN;
   uri: string;
 }) {
-  if (!args.uri || args.uri.length > 128) {
-    throw new Error(
-      "Charter's URI field must be a string less than 128 characters."
-    );
-  }
+  const [charter_pda, _] = await pda.charter(args.program.programId, args.mint);
 
   let instructions = [];
+  const ix = await args.program.methods
+    .initCharter(
+      args.expansion,
+      args.paymentContribution,
+      args.voteContribution,
+      args.withdrawPeriod,
+      args.stakeWithdrawAmount,
+      args.uri
+    )
+    .accounts({
+      charter: charter_pda,
+      mint: args.mint,
+      authority: args.authority,
+      reserve: args.reserve,
+      user: args.signer,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+  instructions.push(ix);
 
-  let [charterPDA, charterBump] = await pda.charter(
+  return {
+    instructions,
+  };
+}
+
+export async function initCashier(args: {
+  program: Program<Strangemood>;
+  uri: string;
+  charter: AccountInfo<Charter> | PublicKey;
+  authority: PublicKey;
+}) {
+  const charterInfo = await asCharterInfo(args.program, args.charter);
+  const stake = Keypair.generate();
+  const [cashier_pda, cashier_bump] = await pda.cashier(
     args.program.programId,
+    stake.publicKey
+  );
+  const [stakeAuthority, stake_authority_bump] = await pda.token_authority(
+    args.program.programId,
+    stake.publicKey
+  );
+
+  let instructions = [];
+  let ix = await args.program.methods
+    .initCashier(stake_authority_bump, args.uri)
+    .accounts({
+      cashier: cashier_pda,
+      stake: stake.publicKey,
+      stakeAuthority,
+      charter: charterInfo.publicKey,
+      charterMint: charterInfo.account.mint,
+      authority: args.authority,
+      clock: SYSVAR_CLOCK_PUBKEY,
+    })
+    .signers([stake])
+    .instruction();
+  instructions.push(ix);
+
+  return {
+    instructions,
+    signers: [stake],
+  };
+}
+
+export async function initCashierTreasury(args: {
+  program: Program<Strangemood>;
+  charter: AccountInfo<Charter> | PublicKey;
+  cashier: AccountInfo<Cashier> | PublicKey;
+  mint: PublicKey;
+  deposit: PublicKey;
+}) {
+  const cashierInfo = await asCashierInfo(args.program, args.cashier);
+  const charterTreasuryInfo = await asCharterTreasuryInfo(
+    args.program,
+    cashierInfo.publicKey,
     args.mint
   );
 
-  const expansion = toAmountAndDecimals(args.expansion.toString());
-  const paymentContribution = toAmountAndDecimals(
-    args.paymentContribution.toString()
+  const escrow = Keypair.generate();
+  const [escrow_authority, bump] = await pda.token_authority(
+    args.program.programId,
+    escrow.publicKey
   );
-  const voteContribution = toAmountAndDecimals(
-    args.voteContribution.toString()
+  const [cashier_treasury_pda, _] = await pda.treasury(
+    args.program.programId,
+    cashierInfo.publicKey,
+    args.mint
   );
 
-  instructions.push(
-    args.program.instruction.initCharter(
-      expansion.amount,
-      expansion.decimals,
-      paymentContribution.amount,
-      paymentContribution.decimals,
-      voteContribution.amount,
-      voteContribution.decimals,
-      args.uri,
-      {
-        accounts: {
-          charter: charterPDA,
-          authority: args.authority,
-          voteDeposit: args.voteDeposit,
-          mint: args.mint,
-          user: args.signer,
-          systemProgram: SystemProgram.programId,
-        },
-      }
-    )
+  let instructions = [];
+  let ix = await args.program.methods
+    .initCashierTreasury(bump)
+    .accounts({
+      cashierTreasury: cashier_treasury_pda,
+      cashier: cashierInfo.publicKey,
+      charterTreasury: charterTreasuryInfo.publicKey,
+      charter: charterTreasuryInfo.publicKey,
+      deposit: args.deposit,
+      escrow: escrow.publicKey,
+      escrowAuthority: escrow_authority,
+      mint: args.mint,
+      clock: SYSVAR_CLOCK_PUBKEY,
+      authority: args.program.provider.wallet.publicKey,
+    })
+    .signers([escrow])
+    .instruction();
+
+  instructions.push(ix);
+
+  return {
+    instructions,
+    signers: [escrow],
+  };
+}
+
+export async function initCharterTreasury(args: {
+  program: Program<Strangemood>;
+  charter: AccountInfo<Charter> | PublicKey;
+  mint: PublicKey;
+  deposit: PublicKey;
+  scalar: number;
+}) {
+  if (args.scalar < 0 || args.scalar > 1) {
+    throw new Error("scalar must be between 0 and 1");
+  }
+  const charterInfo = await asCharterInfo(args.program, args.charter);
+
+  const [treasury_pda, _] = await pda.treasury(
+    args.program.programId,
+    charterInfo.publicKey,
+    args.mint
   );
-  return { instructions, charter: charterPDA };
+
+  let ix = await args.program.methods
+    .initCharterTreasury(1.0)
+    .accounts({
+      treasury: treasury_pda,
+      mint: args.mint,
+      deposit: args.deposit,
+      charter: charterInfo.publicKey,
+    })
+    .instruction();
+
+  let instructions = [ix];
+
+  return {
+    instructions,
+  };
 }

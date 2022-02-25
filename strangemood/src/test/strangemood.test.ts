@@ -1,397 +1,1130 @@
 import assert from "assert";
-import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
-import { Program, splitArgsAndCtx } from "@project-serum/anchor";
+import * as anchor from "@project-serum/anchor";
+import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
-import { TestClient } from "./testClient";
-import { fetchStrangemoodProgram, makeReceiptNonce } from "..";
+import { makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
-import { MAINNET } from "../constants";
-const { SystemProgram } = anchor.web3;
+import {
+  initCharter,
+  createCharterTreasury,
+  initCashier,
+  initListing,
+  mintTo,
+  purchase,
+  createCashierTreasury,
+} from "./instructions";
 
-const RECEIPT_SIZE = 203;
+const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY, Transaction } =
+  anchor.web3;
 
 describe("no nonce buffer bug", () => {
   const nonce = makeReceiptNonce();
   nonce.toBuffer();
 });
 
-describe("strangemood", () => {
+describe("Strangemood", () => {
   const provider = anchor.Provider.env();
   // Configure the client to use the local cluster.
   anchor.setProvider(provider);
-
   const program = anchor.workspace.Strangemood as Program<Strangemood>;
-  const client = new TestClient(provider, program);
 
-  let dummy_mint: anchor.web3.PublicKey;
-  let dummy_treasury: anchor.web3.PublicKey;
+  it("init_charter", async () => {
+    const mint = await createMint(program);
+    const reserve = await createTokenAccount(program, mint.publicKey);
 
-  before(async () => {
-    await client.init();
-
-    dummy_mint = await client.createMint();
-    dummy_treasury = await client.createTreasury(
-      dummy_mint,
-      new anchor.BN(1),
-      0
-    );
-  });
-
-  it("created charter correctly", async () => {
-    const charter = await program.account.charter.fetch(client.charter_pda);
-    assert.equal(charter.mint.toString(), client.realm_mint.toString());
-  });
-
-  it("can create a new treasury", async () => {
-    let charter = await program.account.charter.fetch(client.charter_pda);
-
-    let mint = await createMint(program);
-    let myDeposit = await createTokenAccount(program, mint.publicKey);
-
-    let [treasury_pda, bump] = await pda.treasury(
+    const [charter_pda, _] = await pda.charter(
       program.programId,
-      client.charter_pda,
       mint.publicKey
     );
 
-    await program.rpc.initCharterTreasury(bump, new anchor.BN(1), 0, {
-      accounts: {
-        treasury: treasury_pda,
-        charter: client.charter_pda,
+    await program.methods
+      .initCharter(
+        10,
+        0.01,
+        0.2,
+        new anchor.BN(1),
+        new anchor.BN(1),
+        "https://strangemood.org"
+      )
+      .accounts({
+        charter: charter_pda,
         mint: mint.publicKey,
-        deposit: myDeposit.publicKey,
+        authority: program.provider.wallet.publicKey,
+        reserve: reserve.publicKey,
+        user: program.provider.wallet.publicKey,
         systemProgram: SystemProgram.programId,
-        authority: charter.authority,
-      },
-    });
+      })
+      .rpc();
+    const charter = await program.account.charter.fetch(charter_pda);
 
-    let treasury = await program.account.charterTreasury.fetch(treasury_pda);
-
-    assert.equal(treasury.deposit.toString(), myDeposit.publicKey.toString());
-    assert.equal(treasury.charter.toString(), client.charter_pda.toString());
-    assert.equal(treasury.expansionScalarAmount.toNumber(), 1);
-    assert.equal(treasury.expansionScalarDecimals, 0);
-
-    // can set the treasury to another treasury
-    let anotherDeposit = await createTokenAccount(program, mint.publicKey);
-    await program.rpc.setCharterTreasuryDeposit({
-      accounts: {
-        treasury: treasury_pda,
-        charter: client.charter_pda,
-        mint: mint.publicKey,
-        deposit: anotherDeposit.publicKey,
-        systemProgram: SystemProgram.programId,
-        authority: charter.authority,
-      },
-    });
-    treasury = await program.account.charterTreasury.fetch(treasury_pda);
     assert.equal(
-      treasury.deposit.toString(),
-      anotherDeposit.publicKey.toString()
+      charter.authority.toString(),
+      program.provider.wallet.publicKey.toString()
     );
-
-    // Can change the expansion scalar
-    await program.rpc.setCharterTreasuryExpansionScalar(new anchor.BN(25), 1, {
-      accounts: {
-        treasury: treasury_pda,
-        charter: client.charter_pda,
-        systemProgram: SystemProgram.programId,
-        authority: charter.authority,
-      },
-    });
-    treasury = await program.account.charterTreasury.fetch(treasury_pda);
-    assert.equal(treasury.expansionScalarAmount.toNumber(), 25);
-    assert.equal(treasury.expansionScalarDecimals, 1);
+    assert.equal(charter.mint.toString(), mint.publicKey.toString());
+    assert.equal(charter.reserve.toString(), reserve.publicKey.toString());
+    assert.equal(charter.expansionRate, 10);
+    assert.equal(charter.paymentContribution, 0.01);
+    assert.equal(charter.voteContribution, 0.2);
+    assert.equal(charter.uri, "https://strangemood.org");
+    assert.equal(charter.withdrawPeriod.toNumber(), 1);
+    assert.equal(charter.stakeWithdrawAmount.toNumber(), 1);
   });
 
-  it("can't create another charter with the same mint", async () => {
-    // Create charter
-    let [charterPDA, charterBump] = await pda.charter(
-      program.programId,
-      client.realm_mint
-    );
-
-    let myNefariousVoteAccount = await createTokenAccount(
+  it("init_charter_treasury", async () => {
+    const charter = await initCharter(
       program,
-      client.realm_mint
+      10,
+      0.01,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
     );
 
-    let throws = false;
+    const mint = await createMint(program);
+    const deposit = await createTokenAccount(program, mint.publicKey);
+
+    const [treasury_pda, _] = await pda.treasury(
+      program.programId,
+      charter.publicKey,
+      mint.publicKey
+    );
+
+    await program.methods
+      .initCharterTreasury(1.0)
+      .accounts({
+        treasury: treasury_pda,
+        mint: mint.publicKey,
+        deposit: deposit.publicKey,
+        charter: charter.publicKey,
+      })
+      .rpc();
+    const treasury = await program.account.charterTreasury.fetch(treasury_pda);
+
+    assert.equal(treasury.charter.toString(), charter.publicKey.toString());
+    assert.equal(treasury.deposit.toString(), deposit.publicKey.toString());
+    assert.equal(treasury.mint.toString(), mint.publicKey.toString());
+    assert.equal(treasury.scalar, 1.0);
+  });
+
+  it("can't create two charter treasuries of the same type", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.01,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+
+    const mint = await createMint(program);
+    const deposit = await createTokenAccount(program, mint.publicKey);
+
+    const [treasury_pda, _] = await pda.treasury(
+      program.programId,
+      charter.publicKey,
+      mint.publicKey
+    );
+
+    await program.methods
+      .initCharterTreasury(1.0)
+      .accounts({
+        treasury: treasury_pda,
+        mint: mint.publicKey,
+        deposit: deposit.publicKey,
+        charter: charter.publicKey,
+      })
+      .rpc();
+
+    // Try again with the same PDA.
+    let errored = false;
     try {
-      await program.rpc.initCharter(
-        new anchor.BN(30), // Expansion amount
-        0, // expansion decimals
-        new anchor.BN(6), // pay contribution amount
-        3, // pay contribution decimals
-        new anchor.BN(2), // vote contribution amount
-        1, // vote contribution decimals
-        "https://strangemood.org",
-        {
-          accounts: {
-            charter: charterPDA,
-            authority: program.provider.wallet.publicKey,
-            voteDeposit: myNefariousVoteAccount.publicKey,
-            mint: client.realm_mint,
-            user: provider.wallet.publicKey,
-            systemProgram: SystemProgram.programId,
-          },
-        }
-      );
+      await program.methods
+        .initCharterTreasury(1.0)
+        .accounts({
+          treasury: treasury_pda,
+          mint: mint.publicKey,
+          deposit: deposit.publicKey,
+          charter: charter.publicKey,
+        })
+        .rpc();
     } catch (err) {
-      throws = true;
+      errored = true;
     }
-    assert.equal(throws, true, "Expected initCharter to throw");
+    assert(errored);
   });
 
-  it("can make a listing", async () => {
-    const { listing } = await client.initListing(
-      {
-        mint_to_be_paid_in: dummy_mint,
-        treasury: dummy_treasury,
-      },
-      {
-        price: new anchor.BN(10),
-        decimals: 3,
-        uri: "ipfs://somecid",
-        is_consumable: true,
-        is_refundable: false,
-        is_available: true,
-      }
+  it("init_listing", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.01,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
     );
 
-    const l = await program.account.listing.fetch(listing);
+    const listingMint = Keypair.generate();
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
 
-    let mint = await splToken.getMint(provider.connection, l.mint);
+    const paymentDeposit = await createTokenAccount(
+      program,
+      paymentMint.publicKey
+    );
+    const voteDeposit = await createTokenAccount(program, charter.account.mint);
 
-    assert.equal(mint.decimals, 3);
-    assert.equal(l.price.toNumber(), new anchor.BN(10).toNumber());
-    assert.equal(l.uri, "ipfs://somecid");
-    assert.equal(l.isConsumable, true, "should be consumable");
-    assert.equal(l.isRefundable, false, "not refundable");
-    assert.equal(l.isAvailable, true, "is unexpectedly not available");
+    const [mint_authority, mint_authority_bump] = await pda.mint_authority(
+      program.programId,
+      listingMint.publicKey
+    );
+    const [listing_pda, _] = await pda.listing(
+      program.programId,
+      listingMint.publicKey
+    );
+
+    await program.methods
+      .initListing(
+        mint_authority_bump,
+        0,
+        new anchor.BN(10),
+        false,
+        false,
+        true,
+        0.1,
+        "ipfs://somecid"
+      )
+      .accounts({
+        listing: listing_pda,
+        mintAuthority: mint_authority,
+        mint: listingMint.publicKey,
+        paymentDeposit: paymentDeposit.publicKey,
+        voteDeposit: voteDeposit.publicKey,
+        charter: charter.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        user: program.provider.wallet.publicKey,
+      })
+      .signers([listingMint])
+      .rpc();
+
+    const listing = await program.account.listing.fetch(listing_pda);
     assert.equal(
-      l.charter.toString(),
-      client.charter_pda.toString(),
-      "is not created with this charter"
+      listing.authority.toString(),
+      program.provider.wallet.publicKey.toString()
+    );
+    assert.equal(listing.charter.toString(), charter.publicKey.toString());
+    assert.equal(
+      listing.paymentDeposit.toString(),
+      paymentDeposit.publicKey.toString()
+    );
+    assert.equal(
+      listing.voteDeposit.toString(),
+      voteDeposit.publicKey.toString()
+    );
+    assert.equal(listing.mint.toString(), listingMint.publicKey.toString());
+    assert.equal(listing.isRefundable, false);
+    assert.equal(listing.isConsumable, false);
+    assert.equal(listing.isAvailable, true);
+    assert.equal(listing.cashierSplit, 0.1);
+    assert.equal(listing.uri, "ipfs://somecid");
+    assert.equal(listing.price.toNumber(), 10);
+  });
+
+  it("init_cashier", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.01,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+
+    const stake = Keypair.generate();
+    const [cashier_pda, cashier_bump] = await pda.cashier(
+      program.programId,
+      stake.publicKey
+    );
+    const [stakeAuthority, stake_authority_bump] = await pda.token_authority(
+      program.programId,
+      stake.publicKey
+    );
+
+    await program.methods
+      .initCashier(stake_authority_bump, "ipfs://cashier")
+      .accounts({
+        cashier: cashier_pda,
+        stake: stake.publicKey,
+        stakeAuthority,
+        charter: charter.publicKey,
+        charterMint: charter.account.mint,
+        authority: program.provider.wallet.publicKey,
+        clock: SYSVAR_CLOCK_PUBKEY,
+      })
+      .signers([stake])
+      .rpc();
+
+    const cashier = await program.account.cashier.fetch(cashier_pda);
+    assert.equal(
+      cashier.authority.toString(),
+      program.provider.wallet.publicKey.toString()
+    );
+    assert.equal(cashier.charter.toString(), charter.publicKey.toString());
+    assert.equal(cashier.stake.toString(), stake.publicKey.toString());
+    assert.equal(cashier.lastWithdrawAt, 0);
+    assert.equal(cashier.uri, "ipfs://cashier");
+  });
+
+  it("init_cashier_treasury", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.01,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+
+    assert.equal(charter.account.uri, "https://strangemood.org");
+    if (!charter) {
+      throw new Error("charter not initialized");
+    }
+
+    const cashier = await initCashier(program, charter);
+    const mint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      mint.publicKey
+    );
+    const deposit = await createTokenAccount(program, mint.publicKey);
+
+    const escrow = Keypair.generate();
+    const [escrow_authority, bump] = await pda.token_authority(
+      program.programId,
+      escrow.publicKey
+    );
+    const [cashier_treasury_pda, _] = await pda.treasury(
+      program.programId,
+      cashier.publicKey,
+      mint.publicKey
+    );
+
+    await program.methods
+      .initCashierTreasury(bump)
+      .accounts({
+        cashierTreasury: cashier_treasury_pda,
+        cashier: cashier.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        charter: charter.publicKey,
+        deposit: deposit.publicKey,
+        escrow: escrow.publicKey,
+        escrowAuthority: escrow_authority,
+        mint: mint.publicKey,
+        clock: SYSVAR_CLOCK_PUBKEY,
+        authority: program.provider.wallet.publicKey,
+      })
+      .signers([escrow])
+      .rpc();
+
+    const cashierTreasury = await program.account.cashierTreasury.fetch(
+      cashier_treasury_pda
+    );
+
+    assert.equal(
+      cashierTreasury.cashier.toString(),
+      cashier.publicKey.toString(),
+      "cashier does not match"
+    );
+    assert.equal(
+      cashierTreasury.deposit.toString(),
+      deposit.publicKey.toString(),
+      "deposit does not match"
+    );
+    assert.equal(
+      cashierTreasury.escrow.toString(),
+      escrow.publicKey.toString(),
+      "escrow does not match"
+    );
+    assert.equal(
+      cashierTreasury.mint.toString(),
+      mint.publicKey.toString(),
+      "mint does not match"
+    );
+    assert.equal(
+      cashierTreasury.lastWithdrawAt,
+      0,
+      "lastWithdrawAt does not match"
     );
   });
 
-  it("can create a receipt", async () => {
-    const { listing } = await client.initListing(
-      {
-        mint_to_be_paid_in: dummy_mint,
-        treasury: dummy_treasury,
-      },
-      {
-        price: new anchor.BN(10),
-        decimals: 3,
-        uri: "ipfs://somecid",
-        is_consumable: true,
-        is_refundable: false,
-        is_available: true,
-      }
+  it("can purchase a listing without a cashier", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
     );
-
-    const purchaser = anchor.web3.Keypair.generate();
-    await client.mintToAssociatedTokenAccount(
-      dummy_mint,
-      purchaser.publicKey,
-      1000
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
     );
-
-    const cashier = anchor.web3.Keypair.generate();
-    const {
-      receipt,
-      listingTokenAccount,
-      escrow: escrowPubkey,
-    } = await client.purchase(
-      {
-        listing,
-        cashier: cashier.publicKey,
-        purchaser: purchaser,
-      },
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
       10
     );
 
-    const r = await program.account.receipt.fetch(receipt);
-    assert.equal(r.isInitialized, true, "is initialized");
-    assert.equal(r.isRefundable, false, "is refundable");
-    assert.equal(r.isCashable, true, "is cashable");
-    assert.equal(r.price.toNumber(), 10, "price is not 10");
-    assert.equal(r.listing.toString(), listing.toString());
-    assert.equal(
-      r.listingTokenAccount.toString(),
-      listingTokenAccount.toString()
-    );
-    assert.equal(r.cashier.toString(), cashier.publicKey.toString());
-    assert.equal(r.purchaser.toString(), purchaser.publicKey.toString());
-    assert.equal(r.escrow.toString(), escrowPubkey.toString(), "Escrow Pubkey");
+    const inventory = await createTokenAccount(program, listing.account.mint);
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
 
-    console.log(
-      (
-        await program.provider.connection.getAccountInfo(r.escrow)
-      ).owner.toString()
-    );
+    const [listing_mint_authority, listing_mint_authority_bump] =
+      await pda.mint_authority(program.programId, listing.account.mint);
 
-    let escrow = await splToken.getAccount(
+    const [charter_mint_authority, charter_mint_authority_bump] =
+      await pda.mint_authority(program.programId, charter.account.mint);
+
+    const [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    // Mint payment tokens into the payment account
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // Check we have the funds to pay for the listing
+    let before = await splToken.getAccount(
       program.provider.connection,
-      r.escrow
+      payment.publicKey
     );
+    assert.equal(before.amount, 100);
 
-    const l = await program.account.listing.fetch(r.listing);
-    assert.equal(escrow.amount, l.price.mul(r.quantity).toNumber());
+    // purchase the listing
+    await program.methods
+      .purchase(
+        listing_mint_authority_bump,
+        charter_mint_authority_bump,
+        inventory_delegate_bump,
+        new anchor.BN(1)
+      )
+      .accounts({
+        payment: payment.publicKey,
+        inventory: inventory.publicKey,
+        inventoryDelegate: inventory_delegate,
+        listingsPaymentDeposit: listing.account.paymentDeposit,
+        listingsVoteDeposit: listing.account.voteDeposit,
+        listing: listing.publicKey,
+        listingMint: listing.account.mint,
+        listingMintAuthority: listing_mint_authority,
+        charter: charter.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        charterTreasuryDeposit: charterTreasury.account.deposit,
+        charterReserve: charter.account.reserve,
+        charterMint: charter.account.mint,
+        charterMintAuthority: charter_mint_authority,
+        purchaser: program.provider.wallet.publicKey,
+      })
+      .rpc();
 
-    const receiptBalance = await program.provider.connection.getBalance(
-      receipt
+    // check the account was charged
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
     );
-    assert.equal(
-      await program.provider.connection.getMinimumBalanceForRentExemption(
-        RECEIPT_SIZE
-      ),
-      receiptBalance,
-      "not enough funds in the receipt"
+    assert.equal(after.amount, 90);
+
+    // Check that the inventory has the token
+    let inventoryAccount = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
     );
+    assert.equal(inventoryAccount.amount, 1);
+
+    // Check that the listing payment deposit was paid
+    let listingDeposit = await splToken.getAccount(
+      program.provider.connection,
+      listing.account.paymentDeposit
+    );
+    assert.equal(listingDeposit.amount, 6);
+
+    // Check that the charter deposit was paid
+    let charterDeposit = await splToken.getAccount(
+      program.provider.connection,
+      charterTreasury.account.deposit
+    );
+    assert.equal(charterDeposit.amount, 4);
   });
 
-  it(" close a receipt", async () => {
-    // Create a new listing
-    const { listing } = await client.initListing(
-      {
-        mint_to_be_paid_in: dummy_mint,
-        treasury: dummy_treasury,
-      },
-      {
-        price: new anchor.BN(10),
-        decimals: 3,
-        uri: "ipfs://somecid",
-        is_consumable: true,
-        is_refundable: false,
-        is_available: true,
-      }
+  it("can purchase a listing with a cashier", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
+      10,
+      0,
+      true,
+      false,
+      true,
+      0.5
+    );
+    const cashier = await initCashier(program, charter);
+    const cashierTreasury = await createCashierTreasury(
+      program,
+      charter.publicKey,
+      charterTreasury.publicKey,
+      cashier.publicKey,
+      paymentMint.publicKey
     );
 
-    // Create the receipt for the listing
-    const purchaser = anchor.web3.Keypair.generate();
-    await client.mintToAssociatedTokenAccount(
-      dummy_mint,
-      purchaser.publicKey,
-      1000
-    );
+    const inventory = await createTokenAccount(program, listing.account.mint);
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
 
-    const cashier = anchor.web3.Keypair.generate();
-    const { receipt } = await client.purchase(
-      {
-        listing,
+    const [listing_mint_authority, listing_mint_authority_bump] =
+      await pda.mint_authority(program.programId, listing.account.mint);
+
+    const [charter_mint_authority, charter_mint_authority_bump] =
+      await pda.mint_authority(program.programId, charter.account.mint);
+
+    const [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    // Mint payment tokens into the payment account
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // Check we have the funds to pay for the listing
+    let before = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
+    );
+    assert.equal(before.amount, 100);
+
+    // purchase the listing
+    await program.methods
+      .purchaseWithCashier(
+        listing_mint_authority_bump,
+        charter_mint_authority_bump,
+        inventory_delegate_bump,
+        new anchor.BN(1)
+      )
+      .accounts({
         cashier: cashier.publicKey,
-        purchaser: purchaser,
-      },
-      1
+        cashierTreasury: cashierTreasury.publicKey,
+        cashierTreasuryEscrow: cashierTreasury.account.escrow,
+        payment: payment.publicKey,
+        inventory: inventory.publicKey,
+        inventoryDelegate: inventory_delegate,
+        listingsPaymentDeposit: listing.account.paymentDeposit,
+        listingsVoteDeposit: listing.account.voteDeposit,
+        listing: listing.publicKey,
+        listingMint: listing.account.mint,
+        listingMintAuthority: listing_mint_authority,
+        charter: charter.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        charterTreasuryDeposit: charterTreasury.account.deposit,
+        charterReserve: charter.account.reserve,
+        charterMint: charter.account.mint,
+        charterMintAuthority: charter_mint_authority,
+        purchaser: program.provider.wallet.publicKey,
+      })
+      .rpc();
+
+    // check the account was charged
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
     );
+    assert.equal(after.amount, 90);
+
+    // Check that the inventory has the token
+    let inventoryAccount = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(inventoryAccount.amount, 1);
+
+    // Check that the listing payment deposit was paid
+    let listingDeposit = await splToken.getAccount(
+      program.provider.connection,
+      listing.account.paymentDeposit
+    );
+    assert.equal(listingDeposit.amount, 3);
+
+    // Check that the cashier payment deposit was paid
+    let cashierDeposit = await splToken.getAccount(
+      program.provider.connection,
+      cashierTreasury.account.escrow
+    );
+    assert.equal(cashierDeposit.amount, 3);
+
+    // Check that the charter deposit was paid
+    let charterDeposit = await splToken.getAccount(
+      program.provider.connection,
+      charterTreasury.account.deposit
+    );
+    assert.equal(charterDeposit.amount, 4);
   });
 
-  it("can cash a receipt", async () => {
-    // Create a new listing
-    const { listing } = await client.initListing(
-      {
-        mint_to_be_paid_in: dummy_mint,
-        treasury: dummy_treasury,
-      },
-      {
-        price: new anchor.BN(10),
-        decimals: 3,
-        uri: "ipfs://somecid",
-        is_consumable: true,
-        is_refundable: false,
-        is_available: true,
-      }
+  it("can purchase a listing, and then consume that listing", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
+      1,
+      0,
+      true,
+      true
     );
 
-    // Create the receipt for the listing
-    const purchaser = anchor.web3.Keypair.generate();
-    await client.mintToAssociatedTokenAccount(
-      dummy_mint,
-      purchaser.publicKey,
-      1000
+    // Mint payment tokens into the payment account
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // purchase the listing
+    const { inventory } = await purchase(
+      program,
+      charter,
+      charterTreasury,
+      listing,
+      payment.publicKey,
+      5
     );
 
-    const cashier = anchor.web3.Keypair.generate();
+    let before = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(before.amount, 5);
 
-    const { receipt } = await client.purchase(
-      {
-        listing,
+    let [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    let [mint_authority, mint_authority_bump] = await pda.mint_authority(
+      program.programId,
+      listing.account.mint
+    );
+
+    // Consume the listing
+    await program.methods
+      .consume(mint_authority_bump, inventory_delegate_bump, new anchor.BN(3))
+      .accounts({
+        inventory: inventory.publicKey,
+        mint: listing.account.mint,
+        mintAuthority: mint_authority,
+        inventoryDelegate: inventory_delegate,
+        listing: listing.publicKey,
+        authority: listing.account.authority,
+      })
+      .rpc();
+
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(after.amount, 2);
+  });
+
+  it("can start start_trial with a cashier, and then finish_trial with cashier", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
+      1,
+      0,
+      true,
+      true
+    );
+    const cashier = await initCashier(program, charter);
+    const cashierTreasury = await createCashierTreasury(
+      program,
+      charter.publicKey,
+      charterTreasury.publicKey,
+      cashier.publicKey,
+      paymentMint.publicKey
+    );
+
+    const inventory = await createTokenAccount(program, listing.account.mint);
+
+    // Mint payment tokens into the payment account
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // start the trial
+    const escrow = Keypair.generate();
+    const [listing_mint_authority, listing_mint_authority_bump] =
+      await pda.mint_authority(program.programId, listing.account.mint);
+    const [escrow_authority, escrow_authority_bump] = await pda.token_authority(
+      program.programId,
+      escrow.publicKey
+    );
+    const [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    const [receipt, _] = await pda.receipt(program.programId, escrow.publicKey);
+    await program.methods
+      .startTrialWithCashier(
+        listing_mint_authority_bump,
+        escrow_authority_bump,
+        inventory_delegate_bump,
+        new anchor.BN(10)
+      )
+      .accounts({
         cashier: cashier.publicKey,
-        purchaser: purchaser,
-      },
-      1
-    );
+        payment: payment.publicKey,
+        listing: listing.publicKey,
+        listingPaymentDeposit: listing.account.paymentDeposit,
+        listingPaymentDepositMint: paymentMint.publicKey,
+        listingMint: listing.account.mint,
+        listingMintAuthority: listing_mint_authority,
+        inventory: inventory.publicKey,
+        inventoryDelegate: inventory_delegate,
+        receipt: receipt,
+        escrow: escrow.publicKey,
+        escrowAuthority: escrow_authority,
+        purchaser: program.provider.wallet.publicKey,
+      })
+      .signers([escrow])
+      .rpc();
 
-    let r = await program.account.receipt.fetch(receipt);
-
-    await client.cash({
-      cashier: cashier,
-      receipt: receipt,
-    });
-
-    let l = await program.account.listing.fetch(listing);
-
-    // buyer got the token
+    const receiptAccount = await program.account.receipt.fetch(receipt);
     assert.equal(
-      (
-        await splToken.getAccount(
-          program.provider.connection,
-          r.listingTokenAccount
-        )
-      ).amount,
-      1
+      receiptAccount.cashier.toString(),
+      cashier.publicKey.toString()
     );
-
-    // Lister got it's payment
     assert.equal(
-      (await splToken.getAccount(program.provider.connection, l.paymentDeposit))
-        .amount,
-      9
+      receiptAccount.purchaser.toString(),
+      program.provider.wallet.publicKey.toString()
     );
-
-    // Treasury got it's payment
-    const t = await program.account.charterTreasury.fetch(dummy_treasury);
     assert.equal(
-      (await splToken.getAccount(program.provider.connection, t.deposit))
-        .amount,
-      1
+      receiptAccount.listing.toString(),
+      listing.publicKey.toString()
     );
+    assert.equal(receiptAccount.escrow.toString(), escrow.publicKey.toString());
+    assert.equal(
+      receiptAccount.inventory.toString(),
+      inventory.publicKey.toString()
+    );
+    assert.equal(receiptAccount.quantity.toNumber(), 10);
+    assert.equal(receiptAccount.price.toNumber(), 1);
 
-    let is_escrow_closed = !(await program.provider.connection.getAccountInfo(
-      r.escrow
-    ));
-    assert.equal(is_escrow_closed, true, "is_escrow_closed");
+    // Account is charged
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
+    );
+    assert.equal(after.amount, 90);
 
-    let is_receipt_closed = !(await program.provider.connection.getAccountInfo(
-      receipt
-    ));
-    assert.equal(is_receipt_closed, true, "is_receipt_closed");
+    // Check that the inventory has the token
+    let inventoryAccount = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(inventoryAccount.amount, 10);
+
+    // Check that the funds are in the receipt escrow
+    let escrowAccount = await splToken.getAccount(
+      program.provider.connection,
+      escrow.publicKey
+    );
+    assert.equal(escrowAccount.amount, 10);
+
+    // Finish the trial
+    const [charter_mint_authority, charter_mint_authority_bump] =
+      await pda.mint_authority(program.programId, charter.account.mint);
+    await program.methods
+      .finishTrialWithCashier(
+        charter_mint_authority_bump,
+        escrow_authority_bump
+      )
+      .accounts({
+        receipt,
+        cashier: cashier.publicKey,
+        cashierTreasury: cashierTreasury.publicKey,
+        cashierTreasuryEscrow: cashierTreasury.account.escrow,
+        purchaser: program.provider.wallet.publicKey,
+        listingsPaymentDeposit: listing.account.paymentDeposit,
+        listingsVoteDeposit: listing.account.voteDeposit,
+        listing: listing.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        charterTreasuryDeposit: charterTreasury.account.deposit,
+        charterReserve: charter.account.reserve,
+        receiptEscrow: escrow.publicKey,
+        receiptEscrowAuthority: escrow_authority,
+        charter: charter.publicKey,
+        charterMint: charter.account.mint,
+        charterMintAuthority: charter_mint_authority,
+      })
+      .rpc();
+
+    // Check that the listing payment deposit was paid
+    let listingDeposit = await splToken.getAccount(
+      program.provider.connection,
+      listing.account.paymentDeposit
+    );
+    assert.equal(listingDeposit.amount, 5);
+
+    // Check that the listing payment deposit was paid
+    let cashierEscrow = await splToken.getAccount(
+      program.provider.connection,
+      cashierTreasury.account.escrow
+    );
+    assert.equal(cashierEscrow.amount, 1);
+
+    // Check that the charter deposit was paid
+    let charterDeposit = await splToken.getAccount(
+      program.provider.connection,
+      charterTreasury.account.deposit
+    );
+    assert.equal(charterDeposit.amount, 4);
   });
 
-  it("Can update charter deposits", async () => {
-    const voteDeposit = await createTokenAccount(program, client.realm_mint);
-
-    let charter = await program.account.charter.fetch(client.charter_pda);
-
-    assert.notEqual(
-      charter.voteDeposit.toString(),
-      voteDeposit.publicKey.toString()
+  it("can start_trial, and then finish_trial", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
+      1,
+      0,
+      true,
+      true
     );
 
-    await client.setCharterDeposit({
-      authority: provider.wallet.publicKey,
-      voteDeposit: voteDeposit.publicKey,
-    });
+    const inventory = await createTokenAccount(program, listing.account.mint);
 
-    charter = await program.account.charter.fetch(client.charter_pda);
+    // Mint payment tokens into the payment account
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // start the trial
+    const escrow = Keypair.generate();
+    const [listing_mint_authority, listing_mint_authority_bump] =
+      await pda.mint_authority(program.programId, listing.account.mint);
+    const [escrow_authority, escrow_authority_bump] = await pda.token_authority(
+      program.programId,
+      escrow.publicKey
+    );
+    const [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    const [receipt, _] = await pda.receipt(program.programId, escrow.publicKey);
+    await program.methods
+      .startTrial(
+        listing_mint_authority_bump,
+        escrow_authority_bump,
+        inventory_delegate_bump,
+        new anchor.BN(10)
+      )
+      .accounts({
+        payment: payment.publicKey,
+        listing: listing.publicKey,
+        listingPaymentDeposit: listing.account.paymentDeposit,
+        listingPaymentDepositMint: paymentMint.publicKey,
+        listingMint: listing.account.mint,
+        listingMintAuthority: listing_mint_authority,
+        inventory: inventory.publicKey,
+        inventoryDelegate: inventory_delegate,
+        receipt: receipt,
+        escrow: escrow.publicKey,
+        escrowAuthority: escrow_authority,
+        purchaser: program.provider.wallet.publicKey,
+      })
+      .signers([escrow])
+      .rpc();
+
+    const receiptAccount = await program.account.receipt.fetch(receipt);
     assert.equal(
-      charter.voteDeposit.toString(),
-      voteDeposit.publicKey.toString()
+      receiptAccount.purchaser.toString(),
+      program.provider.wallet.publicKey.toString()
     );
+    assert.equal(
+      receiptAccount.listing.toString(),
+      listing.publicKey.toString()
+    );
+    assert.equal(receiptAccount.escrow.toString(), escrow.publicKey.toString());
+    assert.equal(
+      receiptAccount.inventory.toString(),
+      inventory.publicKey.toString()
+    );
+    assert.equal(receiptAccount.quantity.toNumber(), 10);
+    assert.equal(receiptAccount.price.toNumber(), 1);
+
+    // Account is charged
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
+    );
+    assert.equal(after.amount, 90);
+
+    // Check that the inventory has the token
+    let inventoryAccount = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(inventoryAccount.amount, 10);
+
+    // Check that the funds are in the receipt escrow
+    let escrowAccount = await splToken.getAccount(
+      program.provider.connection,
+      escrow.publicKey
+    );
+    assert.equal(escrowAccount.amount, 10);
+
+    // Finish the trial
+    const [charter_mint_authority, charter_mint_authority_bump] =
+      await pda.mint_authority(program.programId, charter.account.mint);
+    await program.methods
+      .finishTrial(charter_mint_authority_bump, escrow_authority_bump)
+      .accounts({
+        receipt,
+        purchaser: program.provider.wallet.publicKey,
+        listingsPaymentDeposit: listing.account.paymentDeposit,
+        listingsVoteDeposit: listing.account.voteDeposit,
+        listing: listing.publicKey,
+        charterTreasury: charterTreasury.publicKey,
+        charterTreasuryDeposit: charterTreasury.account.deposit,
+        charterReserve: charter.account.reserve,
+        receiptEscrow: escrow.publicKey,
+        receiptEscrowAuthority: escrow_authority,
+        charter: charter.publicKey,
+        charterMint: charter.account.mint,
+        charterMintAuthority: charter_mint_authority,
+      })
+      .rpc();
+
+    // Check that the listing payment deposit was paid
+    let listingDeposit = await splToken.getAccount(
+      program.provider.connection,
+      listing.account.paymentDeposit
+    );
+    assert.equal(listingDeposit.amount, 6);
+
+    // Check that the charter deposit was paid
+    let charterDeposit = await splToken.getAccount(
+      program.provider.connection,
+      charterTreasury.account.deposit
+    );
+    assert.equal(charterDeposit.amount, 4);
+  });
+
+  it("can start_trial, and then finish_trial", async () => {
+    const charter = await initCharter(
+      program,
+      10,
+      0.4,
+      0.2,
+      new anchor.BN(1),
+      new anchor.BN(1),
+      "https://strangemood.org"
+    );
+    const paymentMint = await createMint(program);
+    const charterTreasury = await createCharterTreasury(
+      program,
+      charter.publicKey,
+      paymentMint.publicKey
+    );
+    const listing = await initListing(
+      program,
+      charter,
+      charterTreasury,
+      paymentMint.publicKey,
+      1,
+      0,
+      true,
+      true
+    );
+
+    const inventory = await createTokenAccount(program, listing.account.mint);
+
+    // Mint payment tokens into the payment account
+    const payment = await createTokenAccount(program, paymentMint.publicKey);
+    await mintTo(program, paymentMint.publicKey, payment.publicKey, 100);
+
+    // start the trial
+    const escrow = Keypair.generate();
+    const [listing_mint_authority, listing_mint_authority_bump] =
+      await pda.mint_authority(program.programId, listing.account.mint);
+    const [escrow_authority, escrow_authority_bump] = await pda.token_authority(
+      program.programId,
+      escrow.publicKey
+    );
+    const [inventory_delegate, inventory_delegate_bump] =
+      await pda.token_authority(program.programId, inventory.publicKey);
+
+    const [receipt, _] = await pda.receipt(program.programId, escrow.publicKey);
+    await program.methods
+      .startTrial(
+        listing_mint_authority_bump,
+        escrow_authority_bump,
+        inventory_delegate_bump,
+        new anchor.BN(10)
+      )
+      .accounts({
+        payment: payment.publicKey,
+        listing: listing.publicKey,
+        listingPaymentDeposit: listing.account.paymentDeposit,
+        listingPaymentDepositMint: paymentMint.publicKey,
+        listingMint: listing.account.mint,
+        listingMintAuthority: listing_mint_authority,
+        inventory: inventory.publicKey,
+        inventoryDelegate: inventory_delegate,
+        receipt: receipt,
+        escrow: escrow.publicKey,
+        escrowAuthority: escrow_authority,
+        purchaser: program.provider.wallet.publicKey,
+      })
+      .signers([escrow])
+      .rpc();
+
+    const receiptAccount = await program.account.receipt.fetch(receipt);
+    assert.equal(
+      receiptAccount.purchaser.toString(),
+      program.provider.wallet.publicKey.toString()
+    );
+    assert.equal(
+      receiptAccount.listing.toString(),
+      listing.publicKey.toString()
+    );
+    assert.equal(receiptAccount.escrow.toString(), escrow.publicKey.toString());
+    assert.equal(
+      receiptAccount.inventory.toString(),
+      inventory.publicKey.toString()
+    );
+    assert.equal(receiptAccount.quantity.toNumber(), 10);
+    assert.equal(receiptAccount.price.toNumber(), 1);
+
+    // Account is charged
+    let after = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
+    );
+    assert.equal(after.amount, 90);
+
+    // Check that the inventory has the token
+    let inventoryAccount = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(inventoryAccount.amount, 10);
+
+    // Check that the funds are in the receipt escrow
+    let escrowAccount = await splToken.getAccount(
+      program.provider.connection,
+      escrow.publicKey
+    );
+    assert.equal(escrowAccount.amount, 10);
+
+    // Finish the trial
+    await program.methods
+      .refundTrial(
+        listing_mint_authority_bump,
+        inventory_delegate_bump,
+        escrow_authority_bump
+      )
+      .accounts({
+        receipt,
+        returnDeposit: payment.publicKey,
+        purchaser: program.provider.wallet.publicKey,
+        escrow: receiptAccount.escrow,
+        escrowAuthority: escrow_authority,
+        listing: listing.publicKey,
+        listingMint: listing.account.mint,
+        listingMintAuthority: listing_mint_authority,
+        inventory: inventory.publicKey,
+        inventoryDelegate: inventory_delegate,
+      })
+      .rpc();
+
+    // Check that the listing payment deposit was returned
+    let listingDeposit = await splToken.getAccount(
+      program.provider.connection,
+      payment.publicKey
+    );
+    assert.equal(listingDeposit.amount, 100);
+
+    // Check that the inventory is empty
+    inventoryAccount = await splToken.getAccount(
+      program.provider.connection,
+      inventory.publicKey
+    );
+    assert.equal(inventoryAccount.amount, 0);
   });
 });

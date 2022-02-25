@@ -1,17 +1,17 @@
 [programs.localnet]
 strangemood = "sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW"
 
-# Bundle the governance program into the local test environment
-[[test.genesis]]
-address = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
-program = "./solana-program-library/target/deploy/spl_governance.so"
+# # Bundle the governance program into the local test environment
+# [[test.genesis]]
+# address = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
+# program = "./solana-program-library/target/deploy/spl_governance.so"
 
 [registry]
 url = "https://anchor.projectserum.com"
 
 [provider]
 cluster = "localnet"
-wallet = "/home/ubuntu/.config/solana/id.json"
+wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn ts-mocha -p ./tsconfig.mocha.json -t 1000000 src/test/*.test.ts"
