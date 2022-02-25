@@ -3,83 +3,76 @@ use anchor_lang::solana_program::system_instruction;
 use anchor_lang::{prelude::*, solana_program};
 
 pub fn mint_to_and_freeze<'a>(
-    token_program: AccountInfo<'a>,
-    mint: AccountInfo<'a>,
-    to: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+    mint: &AccountInfo<'a>,
+    to: &AccountInfo<'a>,
+    authority: &AccountInfo<'a>,
     bump: u8,
     amount: u64,
 ) -> Result<()> {
-    thaw_account(token_program, mint, to, authority, bump);
-    mint_to(
-        token_program.clone(),
-        mint.clone(),
-        to.clone(),
-        authority.clone(),
-        bump,
-        amount,
-    )?;
+    thaw_account(token_program, mint, to, authority, bump)?;
+    mint_to(token_program, mint, authority, to, bump, amount)?;
     freeze_account(token_program, mint, to, authority, bump)
 }
 
 pub fn mint_to<'a>(
-    token_program: AccountInfo<'a>,
-    mint: AccountInfo<'a>,
-    to: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+    mint: &AccountInfo<'a>,
+    to: &AccountInfo<'a>,
+    authority: &AccountInfo<'a>,
     bump: u8,
     amount: u64,
 ) -> Result<()> {
     let cpi_program = token_program;
     let cloned_mint = mint.key.clone();
     let cpi_accounts = anchor_spl::token::MintTo {
-        mint: mint,
-        to: to,
-        authority: authority,
+        mint: mint.clone(),
+        to: to.clone(),
+        authority: authority.clone(),
     };
     let seeds = &[b"mint_authority", cloned_mint.as_ref(), &[bump]];
     let signers = &[&seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program.clone(), cpi_accounts, signers);
     anchor_spl::token::mint_to(cpi_ctx, amount)
 }
 
 pub fn freeze_account<'a>(
-    token_program: AccountInfo<'a>,
-    mint: AccountInfo<'a>,
-    account: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+    mint: &AccountInfo<'a>,
+    account: &AccountInfo<'a>,
+    authority: &AccountInfo<'a>,
     bump: u8,
 ) -> Result<()> {
     let cpi_program = token_program;
     let cloned_mint = mint.key.clone();
     let cpi_accounts = anchor_spl::token::FreezeAccount {
-        mint: mint,
-        account: account,
-        authority: authority,
+        mint: mint.clone(),
+        account: account.clone(),
+        authority: authority.clone(),
     };
     let seeds = &[b"mint_authority", cloned_mint.as_ref(), &[bump]];
     let signers = &[&seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program.clone(), cpi_accounts, signers);
     anchor_spl::token::freeze_account(cpi_ctx)
 }
 
 pub fn thaw_account<'a>(
-    token_program: AccountInfo<'a>,
-    mint: AccountInfo<'a>,
-    account: AccountInfo<'a>,
-    authority: AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+    mint: &AccountInfo<'a>,
+    account: &AccountInfo<'a>,
+    authority: &AccountInfo<'a>,
     bump: u8,
 ) -> Result<()> {
     let cpi_program = token_program;
     let cloned_mint = mint.key.clone();
     let cpi_accounts = anchor_spl::token::ThawAccount {
-        mint: mint,
-        account: account,
-        authority: authority,
+        mint: mint.clone(),
+        account: account.clone(),
+        authority: authority.clone(),
     };
     let seeds = &[b"mint_authority", cloned_mint.as_ref(), &[bump]];
     let signers = &[&seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program.clone(), cpi_accounts, signers);
     anchor_spl::token::thaw_account(cpi_ctx)
 }
 

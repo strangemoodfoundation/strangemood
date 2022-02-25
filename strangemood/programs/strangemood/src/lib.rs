@@ -31,20 +31,20 @@ fn distribute_governance_tokens<'a>(
 
     // Mint votes to lister
     mint_to(
-        token_program.clone(),
-        charter_mint.clone(),
-       listing_deposit,
-        charter_mint_authority.clone(),
+        &token_program,
+        &charter_mint,
+       &listing_deposit,
+        &charter_mint_authority,
         charter_mint_authority_bump,
         deposit_amount,
     )?;
 
     // Mint votes to charter
     mint_to(
-        token_program,
-        charter_mint,
-        charter_deposit,
-        charter_mint_authority,
+        &token_program,
+        &charter_mint,
+        &charter_deposit,
+        &charter_mint_authority,
         charter_mint_authority_bump,
         contribution_amount,
     )?;
@@ -345,10 +345,10 @@ pub mod strangemood {
 
         // Distribute listing token 
         mint_to_and_freeze(
-ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-    ctx.accounts.listing_mint_authority.to_account_info(),
+&ctx.accounts.token_program.to_account_info(),
+&ctx.accounts.listing_mint.to_account_info(),
+&ctx.accounts.inventory.to_account_info(),
+&ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
         )?;
@@ -408,10 +408,10 @@ ctx.accounts.token_program.to_account_info(),
 
         // Distribute listing token 
         mint_to_and_freeze(
-ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-    ctx.accounts.listing_mint_authority.to_account_info(),
+&ctx.accounts.token_program.to_account_info(),
+        &ctx.accounts.listing_mint.to_account_info(),
+            &ctx.accounts.inventory.to_account_info(),
+    &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount, 
         )?;
@@ -457,10 +457,10 @@ ctx.accounts.token_program.to_account_info(),
 
         // Mint the token, which can be burned later upon refund.
         mint_to_and_freeze(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.listing_mint.to_account_info(),
+            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
         )?;
@@ -506,10 +506,10 @@ ctx.accounts.token_program.to_account_info(),
 
         // Mint the token, which can be burned later upon refund.
         mint_to_and_freeze(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.listing_mint.to_account_info(),
+            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
         )?;
@@ -652,10 +652,10 @@ ctx.accounts.token_program.to_account_info(),
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
         thaw_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.listing_mint.to_account_info(),
+            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
         )?;
 
@@ -669,10 +669,10 @@ ctx.accounts.token_program.to_account_info(),
         )?;
 
         freeze_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.listing_mint.to_account_info(),
+            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
         )?;
 
@@ -719,10 +719,10 @@ ctx.accounts.token_program.to_account_info(),
         }
 
         thaw_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.mint_authority.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.mint.to_account_info(),
+            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.mint_authority.to_account_info(),
             mint_authority_bump,
         )?;
 
@@ -736,10 +736,10 @@ ctx.accounts.token_program.to_account_info(),
         )?;
 
         freeze_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.mint_authority.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.mint.to_account_info(),
+            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.mint_authority.to_account_info(),
             mint_authority_bump,
         )?;
 
