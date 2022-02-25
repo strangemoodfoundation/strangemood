@@ -11,7 +11,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   SOLANA_VERSION: "1.9.5"
-  PROGRAM_PATH: "programs/clearing_house/" # Target clearing_house
+  PROGRAM_PATH: "strangemood/programs/strangemood/" 
 
 jobs:
   build:
