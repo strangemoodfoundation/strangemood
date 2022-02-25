@@ -14,10 +14,12 @@ import { pda as _pda } from "./pda";
 import * as constants from "./constants";
 import { v4 } from "uuid";
 const { web3 } = anchor;
-const { SystemProgram, SYSVAR_RENT_PUBKEY, Keypair } = web3;
+const { SystemProgram, SYSVAR_RENT_PUBKEY, Keypair, SYSVAR_CLOCK_PUBKEY } =
+  web3;
 import { Buffer } from "buffer";
 import * as splToken from "@solana/spl-token";
 import { idlAddress } from "@project-serum/anchor/dist/cjs/idl";
+import { program } from "@project-serum/anchor/dist/cjs/spl/token";
 
 export const pda = _pda;
 
@@ -45,6 +47,10 @@ export type Listing = Awaited<
 
 export type Charter = Awaited<
   ReturnType<Program<Strangemood>["account"]["charter"]["fetch"]>
+>;
+
+export type Cashier = Awaited<
+  ReturnType<Program<Strangemood>["account"]["cashier"]["fetch"]>
 >;
 
 export type Receipt = Awaited<
@@ -95,6 +101,19 @@ async function asListingInfo(
   }
   return {
     account: await program.account.listing.fetch(arg),
+    publicKey: arg,
+  };
+}
+
+async function asCashierInfo(
+  program: Program<Strangemood>,
+  arg: AccountInfo<Cashier> | PublicKey
+): Promise<AccountInfo<Cashier>> {
+  if (isAccountInfo(arg)) {
+    return arg;
+  }
+  return {
+    account: await program.account.cashier.fetch(arg),
     publicKey: arg,
   };
 }
@@ -383,6 +402,131 @@ export async function initCharter(args: {
     })
     .instruction();
   instructions.push(ix);
+
+  return {
+    instructions,
+  };
+}
+
+export async function initCashier(args: {
+  program: Program<Strangemood>;
+  uri: string;
+  charter: AccountInfo<Charter> | PublicKey;
+  authority: PublicKey;
+}) {
+  const charterInfo = await asCharterInfo(args.program, args.charter);
+  const stake = Keypair.generate();
+  const [cashier_pda, cashier_bump] = await pda.cashier(
+    args.program.programId,
+    stake.publicKey
+  );
+  const [stakeAuthority, stake_authority_bump] = await pda.token_authority(
+    args.program.programId,
+    stake.publicKey
+  );
+
+  let instructions = [];
+  let ix = await args.program.methods
+    .initCashier(stake_authority_bump, args.uri)
+    .accounts({
+      cashier: cashier_pda,
+      stake: stake.publicKey,
+      stakeAuthority,
+      charter: charterInfo.publicKey,
+      charterMint: charterInfo.account.mint,
+      authority: args.authority,
+      clock: SYSVAR_CLOCK_PUBKEY,
+    })
+    .signers([stake])
+    .instruction();
+  instructions.push(ix);
+
+  return {
+    instructions,
+    signers: [stake],
+  };
+}
+
+export async function initCashierTreasury(args: {
+  program: Program<Strangemood>;
+  charter: AccountInfo<Charter> | PublicKey;
+  cashier: AccountInfo<Cashier> | PublicKey;
+  mint: PublicKey;
+  deposit: PublicKey;
+}) {
+  const cashierInfo = await asCashierInfo(args.program, args.cashier);
+  const charterTreasuryInfo = await asCharterTreasuryInfo(
+    args.program,
+    cashierInfo.publicKey,
+    args.mint
+  );
+
+  const escrow = Keypair.generate();
+  const [escrow_authority, bump] = await pda.token_authority(
+    args.program.programId,
+    escrow.publicKey
+  );
+  const [cashier_treasury_pda, _] = await pda.treasury(
+    args.program.programId,
+    cashierInfo.publicKey,
+    args.mint
+  );
+
+  let instructions = [];
+  let ix = await args.program.methods
+    .initCashierTreasury(bump)
+    .accounts({
+      cashierTreasury: cashier_treasury_pda,
+      cashier: cashierInfo.publicKey,
+      charterTreasury: charterTreasuryInfo.publicKey,
+      charter: charterTreasuryInfo.publicKey,
+      deposit: args.deposit,
+      escrow: escrow.publicKey,
+      escrowAuthority: escrow_authority,
+      mint: args.mint,
+      clock: SYSVAR_CLOCK_PUBKEY,
+      authority: args.program.provider.wallet.publicKey,
+    })
+    .signers([escrow])
+    .instruction();
+
+  instructions.push(ix);
+
+  return {
+    instructions,
+    signers: [escrow],
+  };
+}
+
+export async function initCharterTreasury(args: {
+  program: Program<Strangemood>;
+  charter: AccountInfo<Charter> | PublicKey;
+  mint: PublicKey;
+  deposit: PublicKey;
+  scalar: number;
+}) {
+  if (args.scalar < 0 || args.scalar > 1) {
+    throw new Error("scalar must be between 0 and 1");
+  }
+  const charterInfo = await asCharterInfo(args.program, args.charter);
+
+  const [treasury_pda, _] = await pda.treasury(
+    args.program.programId,
+    charterInfo.publicKey,
+    args.mint
+  );
+
+  let ix = await args.program.methods
+    .initCharterTreasury(1.0)
+    .accounts({
+      treasury: treasury_pda,
+      mint: args.mint,
+      deposit: args.deposit,
+      charter: charterInfo.publicKey,
+    })
+    .instruction();
+
+  let instructions = [ix];
 
   return {
     instructions,
