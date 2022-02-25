@@ -152,6 +152,27 @@ async function asCharterTreasuryInfo(
   };
 }
 
+async function asCashierTreasuryInfo(
+  program: Program<Strangemood>,
+  cashier: PublicKey,
+  mint: PublicKey
+): Promise<AccountInfo<CharterTreasury>> {
+  let [cashierTreasuryPublicKey, cashierTreasuryBump] = await pda.treasury(
+    program.programId,
+    cashier,
+    mint
+  );
+
+  let cashierTreasury = await program.account.cashierTreasury.fetch(
+    cashierTreasuryPublicKey
+  );
+
+  return {
+    account: cashierTreasury,
+    publicKey: cashierTreasuryPublicKey,
+  };
+}
+
 async function getOrCreateAssociatedTokenAccount(args: {
   program: Program<Strangemood>;
   mint: PublicKey;
@@ -262,6 +283,125 @@ async function purchaseWithoutCashier(args: {
   return {
     instructions,
   };
+}
+
+async function purchaseWithCashier(args: {
+  program: Program<Strangemood>;
+  signer: PublicKey;
+  listing: AccountInfo<Listing> | PublicKey;
+  quantity: anchor.BN;
+  cashier: AccountInfo<Cashier> | PublicKey;
+}) {
+  let instructions = [];
+  let listingInfo = await asListingInfo(args.program, args.listing);
+  let charterInfo = await asCharterInfo(
+    args.program,
+    listingInfo.account.charter
+  );
+  let cashierInfo = await asCashierInfo(args.program, args.cashier);
+
+  // Create an inventory if it doesn't exist
+  let inventory = await getAssociatedTokenAddress(
+    listingInfo.account.mint,
+    args.signer
+  );
+  if (!(await args.program.provider.connection.getAccountInfo(inventory))) {
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        args.signer,
+        inventory,
+        args.signer,
+        listingInfo.account.mint
+      )
+    );
+  }
+
+  let deposit = await splToken.getAccount(
+    args.program.provider.connection,
+    listingInfo.account.paymentDeposit
+  );
+  let payment = await getAssociatedTokenAddress(deposit.mint, args.signer);
+
+  // Setup PDAs
+  let [_, listingBump] = await pda.listing(
+    args.program.programId,
+    listingInfo.publicKey
+  );
+  let [inventoryDelegate, inventoryDelegateBump] = await pda.token_authority(
+    args.program.programId,
+    inventory
+  );
+  let [listingMintAuthority, listingMintAuthorityBump] =
+    await pda.mint_authority(args.program.programId, listingInfo.account.mint);
+  let [charterMintAuthority, charterMintAuthorityBump] =
+    await pda.mint_authority(args.program.programId, charterInfo.account.mint);
+
+  let charterTreasuryInfo = await asCharterTreasuryInfo(
+    args.program,
+    charterInfo.publicKey,
+    deposit.mint
+  );
+
+  let cashierTreasury = await asCashierTreasuryInfo(
+    args.program,
+    cashierInfo.publicKey,
+    deposit.mint
+  );
+
+  let ix = await args.program.methods
+    .purchaseWithCashier(
+      listingMintAuthorityBump,
+      charterMintAuthorityBump,
+      inventoryDelegateBump,
+      args.quantity
+    )
+    .accounts({
+      cashier: cashierInfo.publicKey,
+      cashierTreasury: cashierTreasury.publicKey,
+      cashierTreasuryEscrow: cashierTreasury.account.escrow,
+      payment: payment,
+      inventory: inventory,
+      inventoryDelegate: inventoryDelegate,
+      listingsPaymentDeposit: listingInfo.account.paymentDeposit,
+      listingsVoteDeposit: listingInfo.account.voteDeposit,
+      listing: listingInfo.publicKey,
+      listingMint: listingInfo.account.mint,
+      listingMintAuthority: listingMintAuthority,
+      charter: charterInfo.publicKey,
+      charterTreasury: charterTreasuryInfo.publicKey,
+      charterTreasuryDeposit: charterTreasuryInfo.account.deposit,
+      charterReserve: charterInfo.account.reserve,
+      charterMint: charterInfo.account.mint,
+      charterMintAuthority: charterMintAuthority,
+      purchaser: args.signer,
+    })
+    .instructions();
+
+  instructions.push(ix);
+
+  return {
+    instructions,
+  };
+}
+
+export async function purchase(args: {
+  program: Program<Strangemood>;
+  signer: PublicKey;
+  listing: AccountInfo<Listing> | PublicKey;
+  quantity: anchor.BN;
+  cashier?: AccountInfo<Cashier> | PublicKey;
+}) {
+  if (args.cashier) {
+    return purchaseWithCashier({
+      program: args.program,
+      signer: args.signer,
+      listing: args.listing,
+      quantity: args.quantity,
+      cashier: args.cashier,
+    });
+  } else {
+    return purchaseWithoutCashier(args);
+  }
 }
 
 export async function initListing(args: {
