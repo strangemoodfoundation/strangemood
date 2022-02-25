@@ -167,32 +167,9 @@ pub fn sync_native<'a>(token_program: &AccountInfo<'a>, account: AccountInfo<'a>
     solana_program::program::invoke(&ix, &[account.clone()]).map_err(Into::into)
 }
 
-pub fn system_transfer<'a>(
-    system_program: &AccountInfo<'a>,
-    from: &AccountInfo<'a>,
-    to: &AccountInfo<'a>,
-    lamports: u64,
-) -> Result<()> {
-    let ix = system_instruction::transfer(&from.key(), &to.key(), lamports);
-
-    solana_program::program::invoke(&ix, &[from.clone(), to.clone(), system_program.clone()])
-        .map_err(Into::into)
-}
-
 pub fn erase_data<'a>(account: &AccountInfo<'a>) {
     let mut data = account.data.borrow_mut();
     data.fill(0);
-}
-
-pub fn move_lamports<'a>(
-    source_account_info: &AccountInfo<'a>,
-    dest_account_info: &AccountInfo<'a>,
-    amount: u64,
-) {
-    let dest_starting_lamports = dest_account_info.lamports();
-    **dest_account_info.lamports.borrow_mut() = dest_starting_lamports.checked_add(amount).unwrap();
-    **source_account_info.lamports.borrow_mut() =
-        source_account_info.lamports().checked_sub(amount).unwrap();
 }
 
 pub fn close_native_account<'a>(
