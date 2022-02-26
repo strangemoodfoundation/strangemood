@@ -977,7 +977,7 @@ ctx.accounts.stake_authority.to_account_info(),
 pub struct StartTrial<'info> {
 
     // The user's token account where funds will be transfered from
-    #[account(mut)]
+    #[account(mut, constraint=payment.mint==listing_payment_deposit_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
@@ -997,7 +997,7 @@ pub struct StartTrial<'info> {
 
     // A token account of the listing.mint where listing tokens
     // will be deposited at
-    #[account(mut)]
+    #[account(mut, constraint=inventory.mint==listing_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Account<'info, TokenAccount>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -1063,7 +1063,7 @@ pub struct StartTrial<'info> {
 pub struct StartTrialWithCashier<'info> {
 
     // The user's token account where funds will be transfered from
-    #[account(mut)]
+    #[account(mut, constraint=payment.mint==listing_payment_deposit_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
@@ -1086,7 +1086,7 @@ pub struct StartTrialWithCashier<'info> {
 
     // A token account of the listing.mint where listing tokens
     // will be deposited at
-    #[account(mut)]
+    #[account(mut, constraint=inventory.mint==listing_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Account<'info, TokenAccount>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -1152,7 +1152,7 @@ pub struct StartTrialWithCashier<'info> {
 #[instruction(listing_mint_authority_bump: u8, charter_mint_authority_bump: u8, inventory_delegate_bump: u8)]
 pub struct Purchase<'info> {
     // The user's token account where funds will be transfered from
-    #[account(mut)]
+    #[account(mut, constraint=payment.mint==listings_payment_deposit.mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment: Box<Account<'info, TokenAccount>>,
 
     // TODO: consider rename? 
@@ -1235,7 +1235,7 @@ pub struct Purchase<'info> {
 #[instruction(listing_mint_authority_bump: u8, charter_mint_authority_bump: u8, inventory_delegate_bump: u8)]
 pub struct PurchaseWithCashier<'info> {
     // The user's token account where funds will be transfered from
-    #[account(mut)]
+    #[account(mut, constraint=payment.mint==listings_payment_deposit.mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment: Box<Account<'info, TokenAccount>>,
 
     #[account(has_one=charter)]
@@ -1252,9 +1252,8 @@ pub struct PurchaseWithCashier<'info> {
     #[account(mut)]
     pub cashier_treasury_escrow: Box<Account<'info, TokenAccount>>,
 
-    // TODO: consider rename? 
     // Where the listing token is deposited when purchase is complete.
-    #[account(mut)]
+    #[account(mut, constraint=inventory.mint==listing_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -1515,7 +1514,7 @@ pub struct RefundTrial<'info> {
     )]
     pub escrow_authority: AccountInfo<'info>,
 
-    #[account(mut)]
+    #[account(mut, constraint=inventory.mint==listing_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -1568,7 +1567,7 @@ pub struct Consume<'info> {
     )]
     pub inventory_delegate: AccountInfo<'info>,
 
-    #[account(mut)]
+    #[account(mut, has_one=mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
 
