@@ -1,7 +1,7 @@
-anchor upgrade ./target/deploy/strangemood.so --program-id sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW --provider.cluster mainnet
-anchor upgrade ./target/deploy/strangemood.so --program-id sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW --provider.cluster testnet
+anchor upgrade ./target/deploy/strangemood.so --program-id sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx --provider.cluster mainnet
+anchor upgrade ./target/deploy/strangemood.so --program-id sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx --provider.cluster testnet
+anchor upgrade ./target/deploy/strangemood.so --program-id sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx --provider.cluster devnet
 
-anchor idl upgrade  -f ./target/idl/strangemood.json sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW --provider.cluster mainnet
-anchor idl upgrade  -f ./target/idl/strangemood.json sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW --provider.cluster testnet
-
-anchor upgrade ./target/deploy/strangemood.so --program-id sgSBafcCxwD6G3tUbvTcvnCD28sCXhpasauLtpw9HdF --provider.cluster testnet
+anchor idl upgrade  -f ./target/idl/strangemood.json sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx --provider.cluster mainnet
+anchor idl upgrade  -f ./target/idl/strangemood.json sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx --provider.cluster testnet
+anchor idl upgrade  -f ./target/idl/strangemood.json sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx --provider.cluster testnet
