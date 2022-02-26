@@ -34,7 +34,7 @@ export async function fetchStrangemoodProgram(
   if (!idl) {
     const address = await idlAddress(programId);
     throw new Error(
-      `Failed to fetch Strangemood program '${programId.toString()}' at anchor IDL $'{address.toString()}'.`
+      `Failed to fetch Strangemood program '${programId.toString()}' at anchor IDL '${address.toString()}'.`
     );
   }
 
@@ -668,7 +668,7 @@ export async function initCharterTreasury(args: {
     .instruction();
 
   let instructions = [ix];
-  x;
+
   return {
     instructions,
     treasury: treasury_pda,

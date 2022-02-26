@@ -11,7 +11,7 @@ pub mod cpi;
 
 use crate::error::StrangemoodError;
 
-declare_id!("sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW");
+declare_id!("sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx");
 
 fn distribute_governance_tokens<'a>(
     contributed: u64, 
