@@ -27,7 +27,7 @@ fn distribute_governance_tokens<'a>(
     let votes = contributed as f64 * scalar;
     let deposit_rate = 1.0 - contribution_rate;
     let deposit_amount = (deposit_rate * votes as f64) as u64;
-    let contribution_amount = (votes as u64) - deposit_amount;
+    let contribution_amount = (votes as u64).checked_sub(deposit_amount).unwrap();
 
     // Mint votes to lister
     mint_to(
@@ -69,8 +69,9 @@ fn transfer_funds<'info>(
     purchaser: Signer<'info>,
 ) -> Result<Splits> {
     let deposit_rate = 1.0 - charter.payment_contribution;
-    let to_lister_amount = (deposit_rate * total as f64) as u64;
-    let to_charter_amount = total - to_lister_amount;
+    let total_as_f64 = total as f64;
+    let to_lister_amount = (deposit_rate * total_as_f64) as u64;
+    let to_charter_amount = total.checked_sub(to_lister_amount).unwrap();
 
     // Distribute payment to the charter
     token_transfer( 
@@ -111,15 +112,16 @@ fn transfer_funds_with_cashier<'info>(
     purchaser: Signer<'info>,
 ) -> Result<SplitsWithCashier> {
     let deposit_rate = 1.0 - charter.payment_contribution;
-    let deposit_amount = (deposit_rate * total as f64) as u64;
-    let to_charter_amount = total - deposit_amount;
+    let total_as_f64 = total as f64;
+    let deposit_amount = (deposit_rate * total_as_f64 as f64) as u64;
+    let to_charter_amount = total.checked_sub(deposit_amount).unwrap();
 
     // Then split the deposit pool between the lister, and the cashier.
     // (charter, (lister, cashier))
     let to_cashier_rate = listing.cashier_split;
     let to_lister_rate = 1.0 - to_cashier_rate;
     let to_lister_amount = (deposit_amount as f64 * to_lister_rate) as u64;
-    let to_cashier_amount = deposit_amount - to_lister_amount;
+    let to_cashier_amount = deposit_amount.checked_sub(to_lister_amount).unwrap();
 
     // Distribute payment to the charter
     token_transfer( 
@@ -166,15 +168,16 @@ fn transfer_funds_from_escrow_with_cashier<'info>(
     bump: u8,
 ) -> Result<SplitsWithCashier> {
     let deposit_rate = 1.0 - charter.payment_contribution;
-    let deposit_amount = (deposit_rate * total as f64) as u64;
-    let to_charter_amount = total - deposit_amount;
+    let total_as_f64 = total as f64;
+    let deposit_amount = (deposit_rate * total_as_f64 as f64) as u64;
+    let to_charter_amount = total.checked_sub(deposit_amount).unwrap();
 
     // Then split the deposit pool between the lister, and the cashier.
     // (charter, (lister, cashier))
     let to_cashier_rate = listing.cashier_split;
     let to_lister_rate = 1.0 - to_cashier_rate;
     let to_lister_amount = (deposit_amount as f64 * to_lister_rate) as u64;
-    let to_cashier_amount = deposit_amount - to_lister_amount;
+    let to_cashier_amount = deposit_amount.checked_sub(to_lister_amount).unwrap();
 
     // Distribute payment to the charter
     token_transfer_with_seed( 
@@ -225,8 +228,9 @@ fn transfer_funds_from_escrow<'info>(
     bump: u8,
 ) -> Result<Splits> {
     let deposit_rate = 1.0 - charter.payment_contribution;
-    let to_lister_amount = (deposit_rate * total as f64) as u64;
-    let to_charter_amount = total - to_lister_amount;
+    let total_as_f64 = total as f64;
+    let to_lister_amount = (deposit_rate * total_as_f64 as f64) as u64;
+    let to_charter_amount = total.checked_sub(to_lister_amount).unwrap();
 
     // Distribute payment to the charter
     token_transfer_with_seed( 
@@ -312,7 +316,7 @@ pub mod strangemood {
         }
 
         // Distribute payment
-        let total: u64 = listing.price * amount;
+        let total: u64 = listing.price.checked_mul(amount).unwrap();
         let splits = transfer_funds(total,
             &listing,
             &charter,
@@ -338,7 +342,7 @@ pub mod strangemood {
         )?;
 
         // Approve the delegate over the inventory 
-        let delegated_amount = ctx.accounts.inventory.amount + amount;
+        let delegated_amount = ctx.accounts.inventory.amount.checked_add(amount).unwrap();
         approve_delegate(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.inventory.to_account_info(),
@@ -377,7 +381,7 @@ pub mod strangemood {
         }
 
         // Distribute payment
-        let total: u64 = listing.price * amount;
+        let total: u64 = listing.price.checked_mul(amount).unwrap();
         let splits = transfer_funds_with_cashier(total,
             &listing,
             &charter,
@@ -404,7 +408,7 @@ pub mod strangemood {
         )?;
 
         // Approve the delegate over the inventory 
-        let delegated_amount = ctx.accounts.inventory.amount + amount;
+        let delegated_amount =  ctx.accounts.inventory.amount.checked_add(amount).unwrap();
         approve_delegate(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.inventory.to_account_info(),
@@ -446,7 +450,7 @@ pub mod strangemood {
         }
 
         // Move funds into an escrow, rather than the lister's deposit.
-        let total = amount * listing.price;
+        let total = amount.checked_mul(listing.price).unwrap();
         token_transfer(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.payment.to_account_info(),
@@ -456,7 +460,7 @@ pub mod strangemood {
         )?;
 
         // Approve the delegate over the inventory 
-        let delegated_amount = ctx.accounts.inventory.amount + amount;
+        let delegated_amount = ctx.accounts.inventory.amount.checked_add(amount).unwrap();
         approve_delegate(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.inventory.to_account_info(),
@@ -505,7 +509,7 @@ pub mod strangemood {
         }
 
         // Move funds into an escrow, rather than the lister's deposit.
-        let total = amount * listing.price;
+        let total = amount.checked_mul(listing.price).unwrap();
         token_transfer(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.payment.to_account_info(),
@@ -550,7 +554,7 @@ pub mod strangemood {
             return Err(error!(StrangemoodError::ReceiptHasCashier));
         }
 
-        let total: u64 = receipt.price * receipt.quantity;
+        let total: u64 = receipt.price.checked_mul(receipt.quantity).unwrap();
         let splits = transfer_funds_from_escrow(
             total, 
             &listing,
@@ -607,7 +611,7 @@ pub mod strangemood {
             return Err(error!(StrangemoodError::ReceiptDoesNotHaveCashier));
         }
 
-        let total: u64 = receipt.price * receipt.quantity;
+        let total: u64 = receipt.price.checked_mul(receipt.quantity).unwrap();
         let splits = transfer_funds_from_escrow_with_cashier(
             total, 
             &listing,
@@ -617,11 +621,10 @@ pub mod strangemood {
             *ctx.accounts.charter_treasury_deposit.clone(),
             *ctx.accounts.listings_payment_deposit.clone(),
             *ctx.accounts.cashier_treasury_escrow.clone(),
-            ctx.accounts.receipt_escrow_authority.clone(),  
+            ctx.accounts.receipt_escrow_authority.clone(),
             receipt_escrow_authority_bump
         )?;
         
-
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
@@ -934,7 +937,7 @@ ctx.accounts.stake_authority.to_account_info(),
         // Calculate the amount to transfer
         let amount_per_period = stake.amount as f64 * charter_treasury.scalar;
         let amount_per_epoch = amount_per_period as f64 / charter.withdraw_period as f64;
-        let epochs_passed = clock.epoch - cashier_treasury.last_withdraw_at;
+        let epochs_passed = clock.epoch.checked_sub(cashier_treasury.last_withdraw_at).unwrap();
         let amount_to_transfer = amount_per_epoch * epochs_passed as f64;
 
         // Transfer what we can
@@ -963,7 +966,7 @@ ctx.accounts.stake_authority.to_account_info(),
         // Calculate the amount to transfer
         let amount_per_period = charter.stake_withdraw_amount;
         let amount_per_epoch = amount_per_period as f64 / charter.withdraw_period as f64;
-        let epochs_passed = clock.epoch - cashier.last_withdraw_at;
+        let epochs_passed = clock.epoch.checked_sub(cashier.last_withdraw_at).unwrap();
         let amount_to_transfer = amount_per_epoch * epochs_passed as f64;
 
         // Transfer what we can
