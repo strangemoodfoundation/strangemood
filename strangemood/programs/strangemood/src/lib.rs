@@ -17,12 +17,12 @@ fn distribute_governance_tokens<'a>(
     contributed: u64, 
     scalar: f64, 
     contribution_rate: f64, 
-    token_program: AccountInfo<'a>, 
-    charter_mint: AccountInfo<'a>,
+    token_program: Program<'a, Token>, 
+    charter_mint: Account<'a, Mint>,
     charter_mint_authority: AccountInfo<'a>,
     charter_mint_authority_bump: u8,
-    listing_deposit: AccountInfo<'a>,
-    charter_deposit: AccountInfo<'a>,
+    listing_deposit: Account<'a, TokenAccount>,
+    charter_deposit: Account<'a, TokenAccount>,
 ) -> Result<()> {
     let votes = contributed as f64 * scalar;
     let deposit_rate = 1.0 - contribution_rate;
@@ -289,6 +289,7 @@ pub mod strangemood {
         listing.is_refundable = refundable;
         listing.is_consumable = consumable;
         listing.is_available = available;
+        listing.is_suspended = false;
         listing.cashier_split = cashier_split;
 
         Ok(())
@@ -305,6 +306,9 @@ pub mod strangemood {
 
         if !listing.is_available {
             return Err(StrangemoodError::ListingIsUnavailable.into());
+        }
+        if listing.is_suspended {
+            return Err(StrangemoodError::ListingIsSuspended.into());
         }
 
         // Distribute payment
@@ -325,12 +329,12 @@ pub mod strangemood {
             splits.to_charter_amount,
             charter.expansion_rate * charter_treasury.scalar,
             charter.vote_contribution,
-             ctx.accounts.token_program.to_account_info(),
-             ctx.accounts.charter_mint.to_account_info(),
+             ctx.accounts.token_program.clone(),
+             *ctx.accounts.charter_mint.clone(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
-             ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_reserve.to_account_info(),
+             *ctx.accounts.listings_vote_deposit.clone(),
+             *ctx.accounts.charter_reserve.clone(),
         )?;
 
         // Approve the delegate over the inventory 
@@ -345,9 +349,9 @@ pub mod strangemood {
 
         // Distribute listing token 
         mint_to_and_freeze(
-&ctx.accounts.token_program.to_account_info(),
-&ctx.accounts.listing_mint.to_account_info(),
-&ctx.accounts.inventory.to_account_info(),
+&ctx.accounts.token_program,
+&ctx.accounts.listing_mint,
+&ctx.accounts.inventory,
 &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
@@ -367,6 +371,9 @@ pub mod strangemood {
 
         if !listing.is_available {
             return Err(StrangemoodError::ListingIsUnavailable.into());
+        }
+        if listing.is_suspended {
+            return Err(StrangemoodError::ListingIsSuspended.into());
         }
 
         // Distribute payment
@@ -388,12 +395,12 @@ pub mod strangemood {
             splits.to_charter_amount,
             charter.expansion_rate * charter_treasury.scalar,
             charter.vote_contribution,
-             ctx.accounts.token_program.to_account_info(),
-             ctx.accounts.charter_mint.to_account_info(),
+                ctx.accounts.token_program.clone(),
+             *ctx.accounts.charter_mint.clone(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
-             ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_reserve.to_account_info(),
+             *ctx.accounts.listings_vote_deposit.clone(),
+             *ctx.accounts.charter_reserve.clone(),
         )?;
 
         // Approve the delegate over the inventory 
@@ -408,9 +415,9 @@ pub mod strangemood {
 
         // Distribute listing token 
         mint_to_and_freeze(
-&ctx.accounts.token_program.to_account_info(),
-        &ctx.accounts.listing_mint.to_account_info(),
-            &ctx.accounts.inventory.to_account_info(),
+        &ctx.accounts.token_program,
+        &ctx.accounts.listing_mint,
+    &ctx.accounts.inventory,
     &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount, 
@@ -433,6 +440,9 @@ pub mod strangemood {
         }
         if !listing.is_refundable {
             return Err(error!(StrangemoodError::ListingIsNotRefundable));
+        }
+        if listing.is_suspended {
+            return Err(StrangemoodError::ListingIsSuspended.into());
         }
 
         // Move funds into an escrow, rather than the lister's deposit.
@@ -457,9 +467,9 @@ pub mod strangemood {
 
         // Mint the token, which can be burned later upon refund.
         mint_to_and_freeze(
-            &ctx.accounts.token_program.to_account_info(),
-            &ctx.accounts.listing_mint.to_account_info(),
-            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
             &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
@@ -506,9 +516,9 @@ pub mod strangemood {
 
         // Mint the token, which can be burned later upon refund.
         mint_to_and_freeze(
-            &ctx.accounts.token_program.to_account_info(),
-            &ctx.accounts.listing_mint.to_account_info(),
-            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
             &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
@@ -558,12 +568,12 @@ pub mod strangemood {
             splits.to_charter_amount,
             charter.expansion_rate * treasury.scalar,
             charter.vote_contribution,
-             ctx.accounts.token_program.to_account_info(),
-             ctx.accounts.charter_mint.to_account_info(),
+             ctx.accounts.token_program.clone(),
+             *ctx.accounts.charter_mint.clone(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
-             ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_reserve.to_account_info(),
+             *ctx.accounts.listings_vote_deposit.clone(),
+             *ctx.accounts.charter_reserve.clone(),
         )?;
 
         // Close the escrow account.
@@ -617,12 +627,12 @@ pub mod strangemood {
             splits.to_charter_amount,
             charter.expansion_rate * treasury.scalar,
             charter.vote_contribution,
-             ctx.accounts.token_program.to_account_info(),
-             ctx.accounts.charter_mint.to_account_info(),
+             ctx.accounts.token_program.clone(),
+             *ctx.accounts.charter_mint.clone(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
-             ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_reserve.to_account_info(),
+             *ctx.accounts.listings_vote_deposit.clone(),
+             *ctx.accounts.charter_reserve.clone(),
         )?;
 
         // Close the escrow account.
@@ -652,9 +662,9 @@ pub mod strangemood {
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
         thaw_account(
-            &ctx.accounts.token_program.to_account_info(),
-            &ctx.accounts.listing_mint.to_account_info(),
-            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
             &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
         )?;
@@ -669,9 +679,9 @@ pub mod strangemood {
         )?;
 
         freeze_account(
-            &ctx.accounts.token_program.to_account_info(),
-            &ctx.accounts.listing_mint.to_account_info(),
-            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
             &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
         )?;
@@ -719,9 +729,9 @@ ctx.accounts.token_program.to_account_info(),
         }
 
         thaw_account(
-            &ctx.accounts.token_program.to_account_info(),
-            &ctx.accounts.mint.to_account_info(),
-            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.mint,
+            &ctx.accounts.inventory,
             &ctx.accounts.mint_authority.to_account_info(),
             mint_authority_bump,
         )?;
@@ -736,9 +746,9 @@ ctx.accounts.token_program.to_account_info(),
         )?;
 
         freeze_account(
-            &ctx.accounts.token_program.to_account_info(),
-            &ctx.accounts.mint.to_account_info(),
-            &ctx.accounts.inventory.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.mint,
+            &ctx.accounts.inventory,
             &ctx.accounts.mint_authority.to_account_info(),
             mint_authority_bump,
         )?;
@@ -970,6 +980,13 @@ ctx.accounts.stake_authority.to_account_info(),
 
         Ok(())
     }
+
+    pub fn set_listing_suspension(ctx: Context<SetListingSuspension>, suspended: bool) -> Result<()> {
+        let listing = &mut ctx.accounts.listing;
+        listing.is_suspended = suspended;
+
+        Ok(())
+    } 
 }
 
 #[derive(Accounts)]
@@ -1581,6 +1598,7 @@ pub struct InitListing<'info> {
     // 8 for the tag
     // 1 for is_initialized
     // 1 for is_available 
+    // 1 for is_suspended 
     // 32 for charter
     // 32 for authority
     // 32 for payment_deposit
@@ -2059,3 +2077,15 @@ pub struct WithdrawCashierStake<'info> {
     pub token_program: Program<'info, Token>
 }
 
+#[derive(Accounts)]
+pub struct SetListingSuspension<'info> {
+    #[account(mut, has_one=charter)]
+    pub listing: Account<'info, Listing>,
+
+    #[account(has_one=authority)]
+    pub charter: Account<'info, Charter>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
