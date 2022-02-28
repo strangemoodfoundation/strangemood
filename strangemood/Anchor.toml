@@ -1,6 +1,12 @@
 [programs.localnet]
 strangemood = "sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx"
 
+[programs.mainnet]
+strangemood = "sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx"
+
+[programs.devnet]
+strangemood = "sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx"
+
 # # Bundle the governance program into the local test environment
 # [[test.genesis]]
 # address = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"

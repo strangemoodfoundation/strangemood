@@ -8,7 +8,6 @@ import {
   withSetMintAuthority,
   withTokenAccount,
 } from "../../token";
-import * as splToken from "@solana/spl-token";
 import {
   Keypair,
   PublicKey,
@@ -23,7 +22,7 @@ export default class CharterInit extends Command {
   static description = "Creates a new charter";
 
   static examples = [
-    `$ strangemood charter init --uri https://strangemood.org --expansion 30 --paymentSplit 0.02 --expansionSplit 0.3
+    `$ strangemood charter init --uri https://charter.strangemood.org --expansion 150 --paymentSplit 0.01 --expansionSplit 0.3
 `,
   ];
 
@@ -43,7 +42,7 @@ export default class CharterInit extends Command {
     supply: Flags.integer({
       description: "An initial supply of tokens to mint to yourself",
       required: false,
-      default: 100000,
+      default: 1000000,
     }),
 
     uri: Flags.url({
@@ -78,7 +77,7 @@ export default class CharterInit extends Command {
       description:
         "The amount of cashier stake that can be withdrawn per withdraw period",
       required: false,
-      default: 50,
+      default: 500,
     }),
   };
 

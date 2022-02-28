@@ -778,6 +778,7 @@ ctx.accounts.token_program.to_account_info(),
         }
         
         let charter = &mut ctx.accounts.charter;
+        charter.is_initialized = true;
         charter.authority = ctx.accounts.authority.key();
         charter.expansion_rate = expansion_rate;
         charter.payment_contribution = payment_contribution;
@@ -860,6 +861,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn init_charter_treasury(ctx: Context<InitCharterTreasury>, scalar: f64) -> Result<()> {
         let treasury = &mut ctx.accounts.treasury;
+        treasury.is_initialized = true;
         treasury.charter = ctx.accounts.charter.key();
         treasury.deposit = ctx.accounts.deposit.key(); 
         treasury.mint = ctx.accounts.mint.key();
@@ -1836,7 +1838,7 @@ pub struct SetCharterTreasuryDeposit<'info> {
 #[instruction(stake_authority_bump: u8)]
 pub struct InitCashier<'info> {
     // 8 for the tag
-    // 1 for is_initalized 
+    // 1 for is_initialized 
     // 32 for charter
     // 32 for stake
     // 8 for last_withdraw_at
