@@ -1,12 +1,12 @@
 import { Command, Flags } from "@oclif/core";
 import ora from "ora";
-import { getProgram } from "../../provider";
+import { getProgram } from "../../../provider";
 
 export default class TreasuryGet extends Command {
   static description = "Returns a JSON object of the treasury";
 
   static examples = [
-    `$ strangemood treasury get 2d2t3RF8SEjDcXmfwnJSHPmj9QPAAyQBzEBEkq9GhM2o
+    `$ strangemood charter treasury get 2d2t3RF8SEjDcXmfwnJSHPmj9QPAAyQBzEBEkq9GhM2o
 `,
   ];
 

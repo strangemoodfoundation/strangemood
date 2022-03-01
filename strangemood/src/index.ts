@@ -142,14 +142,20 @@ async function asCharterTreasuryInfo(
     mint
   );
 
-  let charterTreasury = await program.account.charterTreasury.fetch(
-    charterTreasuryPublicKey
-  );
+  try {
+    let charterTreasury = await program.account.charterTreasury.fetch(
+      charterTreasuryPublicKey
+    );
 
-  return {
-    account: charterTreasury,
-    publicKey: charterTreasuryPublicKey,
-  };
+    return {
+      account: charterTreasury,
+      publicKey: charterTreasuryPublicKey,
+    };
+  } catch (err) {
+    throw new Error(
+      `Could not find charter treasury for charter '${charter.toString()}' and mint '${mint.toString()}'\n${err}`
+    );
+  }
 }
 
 async function asCashierTreasuryInfo(
@@ -276,7 +282,7 @@ async function purchaseWithoutCashier(args: {
       charterMintAuthority: charterMintAuthority,
       purchaser: args.signer,
     })
-    .instructions();
+    .instruction();
 
   instructions.push(ix);
 
@@ -375,7 +381,7 @@ async function purchaseWithCashier(args: {
       charterMintAuthority: charterMintAuthority,
       purchaser: args.signer,
     })
-    .instructions();
+    .instruction();
 
   instructions.push(ix);
 
@@ -496,7 +502,7 @@ export async function initListing(args: {
       user: args.signer,
     })
     .signers([listingMint])
-    .instructions();
+    .instruction();
 
   instructions.push(ix);
 

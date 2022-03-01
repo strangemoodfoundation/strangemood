@@ -1,5 +1,5 @@
 import { Command, Flags } from "@oclif/core";
-import { getProgram } from "../../provider";
+import { getProgram } from "../../../provider";
 import {
   Keypair,
   PublicKey,
@@ -9,16 +9,16 @@ import {
 import { initCharterTreasury, pda } from "@strangemood/strangemood";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
-import { withTokenAccount } from "../../token";
+import { withTokenAccount } from "../../../token";
 import chalk from "chalk";
 
 export default class TreasuryInit extends Command {
   static description = "Creates a new treasury for your charter";
 
   static examples = [
-    `$ strangemood treasury init --charter 7DFCSJoup2ePkNZb6Dhgpb9ABynKwVXDQAS3o5s7o9Ev --mint So11111111111111111111111111111111111111112
+    `$ strangemood charter treasury init --charter 7DFCSJoup2ePkNZb6Dhgpb9ABynKwVXDQAS3o5s7o9Ev --mint So11111111111111111111111111111111111111112
 `,
-    `$ strangemood treasury init --charter 7DFCSJoup2ePkNZb6Dhgpb9ABynKwVXDQAS3o5s7o9Ev --mint So11111111111111111111111111111111111111112 --scale 0.8
+    `$ strangemood charter treasury init --charter 7DFCSJoup2ePkNZb6Dhgpb9ABynKwVXDQAS3o5s7o9Ev --mint So11111111111111111111111111111111111111112 --scale 0.8
 `,
   ];
 
