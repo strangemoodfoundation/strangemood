@@ -760,28 +760,7 @@
   dependencies:
     "@octokit/openapi-types" "^11.2.0"
 
-"@project-serum/anchor@0.21.0":
-  version "0.21.0"
-  resolved "https://registry.yarnpkg.com/@project-serum/anchor/-/anchor-0.21.0.tgz#ad5fb33744991ec1900cdb2fd22707c908b12b5f"
-  integrity sha512-flRuW/F+iC8mitNokx82LOXyND7Dyk6n5UUPJpQv/+NfySFrNFlzuQZaBZJ4CG5g9s8HS/uaaIz1nVkDR8V/QA==
-  dependencies:
-    "@project-serum/borsh" "^0.2.4"
-    "@solana/web3.js" "^1.17.0"
-    base64-js "^1.5.1"
-    bn.js "^5.1.2"
-    bs58 "^4.0.1"
-    buffer-layout "^1.2.2"
-    camelcase "^5.3.1"
-    cross-fetch "^3.1.5"
-    crypto-hash "^1.3.0"
-    eventemitter3 "^4.0.7"
-    find "^0.3.0"
-    js-sha256 "^0.9.0"
-    pako "^2.0.3"
-    snake-case "^3.0.4"
-    toml "^3.0.0"
-
-"@project-serum/anchor@^0.22.0":
+"@project-serum/anchor@0.22.0", "@project-serum/anchor@^0.22.0":
   version "0.22.0"
   resolved "https://registry.yarnpkg.com/@project-serum/anchor/-/anchor-0.22.0.tgz#79d182851346fb46d471577c63eabdf6f199c03e"
   integrity sha512-EJOE790pAQjm07loh7/JYzfcgfYv3SChBb2b9lhVdjjiimSEQrf3ESy+CGMAqcFAsyr699Ewj5k7RizY1y31cg==
@@ -801,14 +780,6 @@
     pako "^2.0.3"
     snake-case "^3.0.4"
     toml "^3.0.0"
-
-"@project-serum/borsh@^0.2.4":
-  version "0.2.4"
-  resolved "https://registry.yarnpkg.com/@project-serum/borsh/-/borsh-0.2.4.tgz#8884c3a759984a39d54bf5b7390bd1ee0b579f16"
-  integrity sha512-tQPc1ktAp1Jtn9D72DmObAfhAic9ivfYBOS5b+T4H7MvkQ84uML88LY1LfvGep30mCy+ua5rf+X9ocPfg6u9MA==
-  dependencies:
-    bn.js "^5.1.2"
-    buffer-layout "^1.2.0"
 
 "@project-serum/borsh@^0.2.5":
   version "0.2.5"
@@ -950,12 +921,12 @@
     superstruct "^0.14.2"
     tweetnacl "^1.0.0"
 
-"@strangemood/strangemood@^0.0.0-76":
-  version "0.0.0-76"
-  resolved "https://registry.yarnpkg.com/@strangemood/strangemood/-/strangemood-0.0.0-76.tgz#30b31c0e6eeedca93e67c8abf510d5193c6d468a"
-  integrity sha512-j3IW4sKcdsnVQ9wVg/70A7p1r6tWMdmrTOXL3sE+GAD4AFDWWh/lalZBhyfvni8D+prDPe3xzGRbhB8UD6Ys4w==
+"@strangemood/strangemood@^0.0.0-77":
+  version "0.0.0-77"
+  resolved "https://registry.yarnpkg.com/@strangemood/strangemood/-/strangemood-0.0.0-77.tgz#56863925cd66c368f207d9a25f89bd07bb9f94f3"
+  integrity sha512-tkLRwIoXZK74fWX86bx3d5tRpSkv4tFWRoOYmkSVraeIOzvYAJ8VzL/hPobjleh/n/nz1/R8F6LpC2vSp7Xt6Q==
   dependencies:
-    "@project-serum/anchor" "0.21.0"
+    "@project-serum/anchor" "0.22.0"
     "@solana/buffer-layout" "^4.0.0"
     "@solana/spl-token" "0.2.0-alpha.2"
     borsh "^0.7.0"
