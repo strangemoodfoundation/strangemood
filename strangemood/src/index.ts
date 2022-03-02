@@ -4,22 +4,16 @@ export { Strangemood } from "../target/types/strangemood";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
-  createSyncNativeInstruction,
   getAssociatedTokenAddress,
-  NATIVE_MINT,
-  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { Strangemood } from "../target/types/strangemood";
 import { pda as _pda } from "./pda";
 import * as constants from "./constants";
-import { v4 } from "uuid";
 const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY, Keypair, SYSVAR_CLOCK_PUBKEY } =
   web3;
 import { Buffer } from "buffer";
 import * as splToken from "@solana/spl-token";
-import { idlAddress } from "@project-serum/anchor/dist/cjs/idl";
-import { program } from "@project-serum/anchor/dist/cjs/spl/token";
 
 export const pda = _pda;
 
@@ -32,9 +26,8 @@ export async function fetchStrangemoodProgram(
 ) {
   const idl = await anchor.Program.fetchIdl<Strangemood>(programId, provider);
   if (!idl) {
-    const address = await idlAddress(programId);
     throw new Error(
-      `Failed to fetch Strangemood program '${programId.toString()}' at anchor IDL '${address.toString()}'.`
+      `Failed to fetch anchor IDL for Strangemood program '${programId.toString()}'.`
     );
   }
 
