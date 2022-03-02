@@ -74,6 +74,9 @@
       },
       "treasury": {
         "description": "Create and manage currency support"
+      },
+      "file": {
+        "description": "Upload and download listing related files"
       }
     }
   },

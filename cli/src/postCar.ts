@@ -17,7 +17,7 @@ const checkStatus = response => {
    }
 }
 
-export async function postCar(bytes: Uint8Array) {
+export async function postCar(bytes: Uint8Array): Promise<any> {
    var retryCount = 0;
    while (retryCount < 3) {
       try {
