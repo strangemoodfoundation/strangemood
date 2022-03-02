@@ -5,7 +5,6 @@ import { homedir } from "os";
 import { join } from "path";
 import { fetchStrangemoodProgram, Strangemood } from "@strangemood/strangemood";
 import { Program } from "@project-serum/anchor";
-import * as http from "http";
 
 export async function getKeypair(filepath?: string) {
   let completepath =

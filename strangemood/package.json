@@ -1,6 +1,6 @@
 {
   "name": "@strangemood/strangemood",
-  "version": "0.0.0-79",
+  "version": "0.0.0-84",
   "module": "./dist/esm/src/index.js",
   "main": "./dist/cjs/src/index.js",
   "browser": "./dist/browser/index.js",
@@ -39,6 +39,6 @@
     "build": "rimraf dist/ && yarn build:node && yarn build:browser",
     "build:node": "tsc && tsc -p tsconfig.cjs.json",
     "build:browser": "rollup --config",
-    "prepublishOnly": "yarn build"
+    "prepublishOnly": "anchor build && yarn build"
   }
 }
