@@ -70,7 +70,6 @@ export default class Purchase extends Command {
       quantity: new anchor.BN(flags.quantity),
     });
     instructions.push(...asPurchase.instructions);
-    signers.push(...asPurchase.signers);
 
     let tx = new Transaction();
     tx.add(...instructions);
@@ -78,7 +77,5 @@ export default class Purchase extends Command {
     spinner.text = "Sending transaction...";
     await program.provider.send(tx, signers);
     spinner.stop();
-
-    console.log(asPurchase.receipt.toString());
   }
 }

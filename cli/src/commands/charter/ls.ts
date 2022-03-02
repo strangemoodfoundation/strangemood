@@ -3,12 +3,13 @@ import { PublicKey } from "@solana/web3.js";
 import ora from "ora";
 import { getProgram } from "../../provider";
 
-export default class ListingLS extends Command {
-  static description = "Returns listings you've created";
+export default class CharterLS extends Command {
+  static description = "Returns charters by their authority";
 
   static examples = [
-    `$ strangemood listing ls
+    `$ strangemood charter ls
 `,
+    `$ strangemood charter ls --cluster=mainnet-beta`,
   ];
 
   static flags = {
@@ -23,7 +24,7 @@ export default class ListingLS extends Command {
   static args = [];
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(ListingLS);
+    const { args, flags } = await this.parse(CharterLS);
     const spinner = ora("Connecting").start();
 
     spinner.text = "Fetching Program";
@@ -33,11 +34,11 @@ export default class ListingLS extends Command {
 
     let authority: PublicKey = program.provider.wallet.publicKey;
 
-    spinner.text = "Fetching Listing from " + authority.toString();
-    const listing = await program.account.listing.all([
+    spinner.text = "Fetching Charter from " + authority.toString();
+    const listing = await program.account.charter.all([
       {
         memcmp: {
-          offset: 8 + 1 + 1 + 1 + 32, // after tag + bool, bool, bool, pubkey
+          offset: 8 + 1 + 8 + 8 + 8, // after tag + bool, f64, f64, f64
           bytes: authority.toBase58(),
         },
       },

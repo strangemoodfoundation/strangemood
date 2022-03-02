@@ -5,7 +5,6 @@ import { FsBlockStore } from 'ipfs-car/blockstore/fs'
 import { TreewalkCarSplitter } from 'carbites/treewalk';
 import { CarIndexedReader } from '@ipld/car'
 import { postCar } from '../../postCar';
-import { execSync } from "child_process";
 import { sep } from 'path';
 import { tmpdir } from 'os';
 import { mkdtemp, existsSync } from 'fs';
@@ -24,9 +23,7 @@ async function make_temp_dir(): Promise<string> {
 export default class FileUpload extends Command {
   static description = "Upload game file to IPFS";
 
-  static examples = [
-    `$ strangemood file upload ./input.zip`,
-  ];
+  static examples = [`$ strangemood file upload ./input.zip`];
 
   static flags = {
     encrypt: Flags.boolean({
@@ -76,8 +73,8 @@ export default class FileUpload extends Command {
       spinner.text = "Uploading CAR in chunks...";
       const reader = await CarIndexedReader.fromFile(outputPath);
       const [rootCid] = await reader.getRoots();
-      // const targetSize = 100000000; // chunk to ~100MB CARs
-      const targetSize = 10000000;
+      const targetSize = 100000000; // chunk to ~100MB CARs
+      // const targetSize = 10000000;
       const num_cars = Math.ceil(fileSizeInBytes / targetSize);
       const splitter = new TreewalkCarSplitter(reader, targetSize);
 

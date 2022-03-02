@@ -2,11 +2,20 @@ import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import { getMinimumBalanceForRentExemptMint } from "@solana/spl-token";
-import { LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  SystemProgram,
+} from "@solana/web3.js";
 import { create } from "domain";
 
-export async function withMint(program: Program<any>, decimals = 9) {
-  let keypair = anchor.web3.Keypair.generate();
+export async function withMint(
+  program: Program<any>,
+  decimals: number,
+  vanityKeypair?: Keypair
+) {
+  let keypair = vanityKeypair || anchor.web3.Keypair.generate();
 
   let create_ix = SystemProgram.createAccount({
     fromPubkey: program.provider.wallet.publicKey,
@@ -34,7 +43,7 @@ export async function withMintTo(
   program: Program<any>,
   mint: PublicKey,
   to: PublicKey,
-  amount: number
+  amount: bigint
 ) {
   let ix = splToken.createMintToInstruction(
     mint,

@@ -4,22 +4,16 @@ export { Strangemood } from "../target/types/strangemood";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
-  createSyncNativeInstruction,
   getAssociatedTokenAddress,
-  NATIVE_MINT,
-  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { Strangemood } from "../target/types/strangemood";
 import { pda as _pda } from "./pda";
 import * as constants from "./constants";
-import { v4 } from "uuid";
 const { web3 } = anchor;
 const { SystemProgram, SYSVAR_RENT_PUBKEY, Keypair, SYSVAR_CLOCK_PUBKEY } =
   web3;
 import { Buffer } from "buffer";
 import * as splToken from "@solana/spl-token";
-import { idlAddress } from "@project-serum/anchor/dist/cjs/idl";
-import { program } from "@project-serum/anchor/dist/cjs/spl/token";
 
 export const pda = _pda;
 
@@ -32,9 +26,8 @@ export async function fetchStrangemoodProgram(
 ) {
   const idl = await anchor.Program.fetchIdl<Strangemood>(programId, provider);
   if (!idl) {
-    const address = await idlAddress(programId);
     throw new Error(
-      `Failed to fetch Strangemood program '${programId.toString()}' at anchor IDL $'{address.toString()}'.`
+      `Failed to fetch anchor IDL for Strangemood program '${programId.toString()}'.`
     );
   }
 
@@ -142,14 +135,20 @@ async function asCharterTreasuryInfo(
     mint
   );
 
-  let charterTreasury = await program.account.charterTreasury.fetch(
-    charterTreasuryPublicKey
-  );
+  try {
+    let charterTreasury = await program.account.charterTreasury.fetch(
+      charterTreasuryPublicKey
+    );
 
-  return {
-    account: charterTreasury,
-    publicKey: charterTreasuryPublicKey,
-  };
+    return {
+      account: charterTreasury,
+      publicKey: charterTreasuryPublicKey,
+    };
+  } catch (err) {
+    throw new Error(
+      `Could not find charter treasury for charter '${charter.toString()}' and mint '${mint.toString()}'\n${err}`
+    );
+  }
 }
 
 async function asCashierTreasuryInfo(
@@ -276,7 +275,7 @@ async function purchaseWithoutCashier(args: {
       charterMintAuthority: charterMintAuthority,
       purchaser: args.signer,
     })
-    .instructions();
+    .instruction();
 
   instructions.push(ix);
 
@@ -375,7 +374,7 @@ async function purchaseWithCashier(args: {
       charterMintAuthority: charterMintAuthority,
       purchaser: args.signer,
     })
-    .instructions();
+    .instruction();
 
   instructions.push(ix);
 
@@ -496,14 +495,14 @@ export async function initListing(args: {
       user: args.signer,
     })
     .signers([listingMint])
-    .instructions();
+    .instruction();
 
   instructions.push(ix);
 
   return {
     instructions,
     signers: [listingMint],
-    publicKey: listing_pda,
+    listing: listing_pda,
   };
 }
 
@@ -545,6 +544,7 @@ export async function initCharter(args: {
 
   return {
     instructions,
+    charter: charter_pda,
   };
 }
 
@@ -670,5 +670,6 @@ export async function initCharterTreasury(args: {
 
   return {
     instructions,
+    treasury: treasury_pda,
   };
 }
