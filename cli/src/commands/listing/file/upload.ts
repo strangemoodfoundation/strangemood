@@ -4,16 +4,17 @@ import { packToFs } from 'ipfs-car/pack/fs';
 import { FsBlockStore } from 'ipfs-car/blockstore/fs'
 import { TreewalkCarSplitter } from 'carbites/treewalk';
 import { CarIndexedReader } from '@ipld/car'
-import { postCar } from '../../postCar';
+import { postCar } from '../../../postCar';
 import { sep } from 'path';
 import { tmpdir } from 'os';
-import { mkdtemp, existsSync } from 'fs';
+import { mkdtemp } from 'fs';
 import fs from 'fs'
 import { execSync } from "child_process";
+import { getProgram } from "../../../provider";
 import fetch from 'node-fetch';
 import path from 'path';
 
-const PRECRYPT_ENDPOINT = "https://precrypt.org";
+const PRECRYPT_ENDPOINT = "https://api.precrypt.org";
 
 async function make_temp_dir(): Promise<string> {
   const tmpDir = tmpdir();
@@ -25,47 +26,52 @@ async function make_temp_dir(): Promise<string> {
   });
 }
 
-export default class FileUpload extends Command {
-  static description = "Upload game file to IPFS";
+export default class UploadFile extends Command {
+  static description = "Upload associated files to IPFS with optional encryption";
 
-  static examples = [`$ strangemood file upload ./input.zip`];
+  static examples = [`$ strangemood file upload A4dWhvxzht9m2LH2QLECDWd7XMdC8mp5Qo52v1AKDusN ./input.zip`];
 
   static flags = {
-    encryptWithMint: Flags.string({
+    cluster: Flags.string({
+      description: "The Solana cluster to hit",
+      required: true,
+      options: ["mainnet-beta", "testnet"],
+      default: "testnet",
+    }),
+    encrypt: Flags.boolean({
       char: 'e',
-      description: "Encrypt the file before uploading to IPFS. Pass the mint address of the SPL token that must be owned to access the file. (example: moodn6VC7wWoFEmx5xGRkFJTNqXdiWBE2c9a3JhEC5p)",
+      description: "Encrypt the file before uploading to IPFS using precrypt. Users will only be able to decrypt the file if they purchase the listing.",
       required: false,
-      summary: "--encryptWithMint=moodn6VC7wWoFEmx5xGRkFJTNqXdiWBE2c9a3JhEC5p"
     })
   };
 
   static args = [
     {
-      name: "input",
-      description: "Path to the file to be uploaded",
+      name: "listing",
+      description: "The public key of the listing",
       required: true,
     },
     {
-      name: "mint",
-      description: "Required if encrypt flag is present. The mint address of the SPL token the user must own in order to access the file. (example: moodn6VC7wWoFEmx5xGRkFJTNqXdiWBE2c9a3JhEC5p)",
-      required: false,
+      name: "path",
+      description: "Path to the file to be uploaded",
+      required: true,
     },
   ];
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(FileUpload);
+    const { args, flags } = await this.parse(UploadFile);
     const spinner = ora("Connecting").start();
     const temp_dir = await make_temp_dir();
 
     try {
-      var inputPath = args["input"];
+      var inputPath = args["path"];
       const extension = path.extname(inputPath).replace(".", "");
       const outputPath = `${temp_dir}/output.car`;
       const fileKeyPath = `${temp_dir}/file.json`;
       const cipherPath = `${temp_dir}/cipher.bin`;
       const recryptKeyPath = `${temp_dir}/recrypt.json`;
 
-      if (flags.encryptWithMint) {
+      if (flags.encrypt) {
         spinner.text = "Encrypting file with precrypt...";
         try {
           execSync(`precrypt keygen ${fileKeyPath}`);
@@ -83,11 +89,9 @@ export default class FileUpload extends Command {
       var stats = fs.statSync(outputPath)
       var fileSizeInBytes = stats.size;
 
-      spinner.text = "Uploading CAR in chunks...";
       const reader = await CarIndexedReader.fromFile(outputPath);
       const [rootCid] = await reader.getRoots();
       const targetSize = 100000000; // chunk to ~100MB CARs
-      // const targetSize = 10000000;
       const num_cars = Math.ceil(fileSizeInBytes / targetSize);
       const splitter = new TreewalkCarSplitter(reader, targetSize);
 
@@ -117,12 +121,19 @@ export default class FileUpload extends Command {
         }
       });
 
-      if (flags.encryptWithMint) {
+      if (flags.encrypt) {
+        const spinner = ora("Connecting").start();
+
+        spinner.text = "Fetching listing mint";
+        const program = await getProgram({
+          net: flags.cluster as any,
+        });
+        const listing = await program.account.listing.fetch(args["listing"]);
         spinner.text = `Uploading recryption key to precrypt node...`;
         const recryptionKeys = JSON.parse(fs.readFileSync(recryptKeyPath).toString());
         const body = {
           "recryption_keys": recryptionKeys,
-          "mint": flags.encryptWithMint,
+          "mint": listing.mint.toString(),
           "file_cid": root.toString(),
           "file_extension": extension
         };

@@ -891,8 +891,10 @@
     superstruct "^0.14.2"
     tweetnacl "^1.0.0"
 
-"@strangemood/strangemood@file:../strangemood":
+"@strangemood/strangemood@0.0.85":
   version "0.0.0-84"
+  resolved "https://registry.yarnpkg.com/@strangemood/strangemood/-/strangemood-0.0.0-84.tgz#44d0376b8d4ea8de5c87f71c1da62ea873643bd7"
+  integrity sha512-pPSeHJ4bAadz5mIiKaJfVALplPc++62AjD8ISi5W1h09qhLmkTxLRHa3VfzDefgx6UOal4otuF1/5JSjDJPmZg==
   dependencies:
     "@project-serum/anchor" "0.22.0"
     "@solana/buffer-layout" "^4.0.0"
