@@ -64,13 +64,12 @@ export default class Purchase extends Command {
       quantity: new anchor.BN(flags.quantity),
     });
     instructions.push(...asPurchase.instructions);
-    console.log(asPurchase.instructions);
 
-    // let tx = new Transaction();
-    // tx.add(...instructions);
+    let tx = new Transaction();
+    tx.add(...instructions);
 
-    // spinner.text = "Sending transaction...";
-    // await program.provider.send(tx, signers);
+    spinner.text = "Sending transaction...";
+    await program.provider.send(tx, signers);
     spinner.stop();
   }
 }
