@@ -197,7 +197,7 @@ async function maybeFundWrappedSolAccount({
   signer: PublicKey;
 }) {
   let instructions = [];
-  if (deposit.mint === splToken.NATIVE_MINT) {
+  if (deposit.mint.toString() === splToken.NATIVE_MINT.toString()) {
     let total = listingInfo.account.price.mul(quantity);
 
     // Create the payment account if it doesn't exist
@@ -291,6 +291,7 @@ async function purchaseWithoutCashier(args: {
     signer: args.signer,
     quantity: args.quantity,
   });
+
   instructions.push(...maybeFundWrappedSolInstructions);
 
   // Setup PDAs
