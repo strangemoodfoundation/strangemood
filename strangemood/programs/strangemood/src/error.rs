@@ -73,4 +73,6 @@ pub enum StrangemoodError {
     // The cashier's split must be 1.0 to 0.0.
     #[msg("Invalid Cashier Split")]
     CashierSplitIsInvalid,
+
+    ListingIsSuspended,
 }

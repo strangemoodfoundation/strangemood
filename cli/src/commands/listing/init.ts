@@ -74,6 +74,13 @@ export default class ListingInit extends Command {
       description: "The metadata associated with the listing",
       required: true,
     }),
+
+    cashierSplit: Flags.string({
+      description:
+        "The % of each transaction that is contributed to the cashier. A number from 0.0 to 1.0",
+      required: false,
+      default: "0.1",
+    }),
   };
 
   static args = [];
@@ -94,6 +101,13 @@ export default class ListingInit extends Command {
     const currency = new PublicKey(flags.currency);
     const charter = new PublicKey(flags.charter);
 
+    if (
+      parseFloat(flags.cashierSplit) >= 1.0 ||
+      parseFloat(flags.cashierSplit) < 0.0
+    ) {
+      throw new Error("cashierSplit must be between 0.0 and 1.0");
+    }
+
     const asInitListing = await initListing({
       program,
       signer: program.provider.wallet.publicKey,
@@ -105,6 +119,7 @@ export default class ListingInit extends Command {
       currency,
       charter,
       uri: flags.uri.toString(),
+      cashierSplit: parseFloat(flags.cashierSplit),
     });
 
     instructions.push(...asInitListing.instructions);
@@ -117,6 +132,6 @@ export default class ListingInit extends Command {
     await program.provider.send(tx, signers);
     spinner.stop();
 
-    console.log(asInitListing.publicKey.toString());
+    console.log(asInitListing.listing.toString());
   }
 }

@@ -1,11 +1,6 @@
 import { Command, Flags } from "@oclif/core";
 import { getProgram } from "../../provider";
-import {
-  Keypair,
-  PublicKey,
-  Transaction,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { purchase } from "@strangemood/strangemood";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
@@ -64,13 +59,11 @@ export default class Purchase extends Command {
     spinner.text = "Purchase";
     const asPurchase = await purchase({
       program,
-      cashier: program.provider.wallet.publicKey,
       signer: program.provider.wallet.publicKey,
       listing: listing,
       quantity: new anchor.BN(flags.quantity),
     });
     instructions.push(...asPurchase.instructions);
-    signers.push(...asPurchase.signers);
 
     let tx = new Transaction();
     tx.add(...instructions);
@@ -78,7 +71,5 @@ export default class Purchase extends Command {
     spinner.text = "Sending transaction...";
     await program.provider.send(tx, signers);
     spinner.stop();
-
-    console.log(asPurchase.receipt.toString());
   }
 }

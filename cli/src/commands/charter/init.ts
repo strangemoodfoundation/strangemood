@@ -8,7 +8,6 @@ import {
   withSetMintAuthority,
   withTokenAccount,
 } from "../../token";
-import * as splToken from "@solana/spl-token";
 import {
   Keypair,
   PublicKey,
@@ -18,12 +17,13 @@ import {
 import { initCharter, pda } from "@strangemood/strangemood";
 import * as anchor from "@project-serum/anchor";
 import ora from "ora";
+import fs from "fs/promises";
 
 export default class CharterInit extends Command {
   static description = "Creates a new charter";
 
   static examples = [
-    `$ strangemood charter init --uri https://strangemood.org --expansion 30 --paymentSplit 0.02 --expansionSplit 0.3
+    `$ strangemood charter init --uri https://charter.strangemood.org --expansion 150 --paymentSplit 0.01 --expansionSplit 0.3
 `,
   ];
 
@@ -43,7 +43,7 @@ export default class CharterInit extends Command {
     supply: Flags.integer({
       description: "An initial supply of tokens to mint to yourself",
       required: false,
-      default: 100000,
+      default: 1000000,
     }),
 
     uri: Flags.url({
@@ -66,6 +66,24 @@ export default class CharterInit extends Command {
       description:
         "The % of vote token expansion that is contribution to the governance",
       required: true,
+    }),
+
+    withdrawPeriod: Flags.integer({
+      description: "The number of epochs a cashier withdraw period lasts",
+      required: false,
+      default: 1,
+    }),
+
+    stakeWithdrawAmount: Flags.integer({
+      description:
+        "The amount of cashier stake that can be withdrawn per withdraw period",
+      required: false,
+      default: 500,
+    }),
+
+    mintKeypair: Flags.string({
+      description: "The vanity keypair to use for the new mint",
+      required: false,
     }),
   };
 
@@ -107,59 +125,79 @@ export default class CharterInit extends Command {
     // Use the mint passed in, or create a new mint
     let mint: PublicKey;
     if (flags.mint) {
+      if (flags.mintKeypair) {
+        throw new Error("Mint and mintKeypair cannot both be specified");
+      }
+
       mint = new PublicKey(flags.mint as any);
     } else {
+      const decimals = 9;
+
       spinner.text = "InitMint";
-      let { ixs, keypair } = await withMint(program);
+      let mintKeypair = Keypair.generate();
+      if (flags.mintKeypair) {
+        let keypairFile = JSON.parse(
+          await fs.readFile(flags.mintKeypair as any, "utf8")
+        ) as number[];
+        mintKeypair = Keypair.fromSecretKey(Uint8Array.from(keypairFile));
+      }
+
+      let { ixs, keypair } = await withMint(program, decimals, mintKeypair);
       instructions.push(...ixs);
       signers.push(keypair);
       mint = keypair.publicKey;
-    }
 
-    // If requested, mint an initial supply of tokens to yourself
-    if (flags.supply) {
-      spinner.text = "InitAssociatedTokenAccount";
-      const asWithAssAcc = await withAssociatedTokenAccount(
-        program,
-        mint,
-        program.provider.wallet.publicKey
-      );
-      instructions.push(asWithAssAcc.ix);
+      // If requested, mint an initial supply of tokens to yourself
+      if (flags.supply) {
+        spinner.text = "InitAssociatedTokenAccount";
+        const asWithAssAcc = await withAssociatedTokenAccount(
+          program,
+          mint,
+          program.provider.wallet.publicKey
+        );
+        instructions.push(asWithAssAcc.ix);
 
-      spinner.text = "MintTo";
-      let { ix } = await withMintTo(
-        program,
-        mint,
-        asWithAssAcc.address,
-        flags.supply
-      );
-      instructions.push(ix);
+        spinner.text = "MintTo";
+        let toPower = BigInt(10) ** BigInt(decimals);
+        let { ix } = await withMintTo(
+          program,
+          mint,
+          asWithAssAcc.address,
+          BigInt(flags.supply) * toPower
+        );
+        instructions.push(ix);
+      }
     }
 
     // Create a deposit for votes to go to
     spinner.text = "InitTokenAccount";
-    const asVoteDeposit = await withTokenAccount(program, mint);
-    instructions.push(...asVoteDeposit.ixs);
-    signers.push(asVoteDeposit.keypair);
+    const asReserve = await withTokenAccount(program, mint);
+    instructions.push(...asReserve.ixs);
+    signers.push(asReserve.keypair);
 
     // Create the charter
     spinner.text = "InitCharter";
     const asInitCharter = await initCharter({
       program: program,
       authority: program.provider.wallet.publicKey,
-      voteDeposit: asVoteDeposit.keypair.publicKey,
+      reserve: asReserve.keypair.publicKey,
       mint: mint,
       signer: program.provider.wallet.publicKey,
       uri: flags.uri.toString(),
       expansion,
       paymentContribution,
       voteContribution,
+      withdrawPeriod: new anchor.BN(flags.withdrawPeriod),
+      stakeWithdrawAmount: new anchor.BN(flags.stakeWithdrawAmount),
     });
     instructions.push(...asInitCharter.instructions);
 
     // Move the mint authority to a PDA of the program.
     spinner.text = "SetMintAuthority";
-    const [mintAuthority, _] = await pda.mint(program.programId, mint);
+    const [mintAuthority, _] = await pda.mint_authority(
+      program.programId,
+      mint
+    );
     const asSetMintAuthority = await withSetMintAuthority(
       program,
       mint,

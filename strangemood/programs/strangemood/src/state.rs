@@ -84,8 +84,11 @@ pub struct Listing {
     /// Contracts should not trust listings that aren't initialized
     pub is_initialized: bool,
 
-    // If "false", this listing cannot be bought.
+    // If "false", this listing cannot be bought. Set by the lister.
     pub is_available: bool,
+
+    // If "true", this listing cannot be bought. Set by the charter authority.
+    pub is_suspended: bool,
 
     // The charter that this listing is associated with
     pub charter: Pubkey,

@@ -4,15 +4,10 @@ import * as splToken from "@solana/spl-token";
 import * as anchor from "@project-serum/anchor";
 import { Program, splitArgsAndCtx } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
-import { cash, makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
 import { MAINNET } from "../constants";
-import {
-  initCharter,
-  createCharterTreasury,
-  initCashier,
-} from "./instructions";
+import { initCashier } from "./instructions";
 import {
   AuthorityType,
   createMintToInstruction,

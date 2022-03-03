@@ -3,7 +3,6 @@ import * as splToken from "@solana/spl-token";
 import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
-import { makeReceiptNonce } from "..";
 import { createMint, createTokenAccount } from "./utils";
 import { pda } from "../pda";
 import {
@@ -18,11 +17,6 @@ import {
 
 const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY, Transaction } =
   anchor.web3;
-
-describe("no nonce buffer bug", () => {
-  const nonce = makeReceiptNonce();
-  nonce.toBuffer();
-});
 
 describe("Strangemood", () => {
   const provider = anchor.Provider.env();

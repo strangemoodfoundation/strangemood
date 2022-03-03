@@ -1,25 +1,17 @@
 import * as anchor from "@project-serum/anchor";
-import { Program } from "@project-serum/anchor";
-export { Strangemood } from "../target/types/strangemood";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { PublicKey, AccountInfo as SolanaAccountInfo } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
-  createSyncNativeInstruction,
   getAssociatedTokenAddress,
-  NATIVE_MINT,
-  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { Strangemood } from "../target/types/strangemood";
+import { Strangemood } from "./idl";
+export { Strangemood } from "./idl";
 import { pda as _pda } from "./pda";
 import * as constants from "./constants";
-import { v4 } from "uuid";
 const { web3 } = anchor;
-const { SystemProgram, SYSVAR_RENT_PUBKEY, Keypair, SYSVAR_CLOCK_PUBKEY } =
-  web3;
+const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY } = web3;
 import { Buffer } from "buffer";
 import * as splToken from "@solana/spl-token";
-import { idlAddress } from "@project-serum/anchor/dist/cjs/idl";
-import { program } from "@project-serum/anchor/dist/cjs/spl/token";
 
 export const pda = _pda;
 
@@ -29,12 +21,11 @@ export const TESTNET = constants.TESTNET;
 export async function fetchStrangemoodProgram(
   provider: anchor.Provider,
   programId = MAINNET.strangemood_program_id
-) {
+): Promise<anchor.Program<Strangemood>> {
   const idl = await anchor.Program.fetchIdl<Strangemood>(programId, provider);
   if (!idl) {
-    const address = await idlAddress(programId);
     throw new Error(
-      `Failed to fetch Strangemood program '${programId.toString()}' at anchor IDL $'{address.toString()}'.`
+      `Failed to fetch anchor IDL for Strangemood program '${programId.toString()}'.`
     );
   }
 
@@ -42,27 +33,27 @@ export async function fetchStrangemoodProgram(
 }
 
 export type Listing = Awaited<
-  ReturnType<Program<Strangemood>["account"]["listing"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["listing"]["fetch"]>
 >;
 
 export type Charter = Awaited<
-  ReturnType<Program<Strangemood>["account"]["charter"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["charter"]["fetch"]>
 >;
 
 export type Cashier = Awaited<
-  ReturnType<Program<Strangemood>["account"]["cashier"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["cashier"]["fetch"]>
 >;
 
 export type Receipt = Awaited<
-  ReturnType<Program<Strangemood>["account"]["receipt"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["receipt"]["fetch"]>
 >;
 
 export type CharterTreasury = Awaited<
-  ReturnType<Program<Strangemood>["account"]["charterTreasury"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["charterTreasury"]["fetch"]>
 >;
 
 export type CashierTreasury = Awaited<
-  ReturnType<Program<Strangemood>["account"]["cashierTreasury"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["cashierTreasury"]["fetch"]>
 >;
 
 export interface AccountInfo<Acc> {
@@ -79,21 +70,8 @@ function isAccountInfo<T>(
   );
 }
 
-async function asReceiptInfo(
-  program: Program<Strangemood>,
-  arg: AccountInfo<Receipt> | PublicKey
-): Promise<AccountInfo<Receipt>> {
-  if (isAccountInfo(arg)) {
-    return arg;
-  }
-  return {
-    account: await program.account.receipt.fetch(arg),
-    publicKey: arg,
-  };
-}
-
 async function asListingInfo(
-  program: Program<Strangemood>,
+  program: any,
   arg: AccountInfo<Receipt> | PublicKey
 ): Promise<AccountInfo<Receipt>> {
   if (isAccountInfo(arg)) {
@@ -106,7 +84,7 @@ async function asListingInfo(
 }
 
 async function asCashierInfo(
-  program: Program<Strangemood>,
+  program: any,
   arg: AccountInfo<Cashier> | PublicKey
 ): Promise<AccountInfo<Cashier>> {
   if (isAccountInfo(arg)) {
@@ -119,7 +97,7 @@ async function asCashierInfo(
 }
 
 async function asCharterInfo(
-  program: Program<Strangemood>,
+  program: any,
   arg: AccountInfo<Charter> | PublicKey
 ): Promise<AccountInfo<Charter>> {
   if (isAccountInfo(arg)) {
@@ -132,7 +110,7 @@ async function asCharterInfo(
 }
 
 async function asCharterTreasuryInfo(
-  program: Program<Strangemood>,
+  program: any,
   charter: PublicKey,
   mint: PublicKey
 ): Promise<AccountInfo<CharterTreasury>> {
@@ -142,18 +120,24 @@ async function asCharterTreasuryInfo(
     mint
   );
 
-  let charterTreasury = await program.account.charterTreasury.fetch(
-    charterTreasuryPublicKey
-  );
+  try {
+    let charterTreasury = await program.account.charterTreasury.fetch(
+      charterTreasuryPublicKey
+    );
 
-  return {
-    account: charterTreasury,
-    publicKey: charterTreasuryPublicKey,
-  };
+    return {
+      account: charterTreasury,
+      publicKey: charterTreasuryPublicKey,
+    };
+  } catch (err) {
+    throw new Error(
+      `Could not find charter treasury for charter '${charter.toString()}' and mint '${mint.toString()}'\n${err}`
+    );
+  }
 }
 
 async function asCashierTreasuryInfo(
-  program: Program<Strangemood>,
+  program: anchor.Program<Strangemood>,
   cashier: PublicKey,
   mint: PublicKey
 ): Promise<AccountInfo<CharterTreasury>> {
@@ -174,7 +158,7 @@ async function asCashierTreasuryInfo(
 }
 
 async function getOrCreateAssociatedTokenAccount(args: {
-  program: Program<Strangemood>;
+  program: any;
   mint: PublicKey;
   signer: PublicKey;
 }) {
@@ -197,8 +181,89 @@ async function getOrCreateAssociatedTokenAccount(args: {
   };
 }
 
+async function maybeFundWrappedSolAccount({
+  program,
+  deposit,
+  payment,
+  listingInfo,
+  signer,
+  quantity,
+}: {
+  program: any;
+  deposit: splToken.Account;
+  payment: PublicKey;
+  listingInfo: AccountInfo<Listing>;
+  quantity: anchor.BN;
+  signer: PublicKey;
+}) {
+  let instructions = [];
+  if (deposit.mint.toString() === splToken.NATIVE_MINT.toString()) {
+    let total = listingInfo.account.price.mul(quantity);
+
+    const signerAccount = (await program.provider.connection.getAccountInfo(
+      signer
+    )) as SolanaAccountInfo<any>;
+    if (!signerAccount) {
+      throw new Error(
+        `The signer '${signer.toString()}' account does not exist. If you think it should, consider sending SOL to the account.`
+      );
+    }
+    if (total.gt(new anchor.BN(signerAccount.lamports))) {
+      throw new Error(
+        `${signer.toString()} only has ${signerAccount.lamports.toString()}, but needs ${total.toString()} to cover the transaction`
+      );
+    }
+
+    // Create the payment account if it doesn't exist
+    if (!(await program.provider.connection.getAccountInfo(payment))) {
+      instructions.push(
+        createAssociatedTokenAccountInstruction(
+          signer,
+          payment,
+          signer,
+          deposit.mint
+        )
+      );
+
+      // And fund it with the wrapped sol from the signer
+      instructions.push(
+        SystemProgram.transfer({
+          fromPubkey: signer,
+          toPubkey: payment,
+          lamports: total.toNumber(),
+        })
+      );
+
+      instructions.push(splToken.createSyncNativeInstruction(payment));
+    } else {
+      // If they don't have enough wrapped sol, fund the account with the difference
+      const paymentAccount = await splToken.getAccount(
+        program.provider.connection,
+        payment
+      );
+      const remaining = total.sub(
+        new anchor.BN(paymentAccount.amount.toString())
+      );
+
+      // If we don't have enough funds in the wrapped SOL account, make
+      // up the difference by funding it from the signer
+      if (remaining.gt(new anchor.BN(0))) {
+        instructions.push(
+          SystemProgram.transfer({
+            fromPubkey: signer,
+            toPubkey: payment,
+            lamports: remaining.toNumber(),
+          })
+        );
+        instructions.push(splToken.createSyncNativeInstruction(payment));
+      }
+    }
+  }
+  return instructions;
+}
+
 async function purchaseWithoutCashier(args: {
-  program: Program<Strangemood>;
+  program: any;
   signer: PublicKey;
   listing: AccountInfo<Listing> | PublicKey;
   quantity: anchor.BN;
@@ -231,6 +296,17 @@ async function purchaseWithoutCashier(args: {
     listingInfo.account.paymentDeposit
   );
   let payment = await getAssociatedTokenAddress(deposit.mint, args.signer);
+
+  const maybeFundWrappedSolInstructions = await maybeFundWrappedSolAccount({
+    program: args.program,
+    deposit,
+    payment,
+    listingInfo,
+    signer: args.signer,
+    quantity: args.quantity,
+  });
+
+  instructions.push(...maybeFundWrappedSolInstructions);
 
   // Setup PDAs
   let [_, listingBump] = await pda.listing(
@@ -276,7 +352,7 @@ async function purchaseWithoutCashier(args: {
       charterMintAuthority: charterMintAuthority,
       purchaser: args.signer,
     })
-    .instructions();
+    .instruction();
 
   instructions.push(ix);
 
@@ -286,7 +362,7 @@ async function purchaseWithoutCashier(args: {
 }
 
 async function purchaseWithCashier(args: {
-  program: Program<Strangemood>;
+  program: any;
   signer: PublicKey;
   listing: AccountInfo<Listing> | PublicKey;
   quantity: anchor.BN;
@@ -321,6 +397,16 @@ async function purchaseWithCashier(args: {
     listingInfo.account.paymentDeposit
   );
   let payment = await getAssociatedTokenAddress(deposit.mint, args.signer);
+
+  const maybeFundWrappedSolInstructions = await maybeFundWrappedSolAccount({
+    program: args.program,
+    deposit,
+    payment,
+    listingInfo,
+    signer: args.signer,
+    quantity: args.quantity,
+  });
+  instructions.push(...maybeFundWrappedSolInstructions);
 
   // Setup PDAs
   let [_, listingBump] = await pda.listing(
@@ -375,7 +461,7 @@ async function purchaseWithCashier(args: {
       charterMintAuthority: charterMintAuthority,
       purchaser: args.signer,
     })
-    .instructions();
+    .instruction();
 
   instructions.push(ix);
 
@@ -385,7 +471,7 @@ async function purchaseWithCashier(args: {
 }
 
 export async function purchase(args: {
-  program: Program<Strangemood>;
+  program: any;
   signer: PublicKey;
   listing: AccountInfo<Listing> | PublicKey;
   quantity: anchor.BN;
@@ -405,7 +491,7 @@ export async function purchase(args: {
 }
 
 export async function initListing(args: {
-  program: Program<Strangemood>;
+  program: any;
   signer: PublicKey;
 
   // In lamports
@@ -496,19 +582,19 @@ export async function initListing(args: {
       user: args.signer,
     })
     .signers([listingMint])
-    .instructions();
+    .instruction();
 
   instructions.push(ix);
 
   return {
     instructions,
     signers: [listingMint],
-    publicKey: listing_pda,
+    listing: listing_pda,
   };
 }
 
 export async function initCharter(args: {
-  program: Program<Strangemood>;
+  program: any;
   authority: PublicKey;
   reserve: PublicKey;
   mint: PublicKey;
@@ -545,11 +631,12 @@ export async function initCharter(args: {
 
   return {
     instructions,
+    charter: charter_pda,
   };
 }
 
 export async function initCashier(args: {
-  program: Program<Strangemood>;
+  program: any;
   uri: string;
   charter: AccountInfo<Charter> | PublicKey;
   authority: PublicKey;
@@ -588,7 +675,7 @@ export async function initCashier(args: {
 }
 
 export async function initCashierTreasury(args: {
-  program: Program<Strangemood>;
+  program: any;
   charter: AccountInfo<Charter> | PublicKey;
   cashier: AccountInfo<Cashier> | PublicKey;
   mint: PublicKey;
@@ -639,7 +726,7 @@ export async function initCashierTreasury(args: {
 }
 
 export async function initCharterTreasury(args: {
-  program: Program<Strangemood>;
+  program: any;
   charter: AccountInfo<Charter> | PublicKey;
   mint: PublicKey;
   deposit: PublicKey;
@@ -670,5 +757,6 @@ export async function initCharterTreasury(args: {
 
   return {
     instructions,
+    treasury: treasury_pda,
   };
 }

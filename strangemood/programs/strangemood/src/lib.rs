@@ -11,40 +11,40 @@ pub mod cpi;
 
 use crate::error::StrangemoodError;
 
-declare_id!("sm2oiswDaZtMsaj1RJv4j4RycMMfyg8gtbpK2VJ1itW");
+declare_id!("sm3L2zgBxMgz34U5f2zifjMDFYEZNEc1SNC6Ur8CXWx");
 
 fn distribute_governance_tokens<'a>(
     contributed: u64, 
     scalar: f64, 
     contribution_rate: f64, 
-    token_program: AccountInfo<'a>, 
-    charter_mint: AccountInfo<'a>,
+    token_program: Program<'a, Token>, 
+    charter_mint: Account<'a, Mint>,
     charter_mint_authority: AccountInfo<'a>,
     charter_mint_authority_bump: u8,
-    listing_deposit: AccountInfo<'a>,
-    charter_deposit: AccountInfo<'a>,
+    listing_deposit: Account<'a, TokenAccount>,
+    charter_deposit: Account<'a, TokenAccount>,
 ) -> Result<()> {
     let votes = contributed as f64 * scalar;
     let deposit_rate = 1.0 - contribution_rate;
     let deposit_amount = (deposit_rate * votes as f64) as u64;
-    let contribution_amount = (votes as u64) - deposit_amount;
+    let contribution_amount = (votes as u64).checked_sub(deposit_amount).unwrap();
 
     // Mint votes to lister
     mint_to(
-        token_program.clone(),
-        charter_mint.clone(),
-       listing_deposit,
-        charter_mint_authority.clone(),
+        &token_program,
+        &charter_mint,
+       &listing_deposit,
+        &charter_mint_authority,
         charter_mint_authority_bump,
         deposit_amount,
     )?;
 
     // Mint votes to charter
     mint_to(
-        token_program,
-        charter_mint,
-        charter_deposit,
-        charter_mint_authority,
+        &token_program,
+        &charter_mint,
+        &charter_deposit,
+        &charter_mint_authority,
         charter_mint_authority_bump,
         contribution_amount,
     )?;
@@ -69,8 +69,9 @@ fn transfer_funds<'info>(
     purchaser: Signer<'info>,
 ) -> Result<Splits> {
     let deposit_rate = 1.0 - charter.payment_contribution;
-    let to_lister_amount = (deposit_rate * total as f64) as u64;
-    let to_charter_amount = total - to_lister_amount;
+    let total_as_f64 = total as f64;
+    let to_lister_amount = (deposit_rate * total_as_f64) as u64;
+    let to_charter_amount = total.checked_sub(to_lister_amount).unwrap();
 
     // Distribute payment to the charter
     token_transfer( 
@@ -111,15 +112,16 @@ fn transfer_funds_with_cashier<'info>(
     purchaser: Signer<'info>,
 ) -> Result<SplitsWithCashier> {
     let deposit_rate = 1.0 - charter.payment_contribution;
-    let deposit_amount = (deposit_rate * total as f64) as u64;
-    let to_charter_amount = total - deposit_amount;
+    let total_as_f64 = total as f64;
+    let deposit_amount = (deposit_rate * total_as_f64 as f64) as u64;
+    let to_charter_amount = total.checked_sub(deposit_amount).unwrap();
 
     // Then split the deposit pool between the lister, and the cashier.
     // (charter, (lister, cashier))
     let to_cashier_rate = listing.cashier_split;
     let to_lister_rate = 1.0 - to_cashier_rate;
     let to_lister_amount = (deposit_amount as f64 * to_lister_rate) as u64;
-    let to_cashier_amount = deposit_amount - to_lister_amount;
+    let to_cashier_amount = deposit_amount.checked_sub(to_lister_amount).unwrap();
 
     // Distribute payment to the charter
     token_transfer( 
@@ -166,15 +168,16 @@ fn transfer_funds_from_escrow_with_cashier<'info>(
     bump: u8,
 ) -> Result<SplitsWithCashier> {
     let deposit_rate = 1.0 - charter.payment_contribution;
-    let deposit_amount = (deposit_rate * total as f64) as u64;
-    let to_charter_amount = total - deposit_amount;
+    let total_as_f64 = total as f64;
+    let deposit_amount = (deposit_rate * total_as_f64 as f64) as u64;
+    let to_charter_amount = total.checked_sub(deposit_amount).unwrap();
 
     // Then split the deposit pool between the lister, and the cashier.
     // (charter, (lister, cashier))
     let to_cashier_rate = listing.cashier_split;
     let to_lister_rate = 1.0 - to_cashier_rate;
     let to_lister_amount = (deposit_amount as f64 * to_lister_rate) as u64;
-    let to_cashier_amount = deposit_amount - to_lister_amount;
+    let to_cashier_amount = deposit_amount.checked_sub(to_lister_amount).unwrap();
 
     // Distribute payment to the charter
     token_transfer_with_seed( 
@@ -225,8 +228,9 @@ fn transfer_funds_from_escrow<'info>(
     bump: u8,
 ) -> Result<Splits> {
     let deposit_rate = 1.0 - charter.payment_contribution;
-    let to_lister_amount = (deposit_rate * total as f64) as u64;
-    let to_charter_amount = total - to_lister_amount;
+    let total_as_f64 = total as f64;
+    let to_lister_amount = (deposit_rate * total_as_f64 as f64) as u64;
+    let to_charter_amount = total.checked_sub(to_lister_amount).unwrap();
 
     // Distribute payment to the charter
     token_transfer_with_seed( 
@@ -289,6 +293,7 @@ pub mod strangemood {
         listing.is_refundable = refundable;
         listing.is_consumable = consumable;
         listing.is_available = available;
+        listing.is_suspended = false;
         listing.cashier_split = cashier_split;
 
         Ok(())
@@ -306,9 +311,12 @@ pub mod strangemood {
         if !listing.is_available {
             return Err(StrangemoodError::ListingIsUnavailable.into());
         }
+        if listing.is_suspended {
+            return Err(StrangemoodError::ListingIsSuspended.into());
+        }
 
         // Distribute payment
-        let total: u64 = listing.price * amount;
+        let total: u64 = listing.price.checked_mul(amount).unwrap();
         let splits = transfer_funds(total,
             &listing,
             &charter,
@@ -325,16 +333,16 @@ pub mod strangemood {
             splits.to_charter_amount,
             charter.expansion_rate * charter_treasury.scalar,
             charter.vote_contribution,
-             ctx.accounts.token_program.to_account_info(),
-             ctx.accounts.charter_mint.to_account_info(),
+             ctx.accounts.token_program.clone(),
+             *ctx.accounts.charter_mint.clone(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
-             ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_reserve.to_account_info(),
+             *ctx.accounts.listings_vote_deposit.clone(),
+             *ctx.accounts.charter_reserve.clone(),
         )?;
 
         // Approve the delegate over the inventory 
-        let delegated_amount = ctx.accounts.inventory.amount + amount;
+        let delegated_amount = ctx.accounts.inventory.amount.checked_add(amount).unwrap();
         approve_delegate(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.inventory.to_account_info(),
@@ -345,10 +353,10 @@ pub mod strangemood {
 
         // Distribute listing token 
         mint_to_and_freeze(
-ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-    ctx.accounts.listing_mint_authority.to_account_info(),
+&ctx.accounts.token_program,
+&ctx.accounts.listing_mint,
+&ctx.accounts.inventory,
+&ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
         )?;
@@ -368,9 +376,12 @@ ctx.accounts.token_program.to_account_info(),
         if !listing.is_available {
             return Err(StrangemoodError::ListingIsUnavailable.into());
         }
+        if listing.is_suspended {
+            return Err(StrangemoodError::ListingIsSuspended.into());
+        }
 
         // Distribute payment
-        let total: u64 = listing.price * amount;
+        let total: u64 = listing.price.checked_mul(amount).unwrap();
         let splits = transfer_funds_with_cashier(total,
             &listing,
             &charter,
@@ -388,16 +399,16 @@ ctx.accounts.token_program.to_account_info(),
             splits.to_charter_amount,
             charter.expansion_rate * charter_treasury.scalar,
             charter.vote_contribution,
-             ctx.accounts.token_program.to_account_info(),
-             ctx.accounts.charter_mint.to_account_info(),
+                ctx.accounts.token_program.clone(),
+             *ctx.accounts.charter_mint.clone(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
-             ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_reserve.to_account_info(),
+             *ctx.accounts.listings_vote_deposit.clone(),
+             *ctx.accounts.charter_reserve.clone(),
         )?;
 
         // Approve the delegate over the inventory 
-        let delegated_amount = ctx.accounts.inventory.amount + amount;
+        let delegated_amount =  ctx.accounts.inventory.amount.checked_add(amount).unwrap();
         approve_delegate(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.inventory.to_account_info(),
@@ -408,10 +419,10 @@ ctx.accounts.token_program.to_account_info(),
 
         // Distribute listing token 
         mint_to_and_freeze(
-ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-    ctx.accounts.listing_mint_authority.to_account_info(),
+        &ctx.accounts.token_program,
+        &ctx.accounts.listing_mint,
+    &ctx.accounts.inventory,
+    &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount, 
         )?;
@@ -434,9 +445,12 @@ ctx.accounts.token_program.to_account_info(),
         if !listing.is_refundable {
             return Err(error!(StrangemoodError::ListingIsNotRefundable));
         }
+        if listing.is_suspended {
+            return Err(StrangemoodError::ListingIsSuspended.into());
+        }
 
         // Move funds into an escrow, rather than the lister's deposit.
-        let total = amount * listing.price;
+        let total = amount.checked_mul(listing.price).unwrap();
         token_transfer(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.payment.to_account_info(),
@@ -446,7 +460,7 @@ ctx.accounts.token_program.to_account_info(),
         )?;
 
         // Approve the delegate over the inventory 
-        let delegated_amount = ctx.accounts.inventory.amount + amount;
+        let delegated_amount = ctx.accounts.inventory.amount.checked_add(amount).unwrap();
         approve_delegate(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.inventory.to_account_info(),
@@ -457,10 +471,10 @@ ctx.accounts.token_program.to_account_info(),
 
         // Mint the token, which can be burned later upon refund.
         mint_to_and_freeze(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
         )?;
@@ -495,7 +509,7 @@ ctx.accounts.token_program.to_account_info(),
         }
 
         // Move funds into an escrow, rather than the lister's deposit.
-        let total = amount * listing.price;
+        let total = amount.checked_mul(listing.price).unwrap();
         token_transfer(
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.payment.to_account_info(),
@@ -506,10 +520,10 @@ ctx.accounts.token_program.to_account_info(),
 
         // Mint the token, which can be burned later upon refund.
         mint_to_and_freeze(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
         )?;
@@ -540,7 +554,7 @@ ctx.accounts.token_program.to_account_info(),
             return Err(error!(StrangemoodError::ReceiptHasCashier));
         }
 
-        let total: u64 = receipt.price * receipt.quantity;
+        let total: u64 = receipt.price.checked_mul(receipt.quantity).unwrap();
         let splits = transfer_funds_from_escrow(
             total, 
             &listing,
@@ -558,12 +572,12 @@ ctx.accounts.token_program.to_account_info(),
             splits.to_charter_amount,
             charter.expansion_rate * treasury.scalar,
             charter.vote_contribution,
-             ctx.accounts.token_program.to_account_info(),
-             ctx.accounts.charter_mint.to_account_info(),
+             ctx.accounts.token_program.clone(),
+             *ctx.accounts.charter_mint.clone(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
-             ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_reserve.to_account_info(),
+             *ctx.accounts.listings_vote_deposit.clone(),
+             *ctx.accounts.charter_reserve.clone(),
         )?;
 
         // Close the escrow account.
@@ -597,7 +611,7 @@ ctx.accounts.token_program.to_account_info(),
             return Err(error!(StrangemoodError::ReceiptDoesNotHaveCashier));
         }
 
-        let total: u64 = receipt.price * receipt.quantity;
+        let total: u64 = receipt.price.checked_mul(receipt.quantity).unwrap();
         let splits = transfer_funds_from_escrow_with_cashier(
             total, 
             &listing,
@@ -607,22 +621,21 @@ ctx.accounts.token_program.to_account_info(),
             *ctx.accounts.charter_treasury_deposit.clone(),
             *ctx.accounts.listings_payment_deposit.clone(),
             *ctx.accounts.cashier_treasury_escrow.clone(),
-            ctx.accounts.receipt_escrow_authority.clone(),  
+            ctx.accounts.receipt_escrow_authority.clone(),
             receipt_escrow_authority_bump
         )?;
         
-
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
             charter.expansion_rate * treasury.scalar,
             charter.vote_contribution,
-             ctx.accounts.token_program.to_account_info(),
-             ctx.accounts.charter_mint.to_account_info(),
+             ctx.accounts.token_program.clone(),
+             *ctx.accounts.charter_mint.clone(),
              ctx.accounts.charter_mint_authority.to_account_info(),
              charter_mint_authority_bump,
-             ctx.accounts.listings_vote_deposit.to_account_info(),
-             ctx.accounts.charter_reserve.to_account_info(),
+             *ctx.accounts.listings_vote_deposit.clone(),
+             *ctx.accounts.charter_reserve.clone(),
         )?;
 
         // Close the escrow account.
@@ -652,10 +665,10 @@ ctx.accounts.token_program.to_account_info(),
         let receipt = ctx.accounts.receipt.clone().into_inner();
 
         thaw_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
         )?;
 
@@ -669,10 +682,10 @@ ctx.accounts.token_program.to_account_info(),
         )?;
 
         freeze_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.listing_mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.listing_mint_authority.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
         )?;
 
@@ -719,10 +732,10 @@ ctx.accounts.token_program.to_account_info(),
         }
 
         thaw_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.mint_authority.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.mint_authority.to_account_info(),
             mint_authority_bump,
         )?;
 
@@ -736,10 +749,10 @@ ctx.accounts.token_program.to_account_info(),
         )?;
 
         freeze_account(
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.inventory.to_account_info(),
-            ctx.accounts.mint_authority.to_account_info(),
+            &ctx.accounts.token_program,
+            &ctx.accounts.mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.mint_authority.to_account_info(),
             mint_authority_bump,
         )?;
 
@@ -768,6 +781,7 @@ ctx.accounts.token_program.to_account_info(),
         }
         
         let charter = &mut ctx.accounts.charter;
+        charter.is_initialized = true;
         charter.authority = ctx.accounts.authority.key();
         charter.expansion_rate = expansion_rate;
         charter.payment_contribution = payment_contribution;
@@ -814,6 +828,7 @@ ctx.accounts.token_program.to_account_info(),
     // Migrate a listing to a different charter
     pub fn set_listing_charter(ctx: Context<SetListingCharter>) -> Result<()> {
         ctx.accounts.listing.charter = ctx.accounts.charter.key();
+        ctx.accounts.listing.vote_deposit = ctx.accounts.vote_deposit.key();
         Ok(())
     }
 
@@ -828,7 +843,7 @@ ctx.accounts.token_program.to_account_info(),
     pub fn set_charter_contribution_rate(
         ctx: Context<SetCharter>,
         payment_contribution: f64,
-        vote_contribution: f64,
+        vote_contribution: f64
     ) -> Result<()> {
         ctx.accounts.charter.payment_contribution = payment_contribution;
         ctx.accounts.charter.vote_contribution = vote_contribution;
@@ -849,6 +864,7 @@ ctx.accounts.token_program.to_account_info(),
 
     pub fn init_charter_treasury(ctx: Context<InitCharterTreasury>, scalar: f64) -> Result<()> {
         let treasury = &mut ctx.accounts.treasury;
+        treasury.is_initialized = true;
         treasury.charter = ctx.accounts.charter.key();
         treasury.deposit = ctx.accounts.deposit.key(); 
         treasury.mint = ctx.accounts.mint.key();
@@ -921,7 +937,7 @@ ctx.accounts.stake_authority.to_account_info(),
         // Calculate the amount to transfer
         let amount_per_period = stake.amount as f64 * charter_treasury.scalar;
         let amount_per_epoch = amount_per_period as f64 / charter.withdraw_period as f64;
-        let epochs_passed = clock.epoch - cashier_treasury.last_withdraw_at;
+        let epochs_passed = clock.epoch.checked_sub(cashier_treasury.last_withdraw_at).unwrap();
         let amount_to_transfer = amount_per_epoch * epochs_passed as f64;
 
         // Transfer what we can
@@ -950,7 +966,7 @@ ctx.accounts.stake_authority.to_account_info(),
         // Calculate the amount to transfer
         let amount_per_period = charter.stake_withdraw_amount;
         let amount_per_epoch = amount_per_period as f64 / charter.withdraw_period as f64;
-        let epochs_passed = clock.epoch - cashier.last_withdraw_at;
+        let epochs_passed = clock.epoch.checked_sub(cashier.last_withdraw_at).unwrap();
         let amount_to_transfer = amount_per_epoch * epochs_passed as f64;
 
         // Transfer what we can
@@ -969,33 +985,13 @@ ctx.accounts.stake_authority.to_account_info(),
 
         Ok(())
     }
-}
 
+    pub fn set_listing_suspension(ctx: Context<SetListingSuspension>, suspended: bool) -> Result<()> {
+        let listing = &mut ctx.accounts.listing;
+        listing.is_suspended = suspended;
 
-#[derive(Accounts)]
-#[instruction(listing_mint_authority_bump: u8)]
-pub struct MintTo<'info> {
-
-    pub inventory: Box<Account<'info, Listing>>,
-
-    // The listing we can mint from
-    #[account(
-        has_one=mint @ StrangemoodError::ListingHasUnexpectedMint,
-        has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority
-    )]
-    pub listing: Box<Account<'info, Listing>>,
-
-    // The listing mint
-    pub mint: Box<Account<'info, Mint>>,
-
-    /// CHECK: This is a PDA, and we're not reading or writing from it.
-    #[account(
-        seeds = [b"mint_authority", mint.key().as_ref()],
-        bump = listing_mint_authority_bump,
-    )]
-    pub mint_authority: AccountInfo<'info>,
-
-    pub authority: Signer<'info>,
+        Ok(())
+    } 
 }
 
 #[derive(Accounts)]
@@ -1003,7 +999,7 @@ pub struct MintTo<'info> {
 pub struct StartTrial<'info> {
 
     // The user's token account where funds will be transfered from
-    #[account(mut)]
+    #[account(mut, constraint=payment.mint==listing_payment_deposit_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
@@ -1023,7 +1019,7 @@ pub struct StartTrial<'info> {
 
     // A token account of the listing.mint where listing tokens
     // will be deposited at
-    #[account(mut)]
+    #[account(mut, constraint=inventory.mint==listing_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Account<'info, TokenAccount>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -1089,7 +1085,7 @@ pub struct StartTrial<'info> {
 pub struct StartTrialWithCashier<'info> {
 
     // The user's token account where funds will be transfered from
-    #[account(mut)]
+    #[account(mut, constraint=payment.mint==listing_payment_deposit_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment: Box<Account<'info, TokenAccount>>,
 
     // The listing to purchase
@@ -1112,7 +1108,7 @@ pub struct StartTrialWithCashier<'info> {
 
     // A token account of the listing.mint where listing tokens
     // will be deposited at
-    #[account(mut)]
+    #[account(mut, constraint=inventory.mint==listing_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Account<'info, TokenAccount>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -1178,7 +1174,7 @@ pub struct StartTrialWithCashier<'info> {
 #[instruction(listing_mint_authority_bump: u8, charter_mint_authority_bump: u8, inventory_delegate_bump: u8)]
 pub struct Purchase<'info> {
     // The user's token account where funds will be transfered from
-    #[account(mut)]
+    #[account(mut, constraint=payment.mint==listings_payment_deposit.mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment: Box<Account<'info, TokenAccount>>,
 
     // TODO: consider rename? 
@@ -1261,7 +1257,7 @@ pub struct Purchase<'info> {
 #[instruction(listing_mint_authority_bump: u8, charter_mint_authority_bump: u8, inventory_delegate_bump: u8)]
 pub struct PurchaseWithCashier<'info> {
     // The user's token account where funds will be transfered from
-    #[account(mut)]
+    #[account(mut, constraint=payment.mint==listings_payment_deposit.mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub payment: Box<Account<'info, TokenAccount>>,
 
     #[account(has_one=charter)]
@@ -1278,9 +1274,8 @@ pub struct PurchaseWithCashier<'info> {
     #[account(mut)]
     pub cashier_treasury_escrow: Box<Account<'info, TokenAccount>>,
 
-    // TODO: consider rename? 
     // Where the listing token is deposited when purchase is complete.
-    #[account(mut)]
+    #[account(mut, constraint=inventory.mint==listing_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -1541,7 +1536,7 @@ pub struct RefundTrial<'info> {
     )]
     pub escrow_authority: AccountInfo<'info>,
 
-    #[account(mut)]
+    #[account(mut, constraint=inventory.mint==listing_mint.key() @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: This is a PDA, and we're not reading or writing from it.
@@ -1594,7 +1589,7 @@ pub struct Consume<'info> {
     )]
     pub inventory_delegate: AccountInfo<'info>,
 
-    #[account(mut)]
+    #[account(mut, has_one=mint @ StrangemoodError::TokenAccountHasUnexpectedMint)]
     pub inventory: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
 
@@ -1608,6 +1603,7 @@ pub struct InitListing<'info> {
     // 8 for the tag
     // 1 for is_initialized
     // 1 for is_available 
+    // 1 for is_suspended 
     // 32 for charter
     // 32 for authority
     // 32 for payment_deposit
@@ -1666,6 +1662,29 @@ pub struct SetListing<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetListingCharter<'info> {
+    #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority)]
+    pub listing: Account<'info, Listing>,
+
+    #[account(
+        has_one=mint @ StrangemoodError::CharterHasUnexpectedMint,
+    )]
+    pub charter: Box<Account<'info, Charter>>,
+
+    pub mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        constraint=vote_deposit.mint==charter.mint @ StrangemoodError::TokenAccountHasUnexpectedMint, 
+        has_one=mint @ StrangemoodError::TokenAccountHasUnexpectedMint
+    )]
+    pub vote_deposit: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct SetListingDeposit<'info> {
     #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority, has_one=charter @ StrangemoodError::ListingHasUnexpectedCharter)]
     pub listing: Account<'info, Listing>,
@@ -1693,19 +1712,6 @@ pub struct SetListingAuthority<'info> {
 
     /// CHECK: This is an authority, and we're not reading or writing from it.
     pub new_authority: AccountInfo<'info>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-
-#[derive(Accounts)]
-pub struct SetListingCharter<'info> {
-    #[account(mut, has_one=authority @ StrangemoodError::ListingHasUnexpectedAuthority)]
-    pub listing: Account<'info, Listing>,
-
-    pub charter: Account<'info, Charter>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -1753,7 +1759,6 @@ pub struct SetCharterReserve<'info> {
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
-
 #[derive(Accounts)]
 pub struct SetCharterAuthority<'info> {
     #[account(mut, has_one=authority @ StrangemoodError::CharterHasUnexpectedAuthority)]
@@ -1766,7 +1771,6 @@ pub struct SetCharterAuthority<'info> {
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
-
 
 #[derive(Accounts)]
 pub struct InitCharterTreasury<'info> {
@@ -1837,7 +1841,7 @@ pub struct SetCharterTreasuryDeposit<'info> {
 #[instruction(stake_authority_bump: u8)]
 pub struct InitCashier<'info> {
     // 8 for the tag
-    // 1 for is_initalized 
+    // 1 for is_initialized 
     // 32 for charter
     // 32 for stake
     // 8 for last_withdraw_at
@@ -2078,3 +2082,15 @@ pub struct WithdrawCashierStake<'info> {
     pub token_program: Program<'info, Token>
 }
 
+#[derive(Accounts)]
+pub struct SetListingSuspension<'info> {
+    #[account(mut, has_one=charter)]
+    pub listing: Account<'info, Listing>,
+
+    #[account(has_one=authority)]
+    pub charter: Account<'info, Charter>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
