@@ -1,12 +1,11 @@
 import * as anchor from "@project-serum/anchor";
-import { Program } from "@project-serum/anchor";
-export { Strangemood } from "../target/types/strangemood";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddress,
 } from "@solana/spl-token";
-import { Strangemood } from "../target/types/strangemood";
+import { Strangemood } from "./idl";
+export { Strangemood } from "./idl";
 import { pda as _pda } from "./pda";
 import * as constants from "./constants";
 const { web3 } = anchor;
@@ -23,7 +22,7 @@ export const TESTNET = constants.TESTNET;
 export async function fetchStrangemoodProgram(
   provider: anchor.Provider,
   programId = MAINNET.strangemood_program_id
-) {
+): Promise<anchor.Program<Strangemood>> {
   const idl = await anchor.Program.fetchIdl<Strangemood>(programId, provider);
   if (!idl) {
     throw new Error(
@@ -35,27 +34,27 @@ export async function fetchStrangemoodProgram(
 }
 
 export type Listing = Awaited<
-  ReturnType<Program<Strangemood>["account"]["listing"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["listing"]["fetch"]>
 >;
 
 export type Charter = Awaited<
-  ReturnType<Program<Strangemood>["account"]["charter"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["charter"]["fetch"]>
 >;
 
 export type Cashier = Awaited<
-  ReturnType<Program<Strangemood>["account"]["cashier"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["cashier"]["fetch"]>
 >;
 
 export type Receipt = Awaited<
-  ReturnType<Program<Strangemood>["account"]["receipt"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["receipt"]["fetch"]>
 >;
 
 export type CharterTreasury = Awaited<
-  ReturnType<Program<Strangemood>["account"]["charterTreasury"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["charterTreasury"]["fetch"]>
 >;
 
 export type CashierTreasury = Awaited<
-  ReturnType<Program<Strangemood>["account"]["cashierTreasury"]["fetch"]>
+  ReturnType<anchor.Program<Strangemood>["account"]["cashierTreasury"]["fetch"]>
 >;
 
 export interface AccountInfo<Acc> {
@@ -73,7 +72,7 @@ function isAccountInfo<T>(
 }
 
 async function asReceiptInfo(
-  program: Program<Strangemood>,
+  program: any,
   arg: AccountInfo<Receipt> | PublicKey
 ): Promise<AccountInfo<Receipt>> {
   if (isAccountInfo(arg)) {
@@ -86,7 +85,7 @@ async function asReceiptInfo(
 }
 
 async function asListingInfo(
-  program: Program<Strangemood>,
+  program: any,
   arg: AccountInfo<Receipt> | PublicKey
 ): Promise<AccountInfo<Receipt>> {
   if (isAccountInfo(arg)) {
@@ -99,7 +98,7 @@ async function asListingInfo(
 }
 
 async function asCashierInfo(
-  program: Program<Strangemood>,
+  program: any,
   arg: AccountInfo<Cashier> | PublicKey
 ): Promise<AccountInfo<Cashier>> {
   if (isAccountInfo(arg)) {
@@ -112,7 +111,7 @@ async function asCashierInfo(
 }
 
 async function asCharterInfo(
-  program: Program<Strangemood>,
+  program: any,
   arg: AccountInfo<Charter> | PublicKey
 ): Promise<AccountInfo<Charter>> {
   if (isAccountInfo(arg)) {
@@ -125,7 +124,7 @@ async function asCharterInfo(
 }
 
 async function asCharterTreasuryInfo(
-  program: Program<Strangemood>,
+  program: any,
   charter: PublicKey,
   mint: PublicKey
 ): Promise<AccountInfo<CharterTreasury>> {
@@ -152,7 +151,7 @@ async function asCharterTreasuryInfo(
 }
 
 async function asCashierTreasuryInfo(
-  program: Program<Strangemood>,
+  program: anchor.Program<Strangemood>,
   cashier: PublicKey,
   mint: PublicKey
 ): Promise<AccountInfo<CharterTreasury>> {
@@ -173,7 +172,7 @@ async function asCashierTreasuryInfo(
 }
 
 async function getOrCreateAssociatedTokenAccount(args: {
-  program: Program<Strangemood>;
+  program: any;
   mint: PublicKey;
   signer: PublicKey;
 }) {
@@ -197,7 +196,7 @@ async function getOrCreateAssociatedTokenAccount(args: {
 }
 
 async function purchaseWithoutCashier(args: {
-  program: Program<Strangemood>;
+  program: any;
   signer: PublicKey;
   listing: AccountInfo<Listing> | PublicKey;
   quantity: anchor.BN;
@@ -285,7 +284,7 @@ async function purchaseWithoutCashier(args: {
 }
 
 async function purchaseWithCashier(args: {
-  program: Program<Strangemood>;
+  program: any;
   signer: PublicKey;
   listing: AccountInfo<Listing> | PublicKey;
   quantity: anchor.BN;
@@ -384,7 +383,7 @@ async function purchaseWithCashier(args: {
 }
 
 export async function purchase(args: {
-  program: Program<Strangemood>;
+  program: any;
   signer: PublicKey;
   listing: AccountInfo<Listing> | PublicKey;
   quantity: anchor.BN;
@@ -404,7 +403,7 @@ export async function purchase(args: {
 }
 
 export async function initListing(args: {
-  program: Program<Strangemood>;
+  program: any;
   signer: PublicKey;
 
   // In lamports
@@ -507,7 +506,7 @@ export async function initListing(args: {
 }
 
 export async function initCharter(args: {
-  program: Program<Strangemood>;
+  program: any;
   authority: PublicKey;
   reserve: PublicKey;
   mint: PublicKey;
@@ -549,7 +548,7 @@ export async function initCharter(args: {
 }
 
 export async function initCashier(args: {
-  program: Program<Strangemood>;
+  program: any;
   uri: string;
   charter: AccountInfo<Charter> | PublicKey;
   authority: PublicKey;
@@ -588,7 +587,7 @@ export async function initCashier(args: {
 }
 
 export async function initCashierTreasury(args: {
-  program: Program<Strangemood>;
+  program: any;
   charter: AccountInfo<Charter> | PublicKey;
   cashier: AccountInfo<Cashier> | PublicKey;
   mint: PublicKey;
@@ -639,7 +638,7 @@ export async function initCashierTreasury(args: {
 }
 
 export async function initCharterTreasury(args: {
-  program: Program<Strangemood>;
+  program: any;
   charter: AccountInfo<Charter> | PublicKey;
   mint: PublicKey;
   deposit: PublicKey;
