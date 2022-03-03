@@ -1,6 +1,6 @@
 {
   "name": "@strangemood/strangemood",
-  "version": "0.0.0-86",
+  "version": "0.0.0-87",
   "module": "./dist/esm/src/index.js",
   "main": "./dist/cjs/src/index.js",
   "browser": "./dist/browser/index.js",

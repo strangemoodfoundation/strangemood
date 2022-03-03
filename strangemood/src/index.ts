@@ -208,7 +208,7 @@ async function maybeFundWrappedSolAccount({
         `The signer '${signer.toString()}' account does not exist. If you think it should, consider sending SOL to the account.`
       );
     }
-    if (signerAccount.lamports) {
+    if (total.gt(new anchor.BN(signerAccount.lamports))) {
       throw new Error(
         `${signer.toString()} only has ${signerAccount.lamports.toString()}, but needs ${total.toString()} to cover the transaction`
       );
