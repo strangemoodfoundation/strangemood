@@ -891,7 +891,7 @@
     superstruct "^0.14.2"
     tweetnacl "^1.0.0"
 
-"@strangemood/strangemood@^0.0.0-77":
+"@strangemood/strangemood@^0.0.0-79":
   version "0.0.0-79"
   resolved "https://registry.yarnpkg.com/@strangemood/strangemood/-/strangemood-0.0.0-79.tgz#633fbff8817edef77e8dbacf40ba6881973ab488"
   integrity sha512-AbB1Vz4bMefL8wDoqfqZ/K1QZttBI4q5tFZ4iXN7n1wJL+Z0FMFi8qetSjqLkk4voNGeM4vwV1SORDDX0cAY1g==
