@@ -3,18 +3,6 @@ import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import { Strangemood } from "../../target/types/strangemood";
 import * as splToken from "@solana/spl-token";
-import {
-  createAccountGovernance,
-  createRealm,
-  createTokenGovernance,
-  depositGovernanceTokens,
-} from "../instructions";
-import {
-  GovernanceConfig,
-  VoteThresholdPercentage,
-  VoteWeightSource,
-} from "../governance/accounts";
-import { pda } from "../pda";
 const { SystemProgram, SYSVAR_RENT_PUBKEY } = anchor.web3;
 
 export async function createWrappedSolTokenAccount(

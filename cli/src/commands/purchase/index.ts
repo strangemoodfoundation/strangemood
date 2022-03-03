@@ -64,7 +64,7 @@ export default class Purchase extends Command {
     spinner.text = "Purchase";
     const asPurchase = await purchase({
       program,
-      cashier: program.provider.wallet.publicKey,
+
       signer: program.provider.wallet.publicKey,
       listing: listing,
       quantity: new anchor.BN(flags.quantity),

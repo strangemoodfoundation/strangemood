@@ -9,8 +9,7 @@ export { Strangemood } from "./idl";
 import { pda as _pda } from "./pda";
 import * as constants from "./constants";
 const { web3 } = anchor;
-const { SystemProgram, SYSVAR_RENT_PUBKEY, Keypair, SYSVAR_CLOCK_PUBKEY } =
-  web3;
+const { SystemProgram, Keypair, SYSVAR_CLOCK_PUBKEY } = web3;
 import { Buffer } from "buffer";
 import * as splToken from "@solana/spl-token";
 
@@ -69,19 +68,6 @@ function isAccountInfo<T>(
     (arg as AccountInfo<T>).account !== undefined &&
     (arg as AccountInfo<T>).publicKey !== undefined
   );
-}
-
-async function asReceiptInfo(
-  program: any,
-  arg: AccountInfo<Receipt> | PublicKey
-): Promise<AccountInfo<Receipt>> {
-  if (isAccountInfo(arg)) {
-    return arg;
-  }
-  return {
-    account: await program.account.receipt.fetch(arg),
-    publicKey: arg,
-  };
 }
 
 async function asListingInfo(
@@ -195,6 +181,73 @@ async function getOrCreateAssociatedTokenAccount(args: {
   };
 }
 
+async function maybeFundWrappedSolAccount({
+  program,
+  deposit,
+  payment,
+  listingInfo,
+  signer,
+  quantity,
+}: {
+  program: any;
+  deposit: splToken.Account;
+  payment: PublicKey;
+  listingInfo: AccountInfo<Listing>;
+  quantity: anchor.BN;
+  signer: PublicKey;
+}) {
+  let instructions = [];
+  if (deposit.mint === splToken.NATIVE_MINT) {
+    let total = listingInfo.account.price.mul(quantity);
+
+    // Create the payment account if it doesn't exist
+    if (!(await program.provider.connection.getAccountInfo(payment))) {
+      instructions.push(
+        createAssociatedTokenAccountInstruction(
+          signer,
+          payment,
+          signer,
+          deposit.mint
+        )
+      );
+
+      // And fund it with the wrapped sol from the signer
+      instructions.push(
+        SystemProgram.transfer({
+          fromPubkey: signer,
+          toPubkey: payment,
+          lamports: total.toNumber(),
+        })
+      );
+
+      instructions.push(splToken.createSyncNativeInstruction(payment));
+    } else {
+      // If they don't have enough wrapped sol, fund the account with the difference
+      const paymentAccount = await splToken.getAccount(
+        program.provider.connection,
+        payment
+      );
+      const remaining = total.sub(
+        new anchor.BN(paymentAccount.amount.toString())
+      );
+
+      // If we don't have enough funds in the wrapped SOL account, make
+      // up the difference by funding it from the signer
+      if (remaining.gt(new anchor.BN(0))) {
+        instructions.push(
+          SystemProgram.transfer({
+            fromPubkey: signer,
+            toPubkey: payment,
+            lamports: remaining.toNumber(),
+          })
+        );
+        instructions.push(splToken.createSyncNativeInstruction(payment));
+      }
+    }
+  }
+  return instructions;
+}
+
 async function purchaseWithoutCashier(args: {
   program: any;
   signer: PublicKey;
@@ -229,6 +282,16 @@ async function purchaseWithoutCashier(args: {
     listingInfo.account.paymentDeposit
   );
   let payment = await getAssociatedTokenAddress(deposit.mint, args.signer);
+
+  const maybeFundWrappedSolInstructions = await maybeFundWrappedSolAccount({
+    program: args.program,
+    deposit,
+    payment,
+    listingInfo,
+    signer: args.signer,
+    quantity: args.quantity,
+  });
+  instructions.push(...maybeFundWrappedSolInstructions);
 
   // Setup PDAs
   let [_, listingBump] = await pda.listing(
@@ -319,6 +382,16 @@ async function purchaseWithCashier(args: {
     listingInfo.account.paymentDeposit
   );
   let payment = await getAssociatedTokenAddress(deposit.mint, args.signer);
+
+  const maybeFundWrappedSolInstructions = await maybeFundWrappedSolAccount({
+    program: args.program,
+    deposit,
+    payment,
+    listingInfo,
+    signer: args.signer,
+    quantity: args.quantity,
+  });
+  instructions.push(...maybeFundWrappedSolInstructions);
 
   // Setup PDAs
   let [_, listingBump] = await pda.listing(
