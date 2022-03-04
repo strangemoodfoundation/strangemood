@@ -1,5 +1,5 @@
 import * as anchor from "@project-serum/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, AccountInfo as SolanaAccountInfo } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddress,
@@ -199,6 +199,20 @@ async function maybeFundWrappedSolAccount({
   let instructions = [];
   if (deposit.mint.toString() === splToken.NATIVE_MINT.toString()) {
     let total = listingInfo.account.price.mul(quantity);
+
+    const signerAccount = (await program.provider.connection.getAccountInfo(
+      signer
+    )) as SolanaAccountInfo<any>;
+    if (!signerAccount) {
+      throw new Error(
+        `The signer '${signer.toString()}' account does not exist. If you think it should, consider sending SOL to the account.`
+      );
+    }
+    if (total.gt(new anchor.BN(signerAccount.lamports))) {
+      throw new Error(
+        `${signer.toString()} only has ${signerAccount.lamports.toString()}, but needs ${total.toString()} to cover the transaction`
+      );
+    }
 
     // Create the payment account if it doesn't exist
     if (!(await program.provider.connection.getAccountInfo(payment))) {
