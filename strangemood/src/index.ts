@@ -593,6 +593,52 @@ export async function initListing(args: {
   };
 }
 
+export async function setListingUri(args: {
+  program: any;
+  signer: PublicKey;
+  listing: AccountInfo<Listing> | PublicKey;
+  uri: string;
+}) {
+  let instructions = [];
+
+  let ix = await args.program.methods
+    .setListingUri(args.uri)
+    .accounts({
+      listing: args.listing,
+      authority: args.signer,
+    })
+    .instruction();
+  
+  instructions.push(ix);
+  
+  return {
+    instructions
+  }
+}
+
+export async function setListingAvailability(args: {
+  program: any;
+  signer: PublicKey;
+  listing: AccountInfo<Listing> | PublicKey;
+  isAvailable: boolean;
+}) {
+  let instructions = [];
+
+  let ix = await args.program.methods
+    .setListingAvailability(args.isAvailable)
+    .accounts({
+      listing: args.listing,
+      authority: args.signer,
+    })
+    .instruction();
+  
+  instructions.push(ix);
+  
+  return {
+    instructions
+  }
+}
+
 export async function initCharter(args: {
   program: any;
   authority: PublicKey;
