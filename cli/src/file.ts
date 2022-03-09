@@ -8,14 +8,11 @@ const PRECRYPT_ENDPOINT = "https://api.precrypt.org";
 
 export async function encryptFile(inputPath: string, fileKeyPath: string, recryptKeyPath: string, cipherPath: string) {
    try {
-      execSync(`precrypt keygen ${fileKeyPath}`).toString();
-      execSync(`precrypt encrypt ${inputPath}  ${fileKeyPath}  ${recryptKeyPath} ${cipherPath}`, { stdio: 'pipe' }).toString();
+      execSync(`npx precrypt keygen ${fileKeyPath}`).toString();
+      execSync(`npx precrypt encrypt ${inputPath}  ${fileKeyPath}  ${recryptKeyPath} ${cipherPath}`, { stdio: 'pipe' }).toString();
       inputPath = cipherPath;
    } catch (err) {
       console.log(err);
-      console.log();
-      console.log("The above error was thrown running precrypt.");
-      console.log("Did you install the precrypt cli with 'npm i -g precrypt'?");
       throw err;
    }
 }
