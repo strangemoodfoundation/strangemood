@@ -1,11 +1,10 @@
 {
   "name": "@strangemood/cli",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "CLI for the Strangemood Protocol",
   "author": "Evan Conrad",
   "bin": {
-    "strangemood": "./bin/run",
-    "precrypt": "node_modules/.bin/precrypt"
+    "strangemood": "./bin/run"
   },
   "homepage": "https://github.com/strangemoodfoundation/strangemood",
   "license": "MIT",
@@ -34,7 +33,6 @@
     "chalk": "^4.1.2",
     "ipfs-car": "^0.6.2",
     "ora": "5.4.1",
-    "precrypt": "^0.3.6",
     "progress": "^2.0.3"
   },
   "devDependencies": {

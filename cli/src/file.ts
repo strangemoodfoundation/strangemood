@@ -8,7 +8,7 @@ const PRECRYPT_ENDPOINT = "https://api.precrypt.org";
 
 export async function encryptFile(inputPath: string, fileKeyPath: string, recryptKeyPath: string, cipherPath: string) {
    try {
-      execSync(`npx precrypt keygen ${fileKeyPath}`).toString();
+      execSync(`npm_config_yes=true npx precrypt keygen ${fileKeyPath}`).toString();
       execSync(`npx precrypt encrypt ${inputPath}  ${fileKeyPath}  ${recryptKeyPath} ${cipherPath}`, { stdio: 'pipe' }).toString();
       inputPath = cipherPath;
    } catch (err) {
