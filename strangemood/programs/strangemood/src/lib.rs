@@ -331,7 +331,7 @@ pub mod strangemood {
         let charter_treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
-            charter.expansion_rate * charter_treasury.scalar,
+            charter.expansion_rate / charter_treasury.scalar,
             charter.vote_contribution,
              ctx.accounts.token_program.clone(),
              *ctx.accounts.charter_mint.clone(),
@@ -414,7 +414,7 @@ pub mod strangemood {
         let charter_treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
-            charter.expansion_rate * charter_treasury.scalar,
+            charter.expansion_rate / charter_treasury.scalar,
             charter.vote_contribution,
                 ctx.accounts.token_program.clone(),
              *ctx.accounts.charter_mint.clone(),
@@ -642,7 +642,7 @@ pub mod strangemood {
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
-            charter.expansion_rate * treasury.scalar,
+            charter.expansion_rate / treasury.scalar,
             charter.vote_contribution,
              ctx.accounts.token_program.clone(),
              *ctx.accounts.charter_mint.clone(),
@@ -700,7 +700,7 @@ pub mod strangemood {
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
-            charter.expansion_rate * treasury.scalar,
+            charter.expansion_rate / treasury.scalar,
             charter.vote_contribution,
              ctx.accounts.token_program.clone(),
              *ctx.accounts.charter_mint.clone(),
