@@ -608,12 +608,12 @@ export async function setListingUri(args: {
       authority: args.signer,
     })
     .instruction();
-  
+
   instructions.push(ix);
-  
+
   return {
-    instructions
-  }
+    instructions,
+  };
 }
 
 export async function setListingAvailability(args: {
@@ -631,12 +631,12 @@ export async function setListingAvailability(args: {
       authority: args.signer,
     })
     .instruction();
-  
+
   instructions.push(ix);
-  
+
   return {
-    instructions
-  }
+    instructions,
+  };
 }
 
 export async function initCharter(args: {
@@ -778,8 +778,8 @@ export async function initCharterTreasury(args: {
   deposit: PublicKey;
   scalar: number;
 }) {
-  if (args.scalar < 0 || args.scalar > 1) {
-    throw new Error("scalar must be between 0 and 1");
+  if (args.scalar < 0) {
+    throw new Error("scalar must be greater than 0");
   }
   const charterInfo = await asCharterInfo(args.program, args.charter);
 
