@@ -331,7 +331,7 @@ pub mod strangemood {
         let charter_treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
-            charter.expansion_rate * charter_treasury.scalar,
+            charter.expansion_rate / charter_treasury.scalar,
             charter.vote_contribution,
              ctx.accounts.token_program.clone(),
              *ctx.accounts.charter_mint.clone(),
@@ -340,6 +340,15 @@ pub mod strangemood {
              *ctx.accounts.listings_vote_deposit.clone(),
              *ctx.accounts.charter_reserve.clone(),
         )?;
+
+        thaw_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_authority_bump
+        )?;
+
 
         // Approve the delegate over the inventory 
         let delegated_amount = ctx.accounts.inventory.amount.checked_add(amount).unwrap();
@@ -352,13 +361,21 @@ pub mod strangemood {
         )?;
 
         // Distribute listing token 
-        mint_to_and_freeze(
-&ctx.accounts.token_program,
-&ctx.accounts.listing_mint,
-&ctx.accounts.inventory,
-&ctx.accounts.listing_mint_authority.to_account_info(),
-            listing_mint_authority_bump,
-            amount,
+        mint_to(
+        &ctx.accounts.token_program,
+        &ctx.accounts.listing_mint,
+        &ctx.accounts.inventory,
+  &ctx.accounts.listing_mint_authority.to_account_info(),
+        listing_mint_authority_bump,
+        amount,
+        )?;
+
+        freeze_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_authority_bump
         )?;
 
         Ok(())
@@ -397,7 +414,7 @@ pub mod strangemood {
         let charter_treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
-            charter.expansion_rate * charter_treasury.scalar,
+            charter.expansion_rate / charter_treasury.scalar,
             charter.vote_contribution,
                 ctx.accounts.token_program.clone(),
              *ctx.accounts.charter_mint.clone(),
@@ -405,6 +422,15 @@ pub mod strangemood {
              charter_mint_authority_bump,
              *ctx.accounts.listings_vote_deposit.clone(),
              *ctx.accounts.charter_reserve.clone(),
+        )?;
+
+        // Thaw the account so we can modify it.
+        thaw_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_authority_bump
         )?;
 
         // Approve the delegate over the inventory 
@@ -417,14 +443,24 @@ pub mod strangemood {
             delegated_amount
         )?;
 
+
         // Distribute listing token 
-        mint_to_and_freeze(
+        mint_to(
         &ctx.accounts.token_program,
         &ctx.accounts.listing_mint,
     &ctx.accounts.inventory,
     &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount, 
+        )?;
+
+        // Freeze account
+        freeze_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_authority_bump
         )?;
 
         Ok(())
@@ -459,6 +495,15 @@ pub mod strangemood {
             total,
         )?;
 
+        // Thaw the account so we can modify it.
+        thaw_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_authority_bump
+        )?;
+
         // Approve the delegate over the inventory 
         let delegated_amount = ctx.accounts.inventory.amount.checked_add(amount).unwrap();
         approve_delegate(
@@ -470,13 +515,22 @@ pub mod strangemood {
         )?;
 
         // Mint the token, which can be burned later upon refund.
-        mint_to_and_freeze(
+        mint_to(
             &ctx.accounts.token_program,
             &ctx.accounts.listing_mint,
             &ctx.accounts.inventory,
             &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
+        )?;
+
+        // Freeze account
+        freeze_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_authority_bump
         )?;
 
         let receipt = &mut ctx.accounts.receipt;
@@ -518,14 +572,32 @@ pub mod strangemood {
             total,
         )?;
 
+        // Thaw account 
+        thaw_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_authority_bump
+        )?;
+
         // Mint the token, which can be burned later upon refund.
-        mint_to_and_freeze(
+        mint_to(
             &ctx.accounts.token_program,
             &ctx.accounts.listing_mint,
             &ctx.accounts.inventory,
             &ctx.accounts.listing_mint_authority.to_account_info(),
             listing_mint_authority_bump,
             amount,
+        )?;
+
+        // Freeze account 
+        freeze_account(
+            &ctx.accounts.token_program,
+            &ctx.accounts.listing_mint,
+            &ctx.accounts.inventory,
+            &ctx.accounts.listing_mint_authority.to_account_info(),
+            listing_mint_authority_bump
         )?;
 
         let receipt = &mut ctx.accounts.receipt;
@@ -570,7 +642,7 @@ pub mod strangemood {
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
-            charter.expansion_rate * treasury.scalar,
+            charter.expansion_rate / treasury.scalar,
             charter.vote_contribution,
              ctx.accounts.token_program.clone(),
              *ctx.accounts.charter_mint.clone(),
@@ -628,7 +700,7 @@ pub mod strangemood {
         let treasury = ctx.accounts.charter_treasury.clone().into_inner();
         distribute_governance_tokens(
             splits.to_charter_amount,
-            charter.expansion_rate * treasury.scalar,
+            charter.expansion_rate / treasury.scalar,
             charter.vote_contribution,
              ctx.accounts.token_program.clone(),
              *ctx.accounts.charter_mint.clone(),

@@ -69,7 +69,8 @@ export async function initCharter(
 export async function createCharterTreasury(
   program: Program<Strangemood>,
   charter: PublicKey,
-  mint: PublicKey
+  mint: PublicKey,
+  scalar: anchor.BN
 ) {
   const [treasury_pda, _] = await pda.treasury(
     program.programId,
@@ -79,7 +80,7 @@ export async function createCharterTreasury(
   const deposit = await createTokenAccount(program, mint);
 
   await program.methods
-    .initCharterTreasury(1.0)
+    .initCharterTreasury(scalar.toNumber())
     .accounts({
       treasury: treasury_pda,
       mint: mint,

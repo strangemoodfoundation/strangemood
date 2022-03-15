@@ -608,12 +608,12 @@ export async function setListingUri(args: {
       authority: args.signer,
     })
     .instruction();
-  
+
   instructions.push(ix);
-  
+
   return {
-    instructions
-  }
+    instructions,
+  };
 }
 
 export async function setListingAvailability(args: {
@@ -631,12 +631,12 @@ export async function setListingAvailability(args: {
       authority: args.signer,
     })
     .instruction();
-  
+
   instructions.push(ix);
-  
+
   return {
-    instructions
-  }
+    instructions,
+  };
 }
 
 export async function initCharter(args: {
@@ -728,9 +728,10 @@ export async function initCashierTreasury(args: {
   deposit: PublicKey;
 }) {
   const cashierInfo = await asCashierInfo(args.program, args.cashier);
+  const charterInfo = await asCharterInfo(args.program, args.charter);
   const charterTreasuryInfo = await asCharterTreasuryInfo(
     args.program,
-    cashierInfo.publicKey,
+    charterInfo.publicKey,
     args.mint
   );
 
@@ -778,8 +779,8 @@ export async function initCharterTreasury(args: {
   deposit: PublicKey;
   scalar: number;
 }) {
-  if (args.scalar < 0 || args.scalar > 1) {
-    throw new Error("scalar must be between 0 and 1");
+  if (args.scalar < 0) {
+    throw new Error("scalar must be greater than 0");
   }
   const charterInfo = await asCharterInfo(args.program, args.charter);
 
@@ -790,12 +791,47 @@ export async function initCharterTreasury(args: {
   );
 
   let ix = await args.program.methods
-    .initCharterTreasury(1.0)
+    .initCharterTreasury(args.scalar)
     .accounts({
       treasury: treasury_pda,
       mint: args.mint,
       deposit: args.deposit,
       charter: charterInfo.publicKey,
+    })
+    .instruction();
+
+  let instructions = [ix];
+
+  return {
+    instructions,
+    treasury: treasury_pda,
+  };
+}
+
+export async function setCharterTreasuryScalar(args: {
+  program: any;
+  signer: PublicKey;
+  charter: AccountInfo<Charter> | PublicKey;
+  mint: PublicKey;
+  scalar: number;
+}) {
+  if (args.scalar < 0) {
+    throw new Error("scalar must be greater than 0");
+  }
+  const charterInfo = await asCharterInfo(args.program, args.charter);
+
+  const [treasury_pda, _] = await pda.treasury(
+    args.program.programId,
+    charterInfo.publicKey,
+    args.mint
+  );
+
+  let ix = await args.program.methods
+    .setCharterTreasuryScalar(args.scalar)
+    .accounts({
+      treasury: treasury_pda,
+      charter: charterInfo.publicKey,
+      authority: args.program.provider.wallet.publicKey,
     })
     .instruction();
 

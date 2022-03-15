@@ -168,7 +168,8 @@ describe("Strangemood", () => {
     const charterTreasury = await createCharterTreasury(
       program,
       charter.publicKey,
-      paymentMint.publicKey
+      paymentMint.publicKey,
+      new anchor.BN(1)
     );
 
     const paymentDeposit = await createTokenAccount(
@@ -300,7 +301,8 @@ describe("Strangemood", () => {
     const charterTreasury = await createCharterTreasury(
       program,
       charter.publicKey,
-      mint.publicKey
+      mint.publicKey,
+      new anchor.BN(1)
     );
     const deposit = await createTokenAccount(program, mint.publicKey);
 
@@ -377,7 +379,8 @@ describe("Strangemood", () => {
     const charterTreasury = await createCharterTreasury(
       program,
       charter.publicKey,
-      paymentMint.publicKey
+      paymentMint.publicKey,
+      new anchor.BN(1)
     );
     const listing = await initListing(
       program,
@@ -479,7 +482,8 @@ describe("Strangemood", () => {
     const charterTreasury = await createCharterTreasury(
       program,
       charter.publicKey,
-      paymentMint.publicKey
+      paymentMint.publicKey,
+      new anchor.BN(1)
     );
     const listing = await initListing(
       program,
@@ -604,7 +608,8 @@ describe("Strangemood", () => {
     const charterTreasury = await createCharterTreasury(
       program,
       charter.publicKey,
-      paymentMint.publicKey
+      paymentMint.publicKey,
+      new anchor.BN(1)
     );
     const listing = await initListing(
       program,
@@ -679,7 +684,8 @@ describe("Strangemood", () => {
     const charterTreasury = await createCharterTreasury(
       program,
       charter.publicKey,
-      paymentMint.publicKey
+      paymentMint.publicKey,
+      new anchor.BN(1)
     );
     const listing = await initListing(
       program,
@@ -849,7 +855,8 @@ describe("Strangemood", () => {
     const charterTreasury = await createCharterTreasury(
       program,
       charter.publicKey,
-      paymentMint.publicKey
+      paymentMint.publicKey,
+      new anchor.BN(1)
     );
     const listing = await initListing(
       program,
@@ -993,7 +1000,8 @@ describe("Strangemood", () => {
     const charterTreasury = await createCharterTreasury(
       program,
       charter.publicKey,
-      paymentMint.publicKey
+      paymentMint.publicKey,
+      new anchor.BN(1)
     );
     const listing = await initListing(
       program,
