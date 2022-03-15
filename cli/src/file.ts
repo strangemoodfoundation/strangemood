@@ -114,12 +114,14 @@ export async function postCar(bytes: Uint8Array): Promise<any> {
    return null;
 }
 
-export async function uploadKey(recryptKeyPath: string, mint: string, fileCID: string,  extension: string): Promise<string> {
+export async function uploadKey(recryptKeyPath: string, network: string,  mint: string, fileCID: string, fileName: string,  extension: string): Promise<string> {
    const recryptionKeys = JSON.parse(fs.readFileSync(recryptKeyPath).toString());
    const body = {
       "recryption_keys": recryptionKeys,
+      "network": network,
       "mint": mint,
       "file_cid": fileCID,
+      "file_name": fileName,
       "file_extension": extension
    };
    const body_str = JSON.stringify(body);

@@ -50,6 +50,7 @@ export default class UploadFile extends Command {
     try {
       var inputPath = args["path"];
       const extension = path.extname(inputPath).replace(".", "");
+      const fileName = path.basename(inputPath, `.${extension}`);
       const outputPath = `${tempDir}/output.car`;
       const fileKeyPath = `${tempDir}/file.json`;
       const cipherPath = `${tempDir}/cipher.bin`;
@@ -87,7 +88,7 @@ export default class UploadFile extends Command {
         const listing = await program.account.listing.fetch(args["listing"]);
 
         keySpinner.text = `Uploading recryption key to precrypt node...`;
-        const keyCID = await uploadKey(recryptKeyPath, listing.mint.toString(), rootCID, extension);
+        const keyCID = await uploadKey(recryptKeyPath, `sol-${flags.cluster}`, listing.mint.toString(), rootCID, fileName, extension);
         keySpinner.succeed("Uploaded recryption key to precrypt node");
         console.log(`Precrypt key CID: ${keyCID}`);
       }
