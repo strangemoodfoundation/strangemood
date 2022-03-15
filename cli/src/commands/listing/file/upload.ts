@@ -58,10 +58,11 @@ export default class UploadFile extends Command {
 
 
       if (flags.encrypt) {
-        ora.promise(
-          encryptFile(inputPath, fileKeyPath, recryptKeyPath, cipherPath),
-          "Encrypting file with precrypt"
-        );
+        const encryptSpinner = ora(`Encrypting file with precrypt...`);
+        await encryptFile(inputPath, fileKeyPath, recryptKeyPath, cipherPath);
+        fs.rmSync(inputPath);
+        inputPath = cipherPath;
+        encryptSpinner.succeed("Encrypted file with precrypt...");
       }
 
       const carSpinner = ora("Packing file to CAR...");

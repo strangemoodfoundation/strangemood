@@ -10,7 +10,6 @@ export async function encryptFile(inputPath: string, fileKeyPath: string, recryp
    try {
       execSync(`npm_config_yes=true npx precrypt keygen ${fileKeyPath}`).toString();
       execSync(`npx precrypt encrypt ${inputPath}  ${fileKeyPath}  ${recryptKeyPath} ${cipherPath}`, { stdio: 'pipe' }).toString();
-      inputPath = cipherPath;
    } catch (err) {
       console.log(err);
       throw err;
