@@ -1,5 +1,4 @@
-import { Command, Flags } from "@oclif/core";
-import ora from "ora";
+import { Command, Flags, CliUx } from "@oclif/core";
 import { packToFs } from 'ipfs-car/pack/fs';
 import { FsBlockStore } from 'ipfs-car/blockstore/fs'
 import { uploadCars, encryptFile, splitCar, uploadKey } from '../../../file';
@@ -58,38 +57,38 @@ export default class UploadFile extends Command {
 
 
       if (flags.encrypt) {
-        const encryptSpinner = ora(`Encrypting file with precrypt...`);
+        CliUx.ux.action.start(`Encrypting file with precrypt`);
+
         await encryptFile(inputPath, fileKeyPath, recryptKeyPath, cipherPath);
         inputPath = cipherPath;
-        encryptSpinner.succeed("Encrypted file with precrypt...");
+        CliUx.ux.action.stop();
       }
 
-      const carSpinner = ora("Packing file to CAR...");
+      CliUx.ux.action.start("Packing file to CAR");
       const { root } = await packToFs({ input: inputPath, output: outputPath, blockstore: new FsBlockStore(), wrapWithDirectory: false });
       const rootCID = root.toString();
-      carSpinner.succeed("File packed to CAR");
+      CliUx.ux.action.stop();
 
-      const spinner = ora(`Splitting CAR into chunks...`);
+      CliUx.ux.action.start(`Splitting CAR into chunks`);
       const carPaths = await splitCar(outputPath, tempDir);
-      spinner.succeed(`CAR split into ${carPaths.length} chunks`);
+      CliUx.ux.action.stop();
 
 
-      const uploadSpinner = ora(`Uploading CAR chunk: ${carPaths.length} remaining...`);
+      CliUx.ux.action.start(`Uploading CAR chunks`);
+      CliUx.ux.action.status = `${carPaths.length} remaining`;
       await uploadCars(carPaths, rootCID);
-      uploadSpinner.succeed(`Uploaded ${carPaths.length} chunks`)
+      CliUx.ux.action.stop()
 
       if (flags.encrypt) {
-        const keySpinner = ora("Connecting...").start();
-
-        keySpinner.text = "Fetching listing mint";
+        CliUx.ux.action.start("Fetching listing mint");
         const program = await getProgram({
           net: flags.cluster as any,
         });
         const listing = await program.account.listing.fetch(args["listing"]);
 
-        keySpinner.text = `Uploading recryption key to precrypt node...`;
+        CliUx.ux.action.status = `Uploading recryption key to precrypt node`;
         const keyCID = await uploadKey(recryptKeyPath, `sol-${flags.cluster}`, listing.mint.toString(), rootCID, fileName, extension);
-        keySpinner.succeed("Uploaded recryption key to precrypt node");
+        CliUx.ux.action.stop();
         console.log(`Precrypt key CID: ${keyCID}`);
       }
       this.log(`File CID: ${rootCID}`);

@@ -1,4 +1,5 @@
 import { CarIndexedReader } from '@ipld/car/indexed-reader';
+import { CliUx } from "@oclif/core";
 import fetch from 'node-fetch';
 import { execSync } from 'node:child_process';
 import fs from 'fs';
@@ -24,18 +25,18 @@ export async function splitCar(filePath: string, tempDir: string): Promise<strin
    var stats = fs.statSync(filePath)
    var fileSizeInBytes = stats.size;
    const numCars = Math.ceil(fileSizeInBytes / targetSize);
-   // spinner.text = `Splitting CAR into chunks: ${numCars - i} remaining...`;
+   CliUx.ux.action.status = `${numCars} remaining`;
    const splitter = new TreewalkCarSplitter(reader, targetSize);
 
    var i = 0;
    var carPaths = [];
    for await (const car of splitter.cars()) {
+      CliUx.ux.action.status = `${numCars - i} remaining`;
       const chunks = []
       for await (const chunk of car) {
          chunks.push(chunk)
       }
       const bytes = new Uint8Array([].concat(...chunks.map(c => Array.from(c))));
-      // spinner.text = `Splitting CAR into chunks: ${numCars - i} remaining...`;
       const carPath = `${tempDir}/car-${i}.car`;
       fs.writeFileSync(carPath, bytes);
       carPaths.push(carPath);
@@ -53,7 +54,7 @@ export async function uploadCars(carPaths: string[], rootCID: string) {
       const promise = postCar(bytes);
       promise.then(() => {
          i += 1;
-         // uploadSpinner.text = `Uploading CAR chunk: ${numCars - i} remaining...`;
+         CliUx.ux.action.status = `${carPaths.length - i} remaining`;
       });
       promises.push(promise);
    }
