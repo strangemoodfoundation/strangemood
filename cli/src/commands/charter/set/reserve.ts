@@ -1,14 +1,17 @@
 import { Command, Flags } from "@oclif/core";
 import ora from "ora";
-import { getProgram } from "../../../../provider";
-import { setCharterTreasuryScalar } from "@strangemood/strangemood";
+import { getProgram } from "../../../provider";
+import {
+  setCharterTreasuryScalar,
+  setCharterReserve,
+} from "@strangemood/strangemood";
 import { PublicKey, Transaction } from "@solana/web3.js";
 
-export default class CharterTreausryUpdateScalar extends Command {
-  static description = "Set charter treasury scalar";
+export default class CharterUpdateReserve extends Command {
+  static description = "Set charter reserve";
 
   static examples = [
-    `$ strangemood charter treasury set scalar --charter 7DFCSJoup2ePkNZb6Dhgpb9ABynKwVXDQAS3o5s7o9Ev --mint So11111111111111111111111111111111111111112 1.0
+    `$ strangemood charter set reserve --charter 7DFCSJoup2ePkNZb6Dhgpb9ABynKwVXDQAS3o5s7o9Ev Some111111111111111111111111111111111111111
 `,
   ];
 
@@ -23,23 +26,18 @@ export default class CharterTreausryUpdateScalar extends Command {
       description: "The charter to make this treasury from",
       required: true,
     }),
-    mint: Flags.string({
-      description: "An existing mint to use",
-      required: true,
-    }),
   };
 
   static args = [
     {
-      name: "scalar",
-      description:
-        "A variable combined with expansion rate that changes how many vote tokens are distributed when using this currency",
+      name: "reserve",
+      description: "The token account to set the reserve to",
       required: true,
     },
   ];
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(CharterTreausryUpdateScalar);
+    const { args, flags } = await this.parse(CharterUpdateReserve);
     const spinner = ora("Connecting").start();
 
     spinner.text = "Fetching Program";
@@ -50,14 +48,13 @@ export default class CharterTreausryUpdateScalar extends Command {
     spinner.text = "Setting charter treasury";
 
     let instructions = [];
-    const asSetCharterTreasuryScalar = await setCharterTreasuryScalar({
+    const asSetCharterReserve = await setCharterReserve({
       program,
       charter: new PublicKey(flags.charter),
-      mint: new PublicKey(flags.mint),
-      scalar: parseFloat(args["scalar"]),
+      reserve: new PublicKey(args.reserve),
       signer: program.provider.wallet.publicKey,
     });
-    instructions.push(...asSetCharterTreasuryScalar.instructions);
+    instructions.push(...asSetCharterReserve.instructions);
 
     let tx = new Transaction();
     tx.add(...instructions);
@@ -66,6 +63,6 @@ export default class CharterTreausryUpdateScalar extends Command {
     await program.provider.send(tx);
 
     spinner.stop();
-    this.log(asSetCharterTreasuryScalar.treasury.toBase58());
+    this.log(asSetCharterReserve.charter.toBase58());
   }
 }

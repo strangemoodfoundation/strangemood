@@ -891,10 +891,10 @@
     superstruct "^0.14.2"
     tweetnacl "^1.0.0"
 
-"@strangemood/strangemood@0.0.0-91":
-  version "0.0.0-91"
-  resolved "https://registry.yarnpkg.com/@strangemood/strangemood/-/strangemood-0.0.0-91.tgz#1319d8541873fb3091febc7fae3aaef571de9b78"
-  integrity sha512-1oEZiaTlJuQdp9/xNJssuH1TRvnWo/9kC90XP8AVNyYRihfyTLMvHeyw5pP1appYlgUVQtMmDqISjr15oTujPA==
+"@strangemood/strangemood@0.0.0-93":
+  version "0.0.0-93"
+  resolved "https://registry.yarnpkg.com/@strangemood/strangemood/-/strangemood-0.0.0-93.tgz#940ee66802e4176572e2f3fe1e46eb46960a1472"
+  integrity sha512-hklizgGSx53pWHWxzvPq8eLm+7pJrNFU2XupH427TVmKgQafP2wg0HG+TMxo6bw6vTh3/mytXEjmuEHeJCUZnQ==
   dependencies:
     "@project-serum/anchor" "0.22.0"
     "@solana/buffer-layout" "^4.0.0"

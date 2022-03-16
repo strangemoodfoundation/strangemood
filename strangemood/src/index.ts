@@ -842,3 +842,28 @@ export async function setCharterTreasuryScalar(args: {
     treasury: treasury_pda,
   };
 }
+
+export async function setCharterReserve(args: {
+  program: any;
+  signer: PublicKey;
+  charter: AccountInfo<Charter> | PublicKey;
+  reserve: PublicKey;
+}) {
+  const charterInfo = await asCharterInfo(args.program, args.charter);
+
+  let ix = await args.program.methods
+    .setCharterReserve()
+    .accounts({
+      charter: charterInfo.publicKey,
+      authority: args.program.provider.wallet.publicKey,
+      reserve: args.reserve,
+    })
+    .instruction();
+
+  let instructions = [ix];
+
+  return {
+    instructions,
+    charter: charterInfo.publicKey,
+  };
+}
